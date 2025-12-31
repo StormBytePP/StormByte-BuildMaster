@@ -20,7 +20,7 @@ if(PKG_CONFIG_FOUND)
 	else()
 		set(PKG_CONFIG_WORKING TRUE)
 		set(PKG_CONFIG_VERSION "${PKG_CONFIG_VERSION_STRING}")
-		message(STATUS "\t\tUsing system pkg-config version: ${PKG_CONFIG_VERSION}")
+		message(STATUS "\t\t\tUsing system pkg-config version: ${PKG_CONFIG_VERSION}")
 	endif()
 endif()
 
@@ -41,7 +41,7 @@ if(NOT PKG_CONFIG_WORKING)
 		"${PKGCONF_BUILD_DIR}"
 		"${BUILDENGINE_INSTALL_DIR}"
 		"${PKGCONF_OPTIONS}"
-		2
+		3
 	)
 	include("${PKGCONF_MESON_SETUP_FILE}")
 
@@ -73,7 +73,7 @@ if(NOT PKG_CONFIG_WORKING)
 	else()
 		set(PKG_CONFIG_WORKING TRUE) # Not really needed, but for consistency
 		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
-		message(STATUS "\t\tUsing bundled pkgconf version: ${PKG_CONFIG_VERSION}")
+		message(STATUS "\t\t\tUsing bundled pkgconf version: ${PKG_CONFIG_VERSION}")
 
 		# Propagate to parent scope and regenerate bootstrap env runner
 		update_env_runner()
