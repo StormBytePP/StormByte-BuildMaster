@@ -35,7 +35,7 @@ macro(add_tool srcdir)
 		set(_INDENT_ "")
 	endif()
 
-	message(STATUS "${_INDENT_}Configuring ${srcdir}")
+	message(STATUS "${_INDENT_}Setting up ${srcdir}")
 	add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/${srcdir}")
 	include("${CMAKE_CURRENT_LIST_DIR}/${srcdir}/propagate_vars.cmake")
 endmacro()
