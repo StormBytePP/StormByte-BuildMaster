@@ -1,4 +1,4 @@
-set(BUILDENGINE_TOOLS_PKGCONF_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(BUILDMASTER_TOOLS_PKGCONF_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
 
 # Set initial state: assume pkg-config/pkgconf is not usable
 set(PKG_CONFIG_WORKING FALSE)
@@ -26,7 +26,7 @@ endif()
 
 # Force build our pkgconf if none found or on Windows because it might have installed a broken pkgconfig (like Strawbery)
 if(NOT PKG_CONFIG_WORKING)
-	set(PKGCONF_SRC_DIR "${BUILDENGINE_TOOLS_PKGCONF_SRC_DIR}/src")
+	set(PKGCONF_SRC_DIR "${BUILDMASTER_TOOLS_PKGCONF_SRC_DIR}/src")
 	ensure_build_dir(PKGCONF_BUILD_DIR)
 
 	set(PKGCONF_MESON_OPTIONS "-Ddefault_library=static")
@@ -39,7 +39,7 @@ if(NOT PKG_CONFIG_WORKING)
 		"${PKGCONF_COMPONENT}"
 		"${PKGCONF_SRC_DIR}"
 		"${PKGCONF_BUILD_DIR}"
-		"${BUILDENGINE_INSTALL_DIR}"
+		"${BUILDMASTER_INSTALL_DIR}"
 		"${PKGCONF_OPTIONS}"
 		3
 	)
@@ -58,7 +58,7 @@ if(NOT PKG_CONFIG_WORKING)
 	endif()
 
 	# Set pkgconf executable path
-	set(PKG_CONFIG "${BUILDENGINE_INSTALL_BIN_DIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
+	set(PKG_CONFIG "${BUILDMASTER_INSTALL_BIN_DIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
 
 	# Test pkgconf/pkg-config version
 	execute_process(

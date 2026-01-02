@@ -48,11 +48,11 @@ function(create_cmake_configure_file _file _component _src_dir _build_dir _insta
 	sanitize_for_filename(_CMAKE_COMPONENT_SAFE "${_CMAKE_COMPONENT}")
 
 	set(_CMAKE_CONFIGURE_FILE
-		"${BUILDENGINE_SCRIPTS_CMAKE_DIR}/configure_${_CMAKE_COMPONENT_SAFE}.cmake"
+		"${BUILDMASTER_SCRIPTS_CMAKE_DIR}/configure_${_CMAKE_COMPONENT_SAFE}.cmake"
 	)
 
 	configure_file(
-		"${BUILDENGINE_TOOLS_CMAKE_SRC_DIR}/configure.cmake.in"
+		"${BUILDMASTER_TOOLS_CMAKE_SRC_DIR}/configure.cmake.in"
 		"${_CMAKE_CONFIGURE_FILE}"
 		@ONLY
 	)

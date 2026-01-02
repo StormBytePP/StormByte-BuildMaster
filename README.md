@@ -1,11 +1,11 @@
-# StormByte‑BuildEngine  
+# StormByte‑BuildMaster  
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-blue)
 ![CMake](https://img.shields.io/badge/cmake-%3E%3D3.20-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Type](https://img.shields.io/badge/type-build%20engine-lightgrey)
 
-StormByte‑BuildEngine provides a modular, reproducible build system designed to overcome the limitations of CMake’s `ExternalProject_Add` and the challenges of integrating heterogeneous build systems during *configure time*.  
+StormByte‑BuildMaster provides a modular, reproducible build system designed to overcome the limitations of CMake’s `ExternalProject_Add` and the challenges of integrating heterogeneous build systems during *configure time*.  
 Traditional approaches make it difficult to propagate environment variables coherently—such as `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`, or platform‑specific search paths—leading to inconsistent builds and fragile toolchain behavior.
 
 This engine generates a hermetic, cross‑platform environment layer that ensures every tool (CMake, Meson, Ninja, Git, pkgconf, etc.) runs with a consistent and fully controlled environment.
@@ -28,7 +28,7 @@ This engine generates a hermetic, cross‑platform environment layer that ensure
 
 ## Overview
 
-StormByte‑BuildEngine is a **build environment generator**, not a wrapper.  
+StormByte‑BuildMaster is a **build environment generator**, not a wrapper.  
 It prepares:
 
 - isolated environment runner scripts  
@@ -51,7 +51,7 @@ CMake’s `ExternalProject_Add` defers configuration to *build time*, making it 
 - generate scripts that depend on configure‑time values  
 - ensure reproducibility across platforms  
 
-StormByte‑BuildEngine solves this by generating all scripts and environment wrappers during the *configure* phase.
+StormByte‑BuildMaster solves this by generating all scripts and environment wrappers during the *configure* phase.
 
 ### 2. Coherent environment propagation  
 Meson, pkgconf, and other tools rely heavily on environment variables.  
@@ -77,7 +77,7 @@ Each subsystem (env, cmake, git, meson, ninja, pkgconf) is isolated and self‑c
 
 ## Architecture
 
-StormByte‑BuildEngine is composed of three main layers:
+StormByte‑BuildMaster is composed of three main layers:
 
 ### 1. Core Initialization  
 Defined in `init_vars.cmake`, it establishes:
@@ -183,19 +183,19 @@ These functions abstract away quoting, path normalization, list handling, and di
 
 ## Variables Propagated to Parent Scope
 
-StormByte‑BuildEngine exposes a set of variables to the parent CMake project using `PARENT_SCOPE`.
+StormByte‑BuildMaster exposes a set of variables to the parent CMake project using `PARENT_SCOPE`.
 
 ### Environment Variables
 
 | Variable | Description |
 |---------|-------------|
-| `BUILDENGINE_SRC_DIR` | Root directory of the BuildEngine source |
-| `BUILDENGINE_BIN_DIR` | Binary directory for generated scripts |
-| `BUILDENGINE_SCRIPTS_DIR` | Base directory for generated scripts |
-| `BUILDENGINE_INSTALL_DIR` | Install prefix used by all components |
-| `BUILDENGINE_INSTALL_LIB_DIR` | Install lib directory |
-| `BUILDENGINE_INSTALL_BIN_DIR` | Install bin directory |
-| `BUILDENGINE_INSTALL_INCLUDE_DIR` | Install include directory |
+| `BUILDMASTER_SRC_DIR` | Root directory of the BuildMaster source |
+| `BUILDMASTER_BIN_DIR` | Binary directory for generated scripts |
+| `BUILDMASTER_SCRIPTS_DIR` | Base directory for generated scripts |
+| `BUILDMASTER_INSTALL_DIR` | Install prefix used by all components |
+| `BUILDMASTER_INSTALL_LIB_DIR` | Install lib directory |
+| `BUILDMASTER_INSTALL_BIN_DIR` | Install bin directory |
+| `BUILDMASTER_INSTALL_INCLUDE_DIR` | Install include directory |
 | `ENV_RUNNER` | Tokenized command list for the environment runner |
 | `ENV_RUNNER_SILENT` | Silent version of the environment runner |
 
@@ -217,8 +217,8 @@ StormByte‑BuildEngine exposes a set of variables to the parent CMake project u
 In your parent project:
 
 ```cmake
-add_subdirectory(StormByte-BuildEngine)
-include(StormByte-BuildEngine/helpers.cmake)
+add_subdirectory(StormByte-BuildMaster)
+include(StormByte-BuildMaster/helpers.cmake)
 
 # Now you can use:
 #   ${ENV_RUNNER}
@@ -244,4 +244,4 @@ include(StormByte-BuildEngine/helpers.cmake)
 
 ## License
 
-StormByte‑BuildEngine is licensed under the **MIT License**, allowing unrestricted use in external projects.
+StormByte‑BuildMaster is licensed under the **MIT License**, allowing unrestricted use in external projects.

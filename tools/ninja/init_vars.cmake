@@ -1,4 +1,4 @@
-set(BUILDENGINE_TOOLS_NINJA_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
+set(BUILDMASTER_TOOLS_NINJA_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
 find_program(NINJA_EXECUTABLE ninja QUIET)
 if(NOT NINJA_EXECUTABLE)
 	message(FATAL_ERROR "Ninja executable not found: please install Ninja or ensure it's on PATH.")

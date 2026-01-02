@@ -52,11 +52,11 @@ function(create_meson_setup_file _file _component _src_dir _build_dir _install_p
 	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_MESON_COMPONENT}")
 
 	set(_MESON_SETUP_FILE
-		"${BUILDENGINE_SCRIPTS_MESON_DIR}/meson_configure_${_MESON_COMPONENT_SAFE}.cmake"
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/meson_configure_${_MESON_COMPONENT_SAFE}.cmake"
 	)
 
 	configure_file(
-		"${BUILDENGINE_TOOLS_MESON_SRC_DIR}/setup.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/setup.cmake.in"
 		"${_MESON_SETUP_FILE}"
 		@ONLY
 	)
