@@ -38,6 +38,10 @@ else()
 	)
 endif()
 
+# Detect number of processors
+include(ProcessorCount)
+ProcessorCount(NPROC)
+
 # Prepare ENV_RUNNER for propagation
 prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 

@@ -7,6 +7,7 @@ update_cflags="@CFLAGS@"
 update_cxxflags="@CXXFLAGS@"
 update_ldflags="@LDFLAGS@"
 update_path="@PATH@"
+update_nproc="@NPROC@"
 
 if [ -n "$update_pkg_config" ]; then
 	export PKG_CONFIG="$update_pkg_config"
@@ -46,6 +47,10 @@ fi
 
 if [ -n "$update_path" ]; then
 	export PATH="$update_path:$PATH"
+fi
+
+if [ -n "$update_nproc" ]; then
+	export CMAKE_BUILD_PARALLEL_LEVEL="$update_nproc"
 fi
 
 if [ $# -eq 0 ]; then
