@@ -2,8 +2,6 @@
 
 set -e
 
-echo "Combining static libraries for @COMPONENT@"
-
 ar -M <<EOF
 CREATE @LIBRARY_PATH@
 @ADD_LIBRARIES@

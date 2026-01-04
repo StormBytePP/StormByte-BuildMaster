@@ -1,5 +1,3 @@
 @echo off
 
-echo "Combining static libraries for @COMPONENT@"
-
 lib /OUT:@DEST_LIBRARY@ @ADD_LIBRARIES@
