@@ -1,6 +1,3 @@
-set(BUILDMASTER_GIT_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
-set(BUILDMASTER_GIT_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}")
-
 ## create_git_patch_file(_out_file _component _git_repo_dir _git_patches)
 ##
 ## Generate a CMake script that applies a set of git patches to a repository.

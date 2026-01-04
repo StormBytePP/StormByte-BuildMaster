@@ -1,34 +1,59 @@
-###
-## Function: create_meson_setup_file
-### Generates a Meson setup CMake script for a specified component.
+### Function: create_meson_stages
+### Create setup/compile/install scripts for a Meson-built component.
 ##
-## Parameters:
-##  - _file: name of the variable to set in parent scope with the path to
-##           the generated setup script.
-##  - _component: simple name of the component (e.g. "ogg", "opus").
-##  - _src_dir: path to the component's source directory.
-##  - _build_dir: path to the component's build directory.
-##  - _install_prefix: installation prefix to pass to Meson.
+## Parameters (positional):
+##  - _file_setup: name of the variable to set in parent scope with the
+##                 path to the generated Meson `*_configure.cmake` script.
+##  - _file_compile: name of the variable to set in parent scope with the
+##                   path to the generated Meson `*_compile.cmake` script.
+##  - _file_install: name of the variable to set in parent scope with the
+##                   path to the generated Meson `*_install.cmake` script.
+##  - _component: simple component name (used to form stage names and
+##                derive the file name).
+##  - _component_title: human-friendly component title (e.g. "opus").
+##  - _src_dir: path to the component source directory.
+##  - _build_dir: path to the component build directory.
 ##  - _meson_options: list of Meson options to pass to the component's setup.
-##  - _indent_level (optional): number of tab characters to prepend to
-##                              generated lines inside the setup script.
-##                              Defaults to no indentation when omitted.
+##  - _output_library: path to the built library/artifact produced by the
+##                     component (exported into `_MESON_OUTPUT_LIBRARY` for
+##                     use inside the templates).
+##  - _indent_level (optional, passed as ARGV9): number of tab characters
+##                   to prepend to generated lines; when provided `_INDENT_`
+##                   is set for use inside templates. This optional argument
+##                   should come after `_output_library`.
 ##
 ### Behaviour:
-##  - The function generates a Meson setup CMake script from the template
-##    `setup.cmake.in` located in the same directory as this helper.cmake.
-##  - The generated script is placed in the bootstrap CMake binary directory
-##    (`${CMAKE_BINARY_DIR}`) with a name derived from the component name.
-##  - The generated script sets up the component's build using the provided
-##    source/build directories and options.
-##  - When `_indent_level` is provided, the variable `_INDENT_` inside the
-##    template will contain that number of tab characters (`\t`), allowing
-##    indentation of emitted commands. When omitted, `_INDENT_` is empty.
-###
-function(create_meson_setup_file _file _component _src_dir _build_dir _install_prefix _meson_options)
+##  - Appends `_build` and `_install` to `_component` to form stage names.
+##  - Sets up template variables: `_MESON_COMPONENT_TITLE`, `_MESON_SRC_DIR`,
+##    `_MESON_BUILD_DIR`, `_MESON_OUTPUT_LIBRARY` and `_MESON_OPTIONS` (the
+##    `_meson_options` list is joined with a space; the Meson setup template
+##    will receive `--prefix`/`--libdir` arguments as appropriate when
+##    generating the runner invocation).
+##  - Calls `sanitize_for_filename` to produce `_MESON_COMPONENT_SAFE` used
+##    to create three output paths inside `${BUILDMASTER_SCRIPTS_MESON_DIR}`:
+##      * <safe>_configure.cmake
+##      * <safe>_compile.cmake
+##      * <safe>_install.cmake
+##  - Generates the three scripts from the templates in
+##    `${BUILDMASTER_TOOLS_MESON_SRC_DIR}` via `configure_file`.
+##  - Writes the generated file paths into the parent scope variables named
+##    by `_file_setup`, `_file_compile` and `_file_install` and exposes
+##    `_MESON_OUTPUT_LIBRARY` for template use.
+##
+### Return / Side effects:
+##  - No direct return value; results are provided through parent-scope
+##    variables.
+##  - `configure_file` calls create or overwrite files under
+##    `${BUILDMASTER_SCRIPTS_MESON_DIR}` when the function runs.
+##
+### Example (conceptual):
+##  create_meson_stages(setup_file compile_file install_file mylib "My Lib"
+##                      /path/to/src /path/to/build "${meson_options}"
+##                      /path/to/mylibname.so 1
+function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _src_dir _build_dir _meson_options _output_library)
 	# Optional indent level
-	if(ARGC GREATER 6)
-		set(_indent_level "${ARGV6}")
+	if(ARGC GREATER 9)
+		set(_indent_level "${ARGV9}")
 		string(REPEAT "\t" ${_indent_level} _INDENT_)
 	else()
 		set(_INDENT_ "")
@@ -36,22 +61,25 @@ function(create_meson_setup_file _file _component _src_dir _build_dir _install_p
 
 	# Original logic
 	set(_MESON_COMPONENT "${_component}")
+	set(_MESON_COMPONENT_TITLE "${_component_title}")
+	string(APPEND _MESON_STAGE_BUILD "${_component}" "_build")
+	string(APPEND _MESON_STAGE_INSTALL "${_component}" "_install")
 	set(_MESON_BUILD_DIR "${_build_dir}")
 	set(_MESON_SRC_DIR "${_src_dir}")
+	set(_MESON_OUTPUT_LIBRARY "${_output_library}")
 
 	list_join(_MESON_OPTIONS "${_meson_options}" " ")
 
-	string(CONCAT
-		_MESON_OPTIONS
-		"--prefix=${_install_prefix} "
-		"--libdir=${CMAKE_INSTALL_LIBDIR} "
-		"${_MESON_OPTIONS}"
-	)
-
-	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_MESON_COMPONENT}")
+	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_component}")
 
 	set(_MESON_SETUP_FILE
-		"${BUILDMASTER_SCRIPTS_MESON_DIR}/meson_configure_${_MESON_COMPONENT_SAFE}.cmake"
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
+	)
+	set(_MESON_COMPILE_FILE
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_compile.cmake"
+	)
+	set(_MESON_INSTALL_FILE
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install.cmake"
 	)
 
 	configure_file(
@@ -59,6 +87,18 @@ function(create_meson_setup_file _file _component _src_dir _build_dir _install_p
 		"${_MESON_SETUP_FILE}"
 		@ONLY
 	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/compile.cmake.in"
+		"${_MESON_COMPILE_FILE}"
+		@ONLY
+	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/install.cmake.in"
+		"${_MESON_INSTALL_FILE}"
+		@ONLY
+	)
 
-	set(${_file} "${_MESON_SETUP_FILE}" PARENT_SCOPE)
+	set(${_file_setup} "${_MESON_SETUP_FILE}" PARENT_SCOPE)
+	set(${_file_compile} "${_MESON_COMPILE_FILE}" PARENT_SCOPE)
+	set(${_file_install} "${_MESON_INSTALL_FILE}" PARENT_SCOPE)
 endfunction()

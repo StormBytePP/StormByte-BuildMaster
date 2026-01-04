@@ -283,3 +283,6 @@ include(${BUILDMASTER_SRC_DIR}/env/helpers.cmake)
 include(${BUILDMASTER_SRC_DIR}/tools/cmake/helpers.cmake)
 include(${BUILDMASTER_SRC_DIR}/tools/git/helpers.cmake)
 include(${BUILDMASTER_SRC_DIR}/tools/meson/helpers.cmake)
+# Library helpers need to be included after tools so cmake and
+# meson helpers are available
+include(${BUILDMASTER_SRC_DIR}/library/helpers.cmake)

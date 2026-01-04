@@ -177,6 +177,19 @@ The engine includes a rich set of helper functions:
 - `ensure_build_dir()`  
 - `prepare_command()`  
 
+### Library import helpers
+
+- `library_import_hint(out_var, lib_name, prefix_path)` : constructs a platform‑appropriate shared‑library filename (or import library on MSVC) and writes it into the variable named by `out_var` in the parent scope. `prefix_path` is optional; when empty the install directory (for example `${CMAKE_INSTALL_LIBDIR}`) is used.
+
+- `library_import_static_hint(out_var, lib_name, prefix_path)` : constructs a static library filename and writes it into `out_var` in the parent scope. `prefix_path` is optional and falls back to `${CMAKE_INSTALL_LIBDIR}` when empty.
+
+- `library_dll_hint(out_var, lib_name, prefix_path)` : MSVC only — constructs the DLL filename located under the install bindir (`${CMAKE_INSTALL_BINDIR}` when `prefix_path` is empty) and writes it into `out_var` in the parent scope.
+
+Notes:
+- Callers should pass the name of the variable to set as `out_var` (the functions use `set(<out_var> <value> PARENT_SCOPE)`).
+- The higher‑level helpers `create_library()`, `create_cmake_library()` and `create_meson_library()` generate per‑component generator scripts using the provided templates (`library/add_shared_library.cmake.in`, `library/add_static_library.cmake.in`) and set the resulting script path in the variable passed as the first argument.
+
+
 These functions abstract away quoting, path normalization, list handling, and directory creation.
 
 ---
