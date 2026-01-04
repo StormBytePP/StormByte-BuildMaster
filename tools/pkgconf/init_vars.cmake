@@ -35,13 +35,17 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(PKGCONF_COMPONENT "pkgconf")
 		set(PKGCONF_OPTIONS "${PKGCONF_MESON_OPTIONS}")
 		set(PKGCONF_SRC_DIR "${PKGCONF_SRC_DIR}")
-		create_meson_setup_file(
+		create_meson_stages(
 			PKGCONF_MESON_SETUP_FILE
+			_ignored_compile_file
+			_ignored_install_file
 			"${PKGCONF_COMPONENT}"
+			"pkgconf"
 			"${PKGCONF_SRC_DIR}"
 			"${PKGCONF_BUILD_DIR}"
-			"${BUILDMASTER_INSTALL_DIR}"
 			"${PKGCONF_OPTIONS}"
+			"static"
+			"pkgconf"
 			3
 		)
 		include("${PKGCONF_MESON_SETUP_FILE}")
