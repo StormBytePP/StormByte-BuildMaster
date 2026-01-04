@@ -211,7 +211,7 @@ function(create_cmake_component _library_create_file _component _component_title
 		set(_CMAKE_INDENT_ 0)
 	endif()
 
-	create_component(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "cmake" "${_subcomponents}" ${_indent_level})
+	create_component(${_library_create_file} "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "cmake" "${_subcomponents}" ${_indent_level})
 endfunction()
 
 ## create_meson_component(_file_library, _component, _component_title,
@@ -232,7 +232,7 @@ function(create_meson_component _library_create_file _component _component_title
 		set(_indent_level 0)
 	endif()
 
-	create_component(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "meson" "${_subcomponents}" ${_indent_level})
+	create_component(${_library_create_file} "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "meson" "${_subcomponents}" ${_indent_level})
 endfunction()
 
 ## rename_static_library(_rename_file, _component, _badname)
