@@ -3,24 +3,23 @@ include(GNUInstallDirs)
 
 ## library_import_hint(out_var, lib_name [, prefix_path])
 ##
-## Assemble a platform-correct shared-library (or import-library on
-## MSVC) filename and write the full path into the named parent-scope
-## variable `out_var`.
+## Build a platform-correct shared-library filename (or MSVC import
+## library) for `lib_name` and store the full path into the parent-
+## scope variable named by `out_var`.
 ##
 ## Parameters
-##  - out_var: variable name (in the parent scope) that will receive the
-##             resulting full path (set with `PARENT_SCOPE`).
-##  - lib_name: library base name without platform prefixes/suffixes.
-##  - prefix_path (optional): directory to prepend; when omitted the
-##             helper uses `${BUILDMASTER_INSTALL_LIBDIR}`.
+##  - out_var: parent-scope variable name that will receive the final path.
+##  - lib_name: base library name without platform affixes (e.g. avcodec).
+##  - prefix_path (optional): directory prefix to use instead of
+##             `${BUILDMASTER_INSTALL_LIBDIR}`.
 ##
 ## Behavior
-##  - On MSVC the name is formed from `CMAKE_IMPORT_LIBRARY_PREFIX`
-##    and `CMAKE_IMPORT_LIBRARY_SUFFIX` (import library). On other
-##    platforms it uses `CMAKE_SHARED_LIBRARY_PREFIX` and
-##    `CMAKE_SHARED_LIBRARY_SUFFIX` (shared object / DLL name).
-##  - The helper does not normalise path separators beyond simple
-##    concatenation: it yields `<prefix>/<prefix_symbol><lib_name><suffix>`.
+##  - On MSVC this composes an import-library name using
+##    `CMAKE_IMPORT_LIBRARY_PREFIX`/`CMAKE_IMPORT_LIBRARY_SUFFIX`.
+##  - On other platforms it composes a shared object / DLL name using
+##    `CMAKE_SHARED_LIBRARY_PREFIX`/`CMAKE_SHARED_LIBRARY_SUFFIX`.
+##  - The returned value is a simple concatenation of the chosen
+##    directory, platform prefix, `lib_name`, and suffix.
 function(library_import_hint _lib_full_path _lib_name)
 	if(ARGC GREATER 2)
 		set(_full_prefix_path "${ARGV2}")
@@ -41,18 +40,19 @@ endfunction()
 
 ## library_import_static_hint(out_var, lib_name [, prefix_path])
 ##
-## Build the canonical static-library filename for `lib_name` and set the
-## full path into the parent-scope variable `out_var`.
+## Compose the canonical static library filename for `lib_name` and
+## set the resulting full path into the parent-scope variable `out_var`.
 ##
 ## Parameters
-##  - out_var: parent-scope variable name to receive the constructed path.
-##  - lib_name: library base name (no prefix/suffix).
-##  - prefix_path (optional): directory to use instead of
+##  - out_var: parent-scope variable name to receive the resulting path.
+##  - lib_name: base library name without prefixes/suffixes.
+##  - prefix_path (optional): directory prefix to use instead of
 ##             `${BUILDMASTER_INSTALL_LIBDIR}`.
 ##
 ## Behavior
-##  - Uses `CMAKE_STATIC_LIBRARY_PREFIX` and `CMAKE_STATIC_LIBRARY_SUFFIX`
-##    to compose the filename and places it under the chosen prefix.
+##  - Uses `CMAKE_STATIC_LIBRARY_PREFIX` and
+##    `CMAKE_STATIC_LIBRARY_SUFFIX` to assemble the filename and
+##    prepends the chosen directory prefix.
 function(library_import_static_hint _lib_full_path _lib_name)
 	if(ARGC GREATER 2)
 		set(_full_prefix_path "${ARGV2}")
@@ -68,20 +68,21 @@ endfunction()
 
 ## library_dll_hint(out_var, lib_name [, prefix_path])
 ##
-## MSVC-only: construct the expected DLL filename for `lib_name` and set
-## the resulting path into the parent-scope variable `out_var`.
+## MSVC-only helper: build the DLL filename for `lib_name` and write the
+## full path into the parent-scope variable `out_var`.
 ##
 ## Parameters
 ##  - out_var: parent-scope variable name to receive the DLL path.
-##  - lib_name: base library name without platform-specific affixes.
+##  - lib_name: base library name without prefixes/suffixes.
 ##  - prefix_path (optional): directory to use instead of
 ##             `${BUILDMASTER_INSTALL_BINDIR}`.
 ##
 ## Behavior
-##  - Fails with `FATAL_ERROR` when invoked on non-MSVC platforms.
-##  - On MSVC it uses `CMAKE_SHARED_LIBRARY_PREFIX`/`CMAKE_SHARED_LIBRARY_SUFFIX`
-##    and places the DLL under the chosen bindir. Useful when import
-##    libraries and DLLs are installed to different directories.
+##  - This helper emits a `FATAL_ERROR` when used on non-MSVC
+##    platforms. On MSVC it composes the DLL name from
+##    `CMAKE_SHARED_LIBRARY_PREFIX`/`CMAKE_SHARED_LIBRARY_SUFFIX` and
+##    places it under the chosen bindir. Intended for cases where DLLs
+##    and import libraries live in different install directories.
 function(library_dll_hint _lib_full_path _lib_name)
 	if(NOT MSVC)
 		message(FATAL_ERROR "library_dll_hint is only applicable on MSVC platforms")
@@ -99,44 +100,49 @@ function(library_dll_hint _lib_full_path _lib_name)
 endfunction()
 
 ## create_component(_library_create_file, _component, _component_title,
-##                  _src_dir, _build_dir, _options, _library_mode, _build_system [, indent_level])
+##                  _src_dir, _build_dir, _options, _library_mode,
+##                  _build_system, _subcomponents, _dependency [, indent_level])
 ##
-## Generate a per-component CMake fragment that declares an `IMPORTED`
-## library target and wires it to the component's install stage. The
-## function writes the generated fragment path into the parent-scope
+## Generate a per-component generator fragment (CMake) which declares an
+## `IMPORTED` target and wires it to the component's install/build stages.
+## The path to the generated fragment is written into the parent-scope
 ## variable named by `_library_create_file`.
 ##
 ## Parameters
-##  - _library_create_file: parent-scope variable name to receive the
-##                         generated script path.
-##  - _component: short component id used for stage names and filenames.
+##  - _library_create_file: parent-scope variable name that will receive
+##                         the generated fragment path.
+##  - _component: short identifier for the component (used in filenames
+##                and stage names).
 ##  - _component_title: human-readable title inserted into templates.
 ##  - _src_dir/_build_dir: component source and build directory paths.
-##  - _options: list of build options forwarded to stage generators.
-##  - _library_mode: `static` or `shared`, selects templates and filename helpers.
-##  - _build_system: `cmake` or `meson`, selects which stage generator to call.
-##  - indent_level (optional): numeric indentation level forwarded to templates.
-##  - _subcomponents: list of subcomponent names whose files are referenced.
+##  - _options: list of options forwarded to stage generator helpers.
+##  - _library_mode: `static` or `shared` — chooses templates and filename helpers.
+##  - _build_system: `cmake` or `meson` — selects which stage generator helper to call.
+##  - _subcomponents: list of subcomponent names referenced by templates.
+##  - _dependency: (may be empty) when non-empty selects alternate "dependant"
+##    templates so the generated fragment can express ordering to another stage.
+##  - indent_level (optional): numeric indentation level; passed as the
+##    11th positional argument (ARGV10) when present.
 ##
 ## Behavior
-##  - In `static` mode the helper computes expected static-library paths
-##    (via `library_import_static_hint`) and exposes them to the template.
-##  - In `shared` mode it computes import-library paths (and on MSVC also
-##    DLL paths) so templates can reference the correct files.
-##  - The chosen generator template (`component_static.cmake.in` or
-##    `component_shared.cmake.in`) is configured into
-##    `${BUILDMASTER_SCRIPTS_LIBRARY_DIR}` producing the per-component
-##    fragment; its path is returned in the variable named by
-##    `_library_create_file`.
+##  - In `static` mode the helper computes static-library filenames via
+##    `library_import_static_hint`. In `shared` mode it computes import
+##    library names and (on MSVC) DLL names.
+##  - When `_dependency` is non-empty the helper selects "dependant"
+##    generator templates so the generated fragment can depend on another
+##    staged target.
+##  - The configured template is written into `${BUILDMASTER_SCRIPTS_COMPONENT_DIR}`
+##    and the resulting path is returned via the variable named by
+##    `_library_create_file` in the parent scope.
 ##
 ## Notes
 ##  - Templates expect variables such as `_LIBRARY_NAME`,
-##    `_LIBRARY_SHARED_FILE`, and `_LIBRARY_IMPORT_FILE` to be set by
-##    this helper before configuration.
-function(create_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _build_system _subcomponents)
+##    `_LIBRARY_SHARED_FILE`, and `_LIBRARY_IMPORT_FILE` to be prepared
+##    by this helper before `configure_file` is invoked.
+function(create_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _build_system _subcomponents _dependency)
 	# Optional indent level
-	if(ARGC GREATER 9)
-		set(_indent_level "${ARGV9}")
+	if(ARGC GREATER 10)
+		set(_indent_level "${ARGV10}")
 	else()
 		set(_indent_level 0)
 	endif()
@@ -145,8 +151,15 @@ function(create_component _library_create_file _component _component_title _src_
 	set(_LIBRARY_NAME "${_component}")
 	string(TOLOWER "${_library_mode}" _library_mode)
 	set(_LIBRARY_STAGE_INSTALL "${_component}_install")
+	if(NOT _dependency STREQUAL "")
+		set(_LIBRARY_CONFIGURE_TARGET "${_component}_configure")
+		set(_LIBRARY_BUILD_TARGET "${_component}_build")
+		set(_component_suffix "_dependant")
+	else()
+		set(_component_suffix "")
+	endif()
 	if(_library_mode STREQUAL "static")
-		set(_LIBRARY_GENERATOR_FILE "component_static.cmake.in")
+		set(_LIBRARY_GENERATOR_FILE "component_static${_component_suffix}.cmake.in")
 		set(_LIBRARY_COMPONENT_NAMES "")
 		set(_LIBRARY_COMPONENT_FILES "")
 		foreach(_subcomponent IN LISTS _subcomponents)
@@ -155,7 +168,7 @@ function(create_component _library_create_file _component _component_title _src_
 			list(APPEND _LIBRARY_COMPONENT_FILES "${_LIBRARY_FILE_SUB}")
 		endforeach()
 	elseif(_library_mode STREQUAL "shared")
-		set(_LIBRARY_GENERATOR_FILE "component_shared.cmake.in")
+		set(_LIBRARY_GENERATOR_FILE "component_shared${_component_suffix}.cmake.in")
 		set(_LIBRARY_COMPONENT_NAMES "")
 		set(_LIBRARY_COMPONENT_FILES "")
 		set(_LIBRARY_COMPONENT_DLL_FILES "")
@@ -194,15 +207,16 @@ function(create_component _library_create_file _component _component_title _src_
 endfunction()
 
 ## create_cmake_component(_file_library, _component, _component_title,
-##                       _src_dir, _build_dir, _options, _library_mode [, indent_level])
+##                       _src_dir, _build_dir, _options, _library_mode, _subcomponents [, indent_level])
 ##
-## Convenience wrapper that calls `create_component` with `_build_system`
-## fixed to `cmake`. Returns the generated fragment path in the parent
-## scope variable named by `_file_library`.
+## Wrapper that calls `create_component` with `_build_system` set to
+## `cmake`. Its parameters are the same order as `create_component` but
+## `_subcomponents` is passed at the eighth position. `indent_level` is
+## optional and when present must be the ninth positional argument.
 ##
-## Notes
-##  - Semantics and parameters are identical to `create_component`; this
-##    wrapper exists to make caller intent explicit.
+## The generated fragment path is returned via the parent-scope variable
+## named by `_file_library` (the wrapper re-exposes that variable into
+## the caller scope).
 function(create_cmake_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
 	# Optional indent level
 	if(ARGC GREATER 8)
@@ -222,6 +236,7 @@ function(create_cmake_component _library_create_file _component _component_title
 		"${_library_mode}"
 		"cmake"
 		"${_subcomponents}"
+		""
 		${_indent_level}
 	)
 
@@ -230,15 +245,16 @@ function(create_cmake_component _library_create_file _component _component_title
 endfunction()
 
 ## create_meson_component(_file_library, _component, _component_title,
-##                       _src_dir, _build_dir, _options, _library_mode [, indent_level])
+##                       _src_dir, _build_dir, _options, _library_mode, _subcomponents [, indent_level])
 ##
-## Convenience wrapper that calls `create_component` with `_build_system`
-## fixed to `meson`. Returns the generated fragment path in the parent
-## scope variable named by `_file_library`.
-##
-## Notes
-##  - Semantics and parameters match `create_component`; this wrapper is
-##    provided to clarify that the generated fragment targets a Meson build.
+## Wrapper that calls `create_component` with `_build_system` set to
+## `meson`. Its parameters follow the same ordering as
+## `create_cmake_component`: `_subcomponents` is the eighth argument and
+## `indent_level` is an optional ninth positional argument.
+##}
+## The generated fragment path is returned via the parent-scope variable
+## named by `_file_library` (the wrapper re-exposes that variable into
+## the caller scope).
 function(create_meson_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
 	if(ARGC GREATER 8)
 		set(_indent_level "${ARGV8}")
@@ -256,6 +272,80 @@ function(create_meson_component _library_create_file _component _component_title
 		"${_library_mode}"
 		"meson"
 		"${_subcomponents}"
+		""
+		${_indent_level}
+	)
+
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
+endfunction()
+
+## create_cmake_dependant_component(_file_library, _component, _component_title,
+##                                  _src_dir, _build_dir, _options, _library_mode,
+##                                  _subcomponents, _dependency [, indent_level])
+##
+## Wrapper that calls `create_component` with `_build_system` set to
+## `cmake` and forwards `_dependency` (required positional argument)
+## which selects dependant templates. `indent_level` is optional and,
+## when present, must be provided as the 10th positional argument.
+##
+## The generated fragment path is returned in the parent-scope variable
+## named by `_file_library` and is re-exposed into the caller's scope.
+function(create_cmake_dependant_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents _dependency)
+	# Optional indent level
+	if(ARGC GREATER 9)
+		set(_indent_level "${ARGV9}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	# Llamamos a create_component, que deja el resultado en *este* scope
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_src_dir}"
+		"${_build_dir}"
+		"${_options}"
+		"${_library_mode}"
+		"cmake"
+		"${_subcomponents}"
+		"${_dependency}"
+		${_indent_level}
+	)
+
+	# Reexpone la variable al scope del llamador real
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
+endfunction()
+
+## create_meson_dependant_component(_file_library, _component, _component_title,
+##                                   _src_dir, _build_dir, _options, _library_mode,
+##                                   _subcomponents, _dependency [, indent_level])
+##
+## Wrapper that calls `create_component` with `_build_system` set to
+## `meson` and forwards `_dependency` (required positional argument)
+## which selects dependant templates. `indent_level` is optional and,
+## when present, must be provided as the 10th positional argument.
+##
+## The generated fragment path is returned in the parent-scope variable
+## named by `_file_library` and is re-exposed into the caller's scope.
+function(create_meson_dependant_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents _dependency)
+	if(ARGC GREATER 9)
+		set(_indent_level "${ARGV9}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_src_dir}"
+		"${_build_dir}"
+		"${_options}"
+		"${_library_mode}"
+		"meson"
+		"${_subcomponents}"
+		"${_dependency}"
 		${_indent_level}
 	)
 
@@ -264,10 +354,10 @@ endfunction()
 
 ## rename_static_library(_rename_file, _component, _badname)
 ##
-## Generate a small CMake fragment that renames an incorrectly named
-## static library file installed by a component to the canonical name.
-## The path to the generated rename fragment is returned in the parent
-## scope variable named by `_rename_file`.
+## Generate a small CMake fragment that renames a wrongly-named static
+## library installed by a component to the canonical filename. The path
+## to the generated fragment is returned in the parent-scope variable
+## named by `_rename_file`.
 ##
 ## Parameters
 ##  - _rename_file: parent-scope variable name to receive the generated script path.
@@ -275,16 +365,17 @@ endfunction()
 ##  - _badname: filename currently present in the install libdir that should be renamed.
 ##
 ## Behavior
-##  - Computes `_LIBRARY_BAD_PATH` as `${BUILDMASTER_INSTALL_LIBDIR}/${_badname}`.
-##  - Computes the expected canonical path via `library_import_static_hint`.
+##  - Constructs `_LIBRARY_BAD_PATH` as `${BUILDMASTER_INSTALL_LIBDIR}/${_badname}`.
+##  - Uses `library_import_static_hint` to compute `_LIBRARY_GOOD_PATH`.
 ##  - Configures `rename_static_library.cmake.in` into
-##    `${BUILDMASTER_SCRIPTS_LIBRARY_DIR}` producing a fragment which performs
-##    the rename (via `cmake -E rename`) when executed.
+##    `${BUILDMASTER_SCRIPTS_LIBRARY_DIR}`, producing a fragment that
+##    performs the rename using `cmake -E rename` when executed.
 ##
 ## Notes
-##  - This helper only generates the fragment; callers must ensure the
-##    fragment is executed (for example by including it in the install stage).
-##  - The function assumes `${BUILDMASTER_INSTALL_LIBDIR}` and
+##  - This function only generates the fragment; callers must include
+##    or install it where appropriate so the rename runs as part of the
+##    component's install stage.
+##  - Assumes `${BUILDMASTER_INSTALL_LIBDIR}` and
 ##    `${BUILDMASTER_SCRIPTS_LIBRARY_DIR}` exist and are writable.
 function(rename_static_library _rename_file _component _badname)
 	set(_LIBRARY_NAME "${_component}")
