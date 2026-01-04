@@ -1,6 +1,6 @@
 set(BUILDMASTER_ENV_DIR "${CMAKE_CURRENT_LIST_DIR}")
 if(NOT BUILDMASTER_CONFIGURED)
-	set(BUILDMASTER_SCRIPTS_ENV_DIR "${BUILDMASTER_BIN_DIR}/scripts/env")
+	set(BUILDMASTER_SCRIPTS_ENV_DIR "${BUILDMASTER_BINDIR}/scripts/env")
 	if(WIN32)
 		# store as a list: interpreter and its first arg, then the script path
 		set(ENV_RUNNER cmd "/C" "${BUILDMASTER_SCRIPTS_ENV_DIR}/runner.bat")

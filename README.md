@@ -203,12 +203,12 @@ StormByte‑BuildMaster exposes a set of variables to the parent CMake project u
 | Variable | Description |
 |---------|-------------|
 | `BUILDMASTER_SRC_DIR` | Root directory of the BuildMaster source |
-| `BUILDMASTER_BIN_DIR` | Binary directory for generated scripts |
+| `BUILDMASTER_BINDIR` | Binary directory for generated scripts |
 | `BUILDMASTER_SCRIPTS_DIR` | Base directory for generated scripts |
 | `BUILDMASTER_INSTALL_DIR` | Install prefix used by all components |
-| `BUILDMASTER_INSTALL_LIB_DIR` | Install lib directory |
-| `BUILDMASTER_INSTALL_BIN_DIR` | Install bin directory |
-| `BUILDMASTER_INSTALL_INCLUDE_DIR` | Install include directory |
+| `BUILDMASTER_INSTALL_LIBDIR` | Install lib directory |
+| `BUILDMASTER_INSTALL_BINDIR` | Install bin directory |
+| `BUILDMASTER_INSTALL_INCLUDEDIR` | Install include directory |
 | `ENV_RUNNER` | Tokenized command list for the environment runner |
 | `ENV_RUNNER_SILENT` | Silent version of the environment runner |
 

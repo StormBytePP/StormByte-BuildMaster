@@ -59,7 +59,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 		endif()
 
 		# Set pkgconf executable path
-		set(PKG_CONFIG "${BUILDMASTER_INSTALL_BIN_DIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
+		set(PKG_CONFIG "${BUILDMASTER_INSTALL_BINDIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
 
 		# Test pkgconf/pkg-config version
 		execute_process(
