@@ -208,10 +208,25 @@ function(create_cmake_component _library_create_file _component _component_title
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
 	else()
-		set(_CMAKE_INDENT_ 0)
+		set(_indent_level 0)
 	endif()
 
-	create_component(${_library_create_file} "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "cmake" "${_subcomponents}" ${_indent_level})
+	# Llamamos a create_component, que deja el resultado en *este* scope
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_src_dir}"
+		"${_build_dir}"
+		"${_options}"
+		"${_library_mode}"
+		"cmake"
+		"${_subcomponents}"
+		${_indent_level}
+	)
+
+	# Reexpone la variable al scope del llamador real
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
 endfunction()
 
 ## create_meson_component(_file_library, _component, _component_title,
@@ -225,14 +240,26 @@ endfunction()
 ##  - Semantics and parameters match `create_component`; this wrapper is
 ##    provided to clarify that the generated fragment targets a Meson build.
 function(create_meson_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
-	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
 	else()
 		set(_indent_level 0)
 	endif()
 
-	create_component(${_library_create_file} "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "meson" "${_subcomponents}" ${_indent_level})
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_src_dir}"
+		"${_build_dir}"
+		"${_options}"
+		"${_library_mode}"
+		"meson"
+		"${_subcomponents}"
+		${_indent_level}
+	)
+
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
 endfunction()
 
 ## rename_static_library(_rename_file, _component, _badname)
