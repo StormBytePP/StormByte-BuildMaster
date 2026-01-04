@@ -1,29 +1,31 @@
-add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
-	COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
-	COMMENT "Configuring @_LIBRARY_NAME@"
-)
-
-include(@_LIBRARY_BUILD_FILE@)
-add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
-include(@_LIBRARY_INSTALL_FILE@)
-
-add_library(@_LIBRARY_NAME@ INTERFACE)
-
-set(libs "@_LIBRARY_COMPONENT_NAMES@")
-set(lib_files "@_LIBRARY_COMPONENT_FILES@")
-
-# Recorremos las listas en paralelo
-foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-	add_library(${lib} STATIC IMPORTED GLOBAL)
-
-	set_target_properties(${lib} PROPERTIES
-		IMPORTED_LOCATION "${lib_file}"
-		IMPORTED_LOCATION_DEBUG "${lib_file}"
-		IMPORTED_LOCATION_RELEASE "${lib_file}"
-		IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
-		IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
+if(NOT TARGET @_LIBRARY_NAME@)
+	add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
+		COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
+		COMMENT "Configuring @_LIBRARY_NAME@"
 	)
 
-	add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
-	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
-endforeach()
+	include(@_LIBRARY_BUILD_FILE@)
+	add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
+	include(@_LIBRARY_INSTALL_FILE@)
+
+	add_library(@_LIBRARY_NAME@ INTERFACE)
+
+	set(libs "@_LIBRARY_COMPONENT_NAMES@")
+	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
+
+	# Recorremos las listas en paralelo
+	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
+		add_library(${lib} STATIC IMPORTED GLOBAL)
+
+		set_target_properties(${lib} PROPERTIES
+			IMPORTED_LOCATION "${lib_file}"
+			IMPORTED_LOCATION_DEBUG "${lib_file}"
+			IMPORTED_LOCATION_RELEASE "${lib_file}"
+			IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
+			IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
+		)
+
+		add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
+		target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
+	endforeach()
+endif()

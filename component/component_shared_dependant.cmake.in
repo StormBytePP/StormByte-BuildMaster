@@ -1,60 +1,59 @@
-add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
-	COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
-	COMMENT "Configuring @_LIBRARY_NAME@"
-)
+if(NOT TARGET @_LIBRARY_NAME@)
+	add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
+		COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
+		COMMENT "Configuring @_LIBRARY_NAME@"
+	)
 
-include(@_LIBRARY_BUILD_FILE@)
-add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
-include(@_LIBRARY_INSTALL_FILE@)
+	include(@_LIBRARY_BUILD_FILE@)
+	add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
+	include(@_LIBRARY_INSTALL_FILE@)
 
-add_library(@_LIBRARY_NAME@ INTERFACE)
+	add_library(@_LIBRARY_NAME@ INTERFACE)
 
-set(libs "@_LIBRARY_COMPONENT_NAMES@")
-set(lib_files "@_LIBRARY_COMPONENT_FILES@")
-if(MSVC)
-    set(lib_dll_files "@_LIBRARY_COMPONENT_DLL_FILES@")
-endif()
+	set(libs "@_LIBRARY_COMPONENT_NAMES@")
+	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
+	if(MSVC)
+		set(lib_dll_files "@_LIBRARY_COMPONENT_DLL_FILES@")
+	endif()
 
-# Recorremos las listas en paralelo
-if(MSVC)
-    foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
-        add_library(${lib} SHARED IMPORTED GLOBAL)
+	# Recorremos las listas en paralelo
+	if(MSVC)
+		foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
+			add_library(${lib} SHARED IMPORTED GLOBAL)
 
-        set_target_properties(${lib} PROPERTIES
-            IMPORTED_IMPLIB "${lib_file}"
-            IMPORTED_IMPLIB_DEBUG "${lib_file}"
-            IMPORTED_IMPLIB_RELEASE "${lib_file}"
-            IMPORTED_IMPLIB_MINSIZEREL "${lib_file}"
-            IMPORTED_IMPLIB_RELWITHDEBINFO "${lib_file}"
-        )
+			set_target_properties(${lib} PROPERTIES
+				IMPORTED_IMPLIB "${lib_file}"
+				IMPORTED_IMPLIB_DEBUG "${lib_file}"
+				IMPORTED_IMPLIB_RELEASE "${lib_file}"
+				IMPORTED_IMPLIB_MINSIZEREL "${lib_file}"
+				IMPORTED_IMPLIB_RELWITHDEBINFO "${lib_file}"
+			)
 
-        set_target_properties(${lib} PROPERTIES
-            IMPORTED_LOCATION "${lib_dll_file}"
-            IMPORTED_LOCATION_DEBUG "${lib_dll_file}"
-            IMPORTED_LOCATION_RELEASE "${lib_dll_file}"
-            IMPORTED_LOCATION_MINSIZEREL "${lib_dll_file}"
-            IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
-        )
-        
-        add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
-        target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
-    endforeach()
+			set_target_properties(${lib} PROPERTIES
+				IMPORTED_LOCATION "${lib_dll_file}"
+				IMPORTED_LOCATION_DEBUG "${lib_dll_file}"
+				IMPORTED_LOCATION_RELEASE "${lib_dll_file}"
+				IMPORTED_LOCATION_MINSIZEREL "${lib_dll_file}"
+				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
+			)
+			
+			add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
+			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
+		endforeach()
+	else()
+		foreach(lib lib_file IN ZIP_LISTS libs lib_files)
+			add_library(${lib} SHARED IMPORTED GLOBAL)
 
-else()
+			set_target_properties(${lib} PROPERTIES
+				IMPORTED_LOCATION "${lib_file}"
+				IMPORTED_LOCATION_DEBUG "${lib_file}"
+				IMPORTED_LOCATION_RELEASE "${lib_file}"
+				IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
+				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
+			)
 
-    foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-        add_library(${lib} SHARED IMPORTED GLOBAL)
-
-        set_target_properties(${lib} PROPERTIES
-            IMPORTED_LOCATION "${lib_file}"
-            IMPORTED_LOCATION_DEBUG "${lib_file}"
-            IMPORTED_LOCATION_RELEASE "${lib_file}"
-            IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
-            IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
-        )
-
-        add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
-        target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
-    endforeach()
-
+			add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
+			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
+		endforeach()
+	endif()
 endif()
