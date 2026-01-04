@@ -1,5 +1,3 @@
-message(STATUS "Compiling @_CMAKE_COMPONENT_TITLE@")
-
 add_custom_target(
 	@_CMAKE_STAGE_BUILD@
 	COMMAND @ENV_CMAKE_COMMAND@ -E echo "Compiling @_CMAKE_COMPONENT_TITLE@"
