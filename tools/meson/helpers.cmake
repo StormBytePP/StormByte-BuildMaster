@@ -50,7 +50,7 @@
 ##  create_meson_stages(setup_file compile_file install_file mylib "My Lib"
 ##                      /path/to/src /path/to/build "${meson_options}"
 ##                      /path/to/mylibname.so 1
-function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _src_dir _build_dir _meson_options _output_library)
+function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _src_dir _build_dir _meson_options _output_libraries)
 	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
@@ -66,7 +66,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	string(APPEND _MESON_STAGE_INSTALL "${_component}" "_install")
 	set(_MESON_BUILD_DIR "${_build_dir}")
 	set(_MESON_SRC_DIR "${_src_dir}")
-	set(_MESON_OUTPUT_LIBRARY "${_output_library}")
+	set(_MESON_OUTPUT_LIBRARIES "${_output_libraries}")
 
 	list_join(_MESON_OPTIONS "${_meson_options}" " ")
 

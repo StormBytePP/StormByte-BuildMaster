@@ -52,7 +52,7 @@
 ##  create_cmake_stages(cfg_file build_file install_file mylib "My Lib"
 ##                      /path/to/src /path/to/build "${options}"
 ##                      /path/to/mylibname.so 1
-function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _src_dir _build_dir _options _output_library)
+function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _src_dir _build_dir _options _output_libraries)
 	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
@@ -66,7 +66,7 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	string(APPEND _CMAKE_STAGE_INSTALL "${_component}" "_install")
 	set(_CMAKE_SRC_DIR "${_src_dir}")
 	set(_CMAKE_BUILD_DIR "${_build_dir}")
-	set(_CMAKE_OUTPUT_LIBRARY "${_output_library}")
+	set(_CMAKE_OUTPUT_LIBRARIES "${_output_libraries}")
 
 	list_join(_CMAKE_OPTIONS "${_options}" "\n\t\t")
 

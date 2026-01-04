@@ -14,9 +14,9 @@ include(env/propagate_vars.cmake)
 add_subdirectory(tools)
 include(tools/propagate_vars.cmake)
 
-# Configure library components and propagate variables
-add_subdirectory(library)
-include(library/propagate_vars.cmake)
+# Configure component components and propagate variables
+add_subdirectory(component)
+include(component/propagate_vars.cmake)
 
 # Propagate variables to parent scope
 include(propagate_vars.cmake)

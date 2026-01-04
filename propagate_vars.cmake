@@ -10,4 +10,4 @@ set(BUILDMASTER_CONFIGURED TRUE PARENT_SCOPE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/env/propagate_vars.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/tools/propagate_vars.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/library/propagate_vars.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/component/propagate_vars.cmake")
