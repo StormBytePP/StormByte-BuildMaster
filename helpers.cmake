@@ -192,43 +192,41 @@ function(list_join _out_var _raw_string _separator)
 
 	set(raw "${_raw_string}")
 
-	if("${raw}" STREQUAL "")
-		message(FATAL_ERROR "list_join: input string is empty")
+	if(NOT "${raw}" STREQUAL "")
+		string(LENGTH "${raw}" N)
+		math(EXPR N "${N} - 1")
+
+		foreach(i RANGE ${N})
+			string(SUBSTRING "${raw}" ${i} 1 ch)
+
+			# Detect opening/closing quotes — but DO NOT output them
+			if(ch STREQUAL "'")
+				if(NOT in_double_quote)
+					toggle_bool(in_single_quote)
+				endif()
+				continue()
+			endif()
+
+			if(ch STREQUAL "\"")
+				if(NOT in_single_quote)
+					toggle_bool(in_double_quote)
+				endif()
+				continue()
+			endif()
+
+			# Replace semicolon only when NOT inside quotes
+			if(ch STREQUAL ";")
+				if(NOT in_single_quote AND NOT in_double_quote)
+					set(ch "\"${_separator}\"")
+				else()
+					set(ch ";")
+				endif()
+			endif()
+
+			# Append the character
+			set(result "${result}${ch}")
+		endforeach()
 	endif()
-
-	string(LENGTH "${raw}" N)
-	math(EXPR N "${N} - 1")
-
-	foreach(i RANGE ${N})
-		string(SUBSTRING "${raw}" ${i} 1 ch)
-
-		# Detect opening/closing quotes — but DO NOT output them
-		if(ch STREQUAL "'")
-			if(NOT in_double_quote)
-				toggle_bool(in_single_quote)
-			endif()
-			continue()
-		endif()
-
-		if(ch STREQUAL "\"")
-			if(NOT in_single_quote)
-				toggle_bool(in_double_quote)
-			endif()
-			continue()
-		endif()
-
-		# Replace semicolon only when NOT inside quotes
-		if(ch STREQUAL ";")
-			if(NOT in_single_quote AND NOT in_double_quote)
-				set(ch "\"${_separator}\"")
-			else()
-				set(ch ";")
-			endif()
-		endif()
-
-		# Append the character
-		set(result "${result}${ch}")
-	endforeach()
 
 	set(result "${result}\"")
 	set(${_out_var} "${result}" PARENT_SCOPE)
