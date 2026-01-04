@@ -4,6 +4,12 @@ if(NOT TARGET @_LIBRARY_NAME@)
 		COMMENT "Configuring @_LIBRARY_NAME@"
 	)
 
+	# If the caller provided a dependency list, make the configure target
+	# depend on those targets so configuration waits for them.
+	if(NOT "@_LIBRARY_DEPENDENCIES@" STREQUAL "")
+		add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ @_LIBRARY_DEPENDENCIES@)
+	endif()
+
 	include(@_LIBRARY_BUILD_FILE@)
 	add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
 	include(@_LIBRARY_INSTALL_FILE@)

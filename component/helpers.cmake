@@ -197,6 +197,9 @@ function(create_component _library_create_file _component _component_title _src_
 	sanitize_for_filename(_LIBRARY_COMPONENT_SAFE "${_component}")
 	set(_LIBRARY_CREATE_FILE "${BUILDMASTER_SCRIPTS_COMPONENT_DIR}/${_LIBRARY_COMPONENT_SAFE}_library.cmake")
 
+	# Expose dependency list to the template (may be empty)
+	set(_LIBRARY_DEPENDENCIES "${_dependency}")
+
 	configure_file(
 		"${BUILDMASTER_COMPONENT_SRC_DIR}/${_LIBRARY_GENERATOR_FILE}"
 		"${_LIBRARY_CREATE_FILE}"
