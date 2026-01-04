@@ -2,7 +2,7 @@
 
 # Arguments passed from CMake:
 # @COMPONENT@
-# @DEST_LIBRARY@
+# @LIBRARY_PATH@
 # @ADD_LIBRARIES@
 
 set -e
@@ -10,7 +10,7 @@ set -e
 echo "Combining static libraries for @COMPONENT@"
 
 ar -M <<EOF
-CREATE @X265_LIBRARY@
+CREATE @LIBRARY_PATH@
 @ADD_LIBRARIES@
 SAVE
 END

@@ -56,9 +56,9 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	# Optional indent level
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
-		string(REPEAT "\t" ${_indent_level} _INDENT_)
+		string(REPEAT "\t" ${_indent_level} _MESON_INDENT_)
 	else()
-		set(_INDENT_ "")
+		set(_MESON_INDENT_ "")
 	endif()
 
 	if(${_library_mode} STREQUAL "static")
