@@ -98,8 +98,8 @@ function(library_dll_hint _lib_full_path _lib_name)
 	set(${_lib_full_path} "${_prefix}${_lib_name}${_suffix}" PARENT_SCOPE)
 endfunction()
 
-## create_library(_library_create_file, _component, _component_title,
-##                _src_dir, _build_dir, _options, _library_mode, _build_system [, indent_level])
+## create_component(_library_create_file, _component, _component_title,
+##                  _src_dir, _build_dir, _options, _library_mode, _build_system [, indent_level])
 ##
 ## Generate a per-component CMake fragment that declares an `IMPORTED`
 ## library target and wires it to the component's install stage. The
@@ -123,8 +123,8 @@ endfunction()
 ##    (via `library_import_static_hint`) and exposes them to the template.
 ##  - In `shared` mode it computes import-library paths (and on MSVC also
 ##    DLL paths) so templates can reference the correct files.
-##  - The chosen generator template (`add_static_library.cmake.in` or
-##    `add_shared_library.cmake.in`) is configured into
+##  - The chosen generator template (`component_static.cmake.in` or
+##    `component_shared.cmake.in`) is configured into
 ##    `${BUILDMASTER_SCRIPTS_LIBRARY_DIR}` producing the per-component
 ##    fragment; its path is returned in the variable named by
 ##    `_library_create_file`.
@@ -133,10 +133,10 @@ endfunction()
 ##  - Templates expect variables such as `_LIBRARY_NAME`,
 ##    `_LIBRARY_SHARED_FILE`, and `_LIBRARY_IMPORT_FILE` to be set by
 ##    this helper before configuration.
-function(create_library _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _build_system _subcomponents)
+function(create_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _build_system _subcomponents)
 	# Optional indent level
-	if(ARGC GREATER 9)
-		set(_indent_level "${ARGV9}")
+	if(ARGC GREATER 10)
+		set(_indent_level "${ARGV10}")
 	else()
 		set(_indent_level 0)
 	endif()
@@ -193,17 +193,17 @@ function(create_library _library_create_file _component _component_title _src_di
 	set(${_library_create_file} "${_LIBRARY_CREATE_FILE}" PARENT_SCOPE)
 endfunction()
 
-## create_cmake_library(_file_library, _component, _component_title,
-##                      _src_dir, _build_dir, _options, _library_mode [, indent_level])
+## create_cmake_component(_file_library, _component, _component_title,
+##                       _src_dir, _build_dir, _options, _library_mode [, indent_level])
 ##
-## Convenience wrapper that calls `create_library` with `_build_system`
+## Convenience wrapper that calls `create_component` with `_build_system`
 ## fixed to `cmake`. Returns the generated fragment path in the parent
 ## scope variable named by `_file_library`.
 ##
 ## Notes
-##  - Semantics and parameters are identical to `create_library`; this
+##  - Semantics and parameters are identical to `create_component`; this
 ##    wrapper exists to make caller intent explicit.
-function(create_cmake_library _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
+function(create_cmake_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
 	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
@@ -211,20 +211,20 @@ function(create_cmake_library _library_create_file _component _component_title _
 		set(_CMAKE_INDENT_ 0)
 	endif()
 
-	create_library(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "cmake" "${_subcomponents}" ${_indent_level})
+	create_component(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "cmake" "${_subcomponents}" ${_indent_level})
 endfunction()
 
-## create_meson_library(_file_library, _component, _component_title,
-##                      _src_dir, _build_dir, _options, _library_mode [, indent_level])
+## create_meson_component(_file_library, _component, _component_title,
+##                       _src_dir, _build_dir, _options, _library_mode [, indent_level])
 ##
-## Convenience wrapper that calls `create_library` with `_build_system`
+## Convenience wrapper that calls `create_component` with `_build_system`
 ## fixed to `meson`. Returns the generated fragment path in the parent
 ## scope variable named by `_file_library`.
 ##
 ## Notes
-##  - Semantics and parameters match `create_library`; this wrapper is
+##  - Semantics and parameters match `create_component`; this wrapper is
 ##    provided to clarify that the generated fragment targets a Meson build.
-function(create_meson_library _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
+function(create_meson_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
 	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
@@ -232,7 +232,7 @@ function(create_meson_library _library_create_file _component _component_title _
 		set(_indent_level 0)
 	endif()
 
-	create_library(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "meson" "${_subcomponents}" ${_indent_level})
+	create_component(_library_create_file "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "meson" "${_subcomponents}" ${_indent_level})
 endfunction()
 
 ## rename_static_library(_rename_file, _component, _badname)
