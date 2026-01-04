@@ -1,8 +1,5 @@
 message(STATUS "Bootstrapping StormByte-BuildMaster (https://github.com/StormBytePP/StormByte-BuildMaster)")
 
-# Optimizations
-include(cmake/optimizations.cmake)
-
 # Initialize directory variables
 include(init_vars.cmake)
 
