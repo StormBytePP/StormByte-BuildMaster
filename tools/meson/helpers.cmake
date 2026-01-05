@@ -63,6 +63,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	if(${_library_mode} STREQUAL "static")
 		set(_MESON_LIBRARY_TYPE "static")
+		list(APPEND _meson_options "-Db_staticpic=true")
 	elseif(${_library_mode} STREQUAL "shared")
 		set(_MESON_LIBRARY_TYPE "shared")
 	else()
