@@ -1,6 +1,6 @@
 if(NOT BUILDMASTER_CONFIGURED)
-	set(BUILDMASTER_TOOLS_GIT_SRC_DIR "${CMAKE_CURRENT_LIST_DIR}")
-	set(BUILDMASTER_SCRIPTS_GIT_DIR "${BUILDMASTER_SCRIPTS_DIR}/git")
+	set(BUILDMASTER_TOOLS_GIT_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
+	set(BUILDMASTER_SCRIPTS_GIT_DIR "${BUILDMASTER_SCRIPTSDIR}/git")
 	find_program(GIT_EXECUTABLE git QUIET)
 	if(NOT GIT_EXECUTABLE)
 		message(FATAL_ERROR "Git executable not found. Install Git.")
@@ -10,4 +10,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(_env_git_silent_list ${ENV_RUNNER_SILENT} ${GIT_EXECUTABLE})
 	prepare_command(ENV_GIT_COMMAND "${_env_git_list}")
 	prepare_command(ENV_GIT_SILENT_COMMAND "${_env_git_silent_list}")
+
+	# Update out part of the toolchain file
+	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

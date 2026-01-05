@@ -11,8 +11,8 @@
 ##  - _component: simple component name (used to form stage names and
 ##                derive the file name).
 ##  - _component_title: human-friendly component title (e.g. "opus").
-##  - _src_dir: path to the component source directory.
-##  - _build_dir: path to the component build directory.
+##  - _srcdir: path to the component source directory.
+##  - _builddir: path to the component build directory.
 ##  - _meson_options: list of Meson options to pass to the component's setup.
 ##  - _library_mode: either `static` or `shared` — controls template behavior.
 ##  - _output_libraries: one or more full paths (or a single path) to the
@@ -26,7 +26,7 @@
 ##
 ### Behaviour:
 ##  - Appends `_build` and `_install` to `_component` to form stage names.
-##  - Sets up template variables: `_MESON_COMPONENT_TITLE`, `_MESON_SRC_DIR`,
+##  - Sets up template variables: `_MESON_COMPONENT_TITLE`, `_MESON_SRCDIR`,
 ##    `_MESON_BUILD_DIR`, `_MESON_OUTPUT_LIBRARIES` and `_MESON_OPTIONS` (the
 ##    `_meson_options` list is joined with a space; the Meson setup template
 ##    will receive `--prefix`/`--libdir` arguments as appropriate when
@@ -37,7 +37,7 @@
 ##      * <safe>_compile.cmake
 ##      * <safe>_install.cmake
 ##  - Generates the three scripts from the templates in
-##    `${BUILDMASTER_TOOLS_MESON_SRC_DIR}` via `configure_file`.
+##    `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via `configure_file`.
 ##  - Writes the generated file paths into the parent scope variables named
 ##    by `_file_setup`, `_file_compile` and `_file_install` and exposes
 ##    `_MESON_OUTPUT_LIBRARY` for template use.
@@ -52,7 +52,7 @@
 ##  create_meson_stages(setup_file compile_file install_file mylib "My Lib"
 ##                      /path/to/src /path/to/build "${meson_options}"
 ##                      shared "/path/to/mylibname.so" 1
-function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _src_dir _build_dir _meson_options _library_mode _output_libraries)
+function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	# Optional indent level
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -75,8 +75,8 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(_MESON_COMPONENT_TITLE "${_component_title}")
 	string(APPEND _MESON_STAGE_BUILD "${_component}" "_build")
 	string(APPEND _MESON_STAGE_INSTALL "${_component}" "_install")
-	set(_MESON_BUILD_DIR "${_build_dir}")
-	set(_MESON_SRC_DIR "${_src_dir}")
+	set(_MESON_BUILD_DIR "${_builddir}")
+	set(_MESON_SRCDIR "${_srcdir}")
 	set(_MESON_OUTPUT_LIBRARIES "${_output_libraries}")
 	# Enable LTO only on Release and if CMAKE_INTERPROCEDURAL_OPTIMIZATION is set
 	if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
@@ -100,17 +100,17 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	)
 
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/setup.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/setup.cmake.in"
 		"${_MESON_SETUP_FILE}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/compile.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/compile.cmake.in"
 		"${_MESON_COMPILE_FILE}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRC_DIR}/install.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/install.cmake.in"
 		"${_MESON_INSTALL_FILE}"
 		@ONLY
 	)

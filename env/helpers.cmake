@@ -5,14 +5,14 @@
 function(update_env_runner)
 	if(WIN32)
 		configure_file(
-			"${BUILDMASTER_SRC_DIR}/env/runner_windows.bat.in"
-			"${BUILDMASTER_SCRIPTS_ENV_DIR}/runner.bat"
+			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat"
 			@ONLY
 		)
 	else()
 		configure_file(
-			"${BUILDMASTER_SRC_DIR}/env/runner_linux.sh.in"
-			"${BUILDMASTER_SCRIPTS_ENV_DIR}/runner.sh"
+			"${BUILDMASTER_SRCDIR}/env/runner_linux.sh.in"
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh"
 			@ONLY
 		)
 
@@ -20,7 +20,7 @@ function(update_env_runner)
 		# invoked directly by execute_process(). Some platforms require the
 		# executable bit even when a shebang is present.
 		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${BUILDMASTER_SCRIPTS_ENV_DIR}/runner.sh"
+			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh"
 			RESULT_VARIABLE _chmod_result
 			OUTPUT_QUIET
 			ERROR_QUIET
@@ -57,7 +57,7 @@ endfunction()
 ##
 ## Example:
 ## ```cmake
-## set(_cmd /bin/sh "${BUILDMASTER_SCRIPTS_ENV_DIR}/runner.sh")
+## set(_cmd /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
 ## prepare_command(ENV_RUNNER "${_cmd}")
 ## execute_process(COMMAND ${ENV_RUNNER} --version WORKING_DIRECTORY ${WD})
 ## ```

@@ -1,3 +1,3 @@
 [submodule "Pkgconf"]
-	path = tools/pkgconf/src
+	path = tools/extra/pkgconf/src
 	url = https://github.com/pkgconf/pkgconf.git

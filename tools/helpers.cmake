@@ -39,3 +39,101 @@ macro(add_tool srcdir)
 	add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/${srcdir}")
 	include("${CMAKE_CURRENT_LIST_DIR}/${srcdir}/propagate_vars.cmake")
 endmacro()
+
+## ensure_extra_tool_is_available(tool_name)
+# Description:
+#   Verify that `tool_name` is listed in the global property
+#   `BUILDMASTER_PLUGINS_EXTRA_AVAILABLE`.
+#
+# Parameters:
+#   tool_name - Name of the extra tool to check.
+#
+# Behavior:
+#   - Reads the global property `BUILDMASTER_PLUGINS_EXTRA_AVAILABLE`.
+#   - Searches for `tool_name` and calls `message(FATAL_ERROR ...)` if not found.
+#
+# Notes:
+#   - This macro halts configuration when the tool is not available.
+#   - Intended to be used before operations that assume the tool exists.
+macro(ensure_extra_tool_is_available tool_name)
+	# Append the tool name to the global property BUILDMASTER_PLUGINS_EXTRA
+	get_property(available_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_AVAILABLE)
+	list(FIND available_extra_tools "${tool_name}" _found_index)
+	if(_found_index EQUAL -1)
+		message(FATAL_ERROR "The extra tool '${tool_name}' is not available. Available extra tools are: ${available_extra_tools}")
+	endif()
+endmacro()
+
+## propagate_vars_extra_tool(tool_name)
+# Description:
+#   Include the tool's `propagate_vars.cmake` file only if the tool is enabled
+#   in `BUILDMASTER_PLUGINS_EXTRA_ENABLED`.
+#
+# Parameters:
+#   tool_name - Name of the extra tool.
+#
+# Behavior:
+#   - Reads `BUILDMASTER_PLUGINS_EXTRA_ENABLED`.
+#   - If `tool_name` is present, runs `include(${tool_name}/propagate_vars.cmake)`.
+#
+# Notes:
+#   - No-op if the tool is not enabled.
+macro(propagate_vars_extra_tool tool_name)
+	# Append the tool name to the global property BUILDMASTER_PLUGINS_EXTRA
+	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
+	list(FIND configured_extra_tools "${tool_name}" _found_index)
+	if(_found_index GREATER -1)
+		include(${tool_name}/propagate_vars.cmake)
+	endif()
+endmacro()
+
+## propagate_all_vars_extra_tools()
+# Description:
+#   Include `propagate_vars.cmake` for all extra tools listed in
+#   `BUILDMASTER_PLUGINS_EXTRA_ENABLED`.
+#
+# Parameters:
+#   None.
+#
+# Behavior:
+#   - Reads `BUILDMASTER_PLUGINS_EXTRA_ENABLED` and includes each tool's
+#     `propagate_vars.cmake`.
+#
+# Notes:
+#   - Inclusion errors will propagate as CMake errors.
+macro(propagate_all_vars_extra_tools)
+	# Get the list of configured extra tools
+	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
+	foreach(tool_name IN LISTS configured_extra_tools)
+		include(${tool_name}/propagate_vars.cmake)
+	endforeach()
+endmacro()
+
+## configure_extra_tool(tool_name)
+# Description:
+#   Ensure a tool is available and, if not already configured, add it to the
+#   build and propagate its variables.
+#
+# Parameters:
+#   tool_name - Name of the extra tool.
+#
+# Behavior:
+#   - Calls `ensure_extra_tool_is_available(${tool_name})`.
+#   - If the tool is not present in `BUILDMASTER_PLUGINS_EXTRA_ENABLED`, runs
+#     `add_subdirectory(${tool_name})` and includes
+#     `${tool_name}/propagate_vars.cmake`.
+#
+# Notes:
+#   - This macro modifies the project configuration by adding a subdirectory.
+macro(configure_extra_tool tool_name)
+	# Ensure the tool is available
+	ensure_extra_tool_is_available(${tool_name})
+
+	# Append the tool name to the global property BUILDMASTER_PLUGINS_EXTRA
+	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
+	list(FIND configured_extra_tools "${tool_name}" _found_index)
+	if(_found_index EQUAL -1)
+		add_subdirectory(${tool_name})
+		include(${tool_name}/propagate_vars.cmake)
+	endif()
+endmacro()

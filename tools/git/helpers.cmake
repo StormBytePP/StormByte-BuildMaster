@@ -27,7 +27,7 @@ function(create_git_patch_file _file _component _git_repo_dir _git_paches)
 	sanitize_for_filename(_GIT_PATCH_NAME "${_component}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_GIT_PATCH_NAME}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRC_DIR}/patch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/patch.cmake.in"
 		"${_GIT_PATCH_FILE}"
 		@ONLY
 	)
@@ -55,7 +55,7 @@ function(create_git_reset_file _file _component _git_repo_dir)
 	sanitize_for_filename(_GIT_RESET_NAME "${_component}")
 	set(_GIT_RESET_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_reset_${_GIT_RESET_NAME}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRC_DIR}/reset.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/reset.cmake.in"
 		"${_GIT_RESET_FILE}"
 		@ONLY
 	)
@@ -87,7 +87,7 @@ function(create_git_switch_branch _file _component _git_repo_dir _git_branch)
 	sanitize_for_filename(_GIT_SWITCH_NAME "${_component}")
 	set(_GIT_SWITCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_switch_${_GIT_SWITCH_NAME}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRC_DIR}/switch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/switch.cmake.in"
 		"${_GIT_SWITCH_FILE}"
 		@ONLY
 	)
@@ -120,7 +120,7 @@ function(create_git_fetch _file _component _git_repo_dir)
 	sanitize_for_filename(_GIT_FETCH_NAME "${_component}")
 	set(_GIT_FETCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_fetch_${_GIT_FETCH_NAME}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRC_DIR}/fetch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/fetch.cmake.in"
 		"${_GIT_FETCH_FILE}"
 		@ONLY
 	)

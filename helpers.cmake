@@ -277,10 +277,10 @@ function(ensure_build_dir _out)
 endfunction()
 
 # A convenience files to add all bootstrap helper functions
-include(${BUILDMASTER_SRC_DIR}/env/helpers.cmake)
-include(${BUILDMASTER_SRC_DIR}/tools/cmake/helpers.cmake)
-include(${BUILDMASTER_SRC_DIR}/tools/git/helpers.cmake)
-include(${BUILDMASTER_SRC_DIR}/tools/meson/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/env/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/tools/cmake/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/tools/git/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/tools/meson/helpers.cmake)
 # Component helpers need to be included after tools so cmake and
 # meson helpers are available
-include(${BUILDMASTER_SRC_DIR}/component/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/component/helpers.cmake)

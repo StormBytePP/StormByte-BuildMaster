@@ -1,0 +1,11 @@
+# Available tools
+get_property(_exists GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_AVAILABLE DEFINED)
+if(NOT _exists)
+	set_property(GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_AVAILABLE "pkgconf")
+endif()
+
+# Configured tools
+get_property(_exists GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED DEFINED)
+if(NOT _exists)
+	set_property(GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED "")
+endif()

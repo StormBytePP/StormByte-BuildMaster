@@ -4,7 +4,7 @@ if(NOT TARGET @_LIBRARY_NAME@)
 	include(@_LIBRARY_INSTALL_FILE@)
 
 	add_library(@_LIBRARY_NAME@ INTERFACE)
-	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@_LIBRARY_SRC_DIR@")
+	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@_LIBRARY_SRCDIR@")
 
 	set(libs "@_LIBRARY_COMPONENT_NAMES@")
 	set(lib_files "@_LIBRARY_COMPONENT_FILES@")

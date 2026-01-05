@@ -1,260 +1,227 @@
-# StormByte‑BuildMaster  
+# StormByte BuildMaster
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-blue)
 ![CMake](https://img.shields.io/badge/cmake-%3E%3D3.20-blue)
 ![Status](https://img.shields.io/badge/status-active-success)
 ![Type](https://img.shields.io/badge/type-build%20engine-lightgrey)
 
-StormByte‑BuildMaster provides a modular, reproducible build system designed to overcome the limitations of CMake’s `ExternalProject_Add` and the challenges of integrating heterogeneous build systems during *configure time*.  
-Traditional approaches make it difficult to propagate environment variables coherently—such as `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`, or platform‑specific search paths—leading to inconsistent builds and fragile toolchain behavior.
-
-This engine generates a hermetic, cross‑platform environment layer that ensures every tool (CMake, Meson, Ninja, Git, pkgconf, etc.) runs with a consistent and fully controlled environment.
-
----
-
 ## Table of Contents
-- [Overview](#overview)  
-- [Design Goals](#design-goals)  
-- [Architecture](#architecture)  
-- [Environment Layer](#environment-layer)  
-- [Tools Layer](#tools-layer)  
-- [Helper Functions](#helper-functions)  
-- [Variables Propagated to Parent Scope](#variables-propagated-to-parent-scope)  
-- [Usage](#usage)  
-- [Platform Notes](#platform-notes)  
-- [License](#license)
 
----
+- [Overview](#overview)
+- [Design goals (brief)](#design-goals-brief)
+- [How to use (quick start)](#how-to-use-quick-start)
+- [Two usage modes](#two-usage-modes)
+  - [Simple mode — high level](#simple-mode---high-level)
+  - [Advanced mode — explicit stages](#advanced-mode---explicit-stages)
+- [Targets and naming](#targets-and-naming)
+- [Important functions (where to look)](#important-functions-where-to-look)
+- [Helpers and utilities](#helpers-and-utilities)
+- [Templates and implementation notes](#templates-and-implementation-notes)
+- [Examples](#examples)
+  - [Dependent components](#dependent-components)
+- [Why this matters](#why-this-matters)
+- [Next steps / where to inspect](#next-steps--where-to-inspect)
+- [License](#license)
 
 ## Overview
 
-StormByte‑BuildMaster is a **build environment generator**, not a wrapper.  
-It prepares:
+Build Master is a small DSL extension for CMake that makes it simple and reliable to build, install and consume external CMake and Meson projects from a parent CMake tree. It was created to work around a common limitation of `ExternalProject_Add`: external projects are typically configured at build time, which prevents the parent CMake from observing and reacting to configure-time results. Build Master generates configure / compile / install stages at CMake configure time so the parent project can inspect artifacts, create import targets, and adjust environment variables deterministically.
 
-- isolated environment runner scripts  
-- toolchain‑aware command invocations  
-- reproducible build directories  
-- patch/reset/switch scripts for Git  
-- CMake/Meson/Ninja invocation scripts  
-- consistent environment propagation across nested CMake scopes  
+### Why Build Master exists
 
-It can be embedded inside larger projects or used standalone as a build SDK.
+When a CMake project needs to build external dependencies as part of its own build, the usual tool — `ExternalProject_Add` — has several structural limitations:
 
----
+- External projects are configured at build time, not at configure time.  
+  This prevents the parent CMake project from inspecting results, generating import targets, or adjusting logic based on the external project's configuration.
+- It does not provide full, explicit targets for each stage.  
+  You cannot attach POST_BUILD commands to a clean `<component>_build` or `<component>_install` target because those targets simply do not exist.
+- Environment propagation is inconsistent and must be manually handled.
+- Integration with Meson projects requires custom glue and is not deterministic.
 
-## Design Goals
+Build Master solves these issues by generating configure/build/install stages during CMake configure time, exposing deterministic targets such as:
 
-### 1. Deterministic configure‑time behavior  
-CMake’s `ExternalProject_Add` defers configuration to *build time*, making it impossible to:
+`<component>_build`  
+`<component>_install`
 
-- modify environment variables before configuration  
-- generate scripts that depend on configure‑time values  
-- ensure reproducibility across platforms  
+This makes it trivial to attach post-build actions, inspect installed artifacts, and integrate external projects as if they were native parts of the parent build.
 
-StormByte‑BuildMaster solves this by generating all scripts and environment wrappers during the *configure* phase.
+## Design goals (brief)
 
-### 2. Coherent environment propagation  
-Meson, pkgconf, and other tools rely heavily on environment variables.  
-This engine ensures:
+- Deterministic configure-time behavior: run external config steps during the configure phase so results can be used immediately.
+- Coherent environment propagation: ensure PKG_CONFIG_PATH, PATH, platform LIB/INCLUDE, and other environment variables are consistently set for every tool.
+- Cross-platform: handle Windows vs Unix differences, MSVC import-naming, and runner scripts.
+- Modular: small, testable helpers and templates for CMake and Meson components.
 
-- `PKG_CONFIG_PATH` is updated consistently  
-- `PATH` is extended with install/bin directories  
-- Windows `LIB` and `INCLUDE` variables are chained correctly  
-- all tools run through a controlled environment runner  
-
-### 3. Cross‑platform hermeticity  
-The engine abstracts away:
-
-- Windows vs. Unix shell differences  
-- quoting and argument tokenization  
-- executable permissions  
-- path normalization  
-
-### 4. Modularity  
-Each subsystem (env, cmake, git, meson, ninja, pkgconf) is isolated and self‑contained.
-
----
-
-## Architecture
-
-StormByte‑BuildMaster is composed of three main layers:
-
-### 1. Core Initialization  
-Defined in `init_vars.cmake`, it establishes:
-
-- source directories  
-- binary directories  
-- install prefixes  
-- script output directories  
-
-### 2. Environment Layer (`env/`)  
-Responsible for:
-
-- generating environment runner scripts  
-- preparing tokenized command lists  
-- updating environment variables  
-- propagating environment state upward  
-
-### 3. Tools Layer (`tools/`)  
-Each tool (CMake, Git, Meson, Ninja, pkgconf) provides:
-
-- initialization  
-- helper functions  
-- script generators  
-- environment‑aware command wrappers  
-
----
-
-## Environment Layer
-
-The environment layer generates platform‑specific runner scripts:
-
-### Linux/macOS
-- `runner.sh`  
-- `runner_silent.sh`
-
-### Windows
-- `runner.bat`  
-- `runner_silent.bat`
-
-These scripts:
-
-- update `PKG_CONFIG`, `PKG_CONFIG_PATH`, `CFLAGS`, `CXXFLAGS`, `LDFLAGS`, `PATH`  
-- ensure consistent environment chaining  
-- execute arbitrary commands inside the prepared environment  
-
-### Key Functions
-
-#### `prepare_command(out list)`  
-Converts a CMake list into a tokenized command suitable for `execute_process()`.
-
-#### `update_env_runner()`  
-Regenerates the environment runner script based on current variables.
-
----
-
-## Tools Layer
-
-Each tool has:
-
-- an `init_vars.cmake`  
-- a `helpers.cmake`  
-- a `propagate_vars.cmake`  
-- optional script templates (`*.in`)  
-
-### CMake Tool  
-Generates configure scripts for third‑party CMake projects.
-
-### Git Tool  
-Generates scripts for:
-
-- applying patches  
-- resetting repositories  
-- switching branches  
-- fetching updates  
-
-### Meson Tool  
-Prepares Meson invocations through the environment runner.
-
-### Ninja Tool  
-Provides environment‑aware Ninja commands.
-
-### pkgconf Tool  
-Ensures pkgconf is invoked with the correct environment.
-
----
-
-## Helper Functions
-
-The engine includes a rich set of helper functions:
-
-- `windows_path()`  
-- `library_import_hint()`  
-- `library_import_static_hint()`  
-- `sanitize_for_filename()`  
-- `toggle_bool()`  
-- `list_join()`  
-- `ensure_build_dir()`  
-- `prepare_command()`  
-
-### Library import helpers
-
-- `library_import_hint(out_var, lib_name, prefix_path)` : constructs a platform‑appropriate shared‑library filename (or import library on MSVC) and writes it into the variable named by `out_var` in the parent scope. `prefix_path` is optional; when empty the install directory (for example `${CMAKE_INSTALL_LIBDIR}`) is used.
-
-- `library_import_static_hint(out_var, lib_name, prefix_path)` : constructs a static library filename and writes it into `out_var` in the parent scope. `prefix_path` is optional and falls back to `${CMAKE_INSTALL_LIBDIR}` when empty.
-
-- `library_dll_hint(out_var, lib_name, prefix_path)` : MSVC only — constructs the DLL filename located under the install bindir (`${CMAKE_INSTALL_BINDIR}` when `prefix_path` is empty) and writes it into `out_var` in the parent scope.
-
-Notes:
-- Callers should pass the name of the variable to set as `out_var` (the functions use `set(<out_var> <value> PARENT_SCOPE)`).
-- The higher‑level helpers `create_library()`, `create_cmake_library()` and `create_meson_library()` generate per‑component generator scripts using the provided templates (`library/add_shared_library.cmake.in`, `library/add_static_library.cmake.in`) and set the resulting script path in the variable passed as the first argument.
-
-
-These functions abstract away quoting, path normalization, list handling, and directory creation.
-
----
-
-## Variables Propagated to Parent Scope
-
-StormByte‑BuildMaster exposes a set of variables to the parent CMake project using `PARENT_SCOPE`.
-
-### Environment Variables
-
-| Variable | Description |
-|---------|-------------|
-| `BUILDMASTER_SRC_DIR` | Root directory of the BuildMaster source |
-| `BUILDMASTER_BINDIR` | Binary directory for generated scripts |
-| `BUILDMASTER_SCRIPTS_DIR` | Base directory for generated scripts |
-| `BUILDMASTER_INSTALL_DIR` | Install prefix used by all components |
-| `BUILDMASTER_INSTALL_LIBDIR` | Install lib directory |
-| `BUILDMASTER_INSTALL_BINDIR` | Install bin directory |
-| `BUILDMASTER_INSTALL_INCLUDEDIR` | Install include directory |
-| `ENV_RUNNER` | Tokenized command list for the environment runner |
-| `ENV_RUNNER_SILENT` | Silent version of the environment runner |
-
-### Tool Variables
-
-| Variable | Description |
-|---------|-------------|
-| `ENV_CMAKE_COMMAND` | Environment‑aware CMake invocation |
-| `ENV_CMAKE_SILENT_COMMAND` | Silent CMake invocation |
-| `ENV_GIT_COMMAND` | Environment‑aware Git invocation |
-| `ENV_MESON_COMMAND` | Environment‑aware Meson invocation |
-| `ENV_NINJA_COMMAND` | Environment‑aware Ninja invocation |
-| `PKG_CONFIG` | pkgconf executable (if found) |
-
----
-
-## Usage
-
-In your parent project:
+## How to use (quick start)
+Using Build Master in a project is intentionally simple — three steps:
 
 ```cmake
-add_subdirectory(StormByte-BuildMaster)
-include(StormByte-BuildMaster/helpers.cmake)
+# optional: enable extra tools (e.g. pkgconf)
+set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS "pkgconf")
 
-# Now you can use:
-#   ${ENV_RUNNER}
-#   ${ENV_CMAKE_COMMAND}
-#   ${ENV_GIT_COMMAND}
-#   ${ENV_MESON_COMMAND}
-#   ${ENV_NINJA_COMMAND}
-#   and all helper functions
+# add the Build Master tree to your project
+add_subdirectory(buildmaster)
 
-## Platform Notes
+# import the helper DSL
+include(buildmaster/helpers.cmake)
+```
 
-### Windows
-- `LIB` and `INCLUDE` are chained correctly  
-- `.bat` runners ensure consistent environment propagation  
-- quoting rules are handled automatically  
+What these lines do:
 
-### Linux/macOS
-- executable permissions are applied automatically  
-- pkgconfig paths are merged safely  
-- shell quoting is handled via `prepare_command()`  
+- `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`: optional list of extra tools that are not initialized by default (for example `pkgconf`).
+- `add_subdirectory(buildmaster)`: configures and initializes Build Master.
+- `include(buildmaster/helpers.cmake)`: imports helper functions such as `create_component()`, `create_cmake_component()`, `create_meson_component()` and other utilities.
 
----
+After this you can declare components. Example (simple):
+
+```cmake
+set(options "-DENABLE_FOO=ON")
+create_cmake_component(OUT_FILE
+                       opus
+                       "Opus Audio Codec"
+                       ${CMAKE_SOURCE_DIR}/thirdparty/opus
+                       ${CMAKE_BINARY_DIR}/thirdparty/opus_build
+                       "${options}"
+                       shared
+                       "")
+include(${OUT_FILE})
+```
+
+Notes:
+
+- The first argument to `create_cmake_component` is the name of the variable that will receive the generated fragment path (here `OUT_FILE`).
+- After `include(${OUT_FILE})` the generated imported targets and the stage targets (`<component>_build`, `<component>_install`) are available to the parent project.
+
+That’s all — Build Master will generate configure/build/install stages, wire targets, and expose import targets for immediate consumption.
+
+## Two usage modes
+
+### Simple mode — high level
+
+- Call `create_component()` or the convenience wrappers `create_cmake_component()` / `create_meson_component()`.
+- This generates a per-component CMake fragment (configured from templates) that declares imported targets and wires the build/install stages into the parent project.
+- The generated fragment path is returned in the caller's variable (the first argument you pass).
+
+### Advanced mode — explicit stages
+
+- Call `create_cmake_stages()` or `create_meson_stages()` directly to produce three scripts: `configure`, `build/compile`, `install`.
+- Include those generated scripts in your tree to define explicit targets and customize ordering or add POST_BUILD steps.
+
+## Targets and naming
+
+- All created components define stage targets named `<component>_build` and `<component>_install` (for example `opus_build` / `opus_install`). This makes it trivial to attach post-build or install-time actions to component stages.
+- Install commands declare their produced files as OUTPUT, so other targets can DEPENDS on installed artifacts.
+
+## Important functions (where to look)
+
+- `create_component(_out_var _component _component_title _srcdir _builddir _options _library_mode _build_system _subcomponents _dependency)` — high-level generator that emits a per-component fragment, sets up library filenames and stage names, and writes the fragment path into the parent scope variable named by `_out_var`.
+
+- `create_cmake_stages(_file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)` — creates three configured scripts under the generated scripts directory and returns their paths. The scripts are produced from `tools/cmake/*.in` templates and create `<component>_build` and `<component>_install` targets.
+
+- `create_meson_stages(...)` — same idea for Meson projects; it produces setup/compile/install scripts using `tools/meson/*.in` templates.
+
+## Helpers and utilities
+
+- library_import_hint(out_var, lib_name [, prefix]) — builds a platform-correct shared-library or import-library filename (handles MSVC prefixes/suffixes).
+- library_import_static_hint(out_var, lib_name [, prefix]) — builds canonical static library filename.
+- library_dll_hint(out_var, lib_name [, prefix]) — MSVC-only helper for DLL filename under the install bindir.
+- sanitize_for_filename(), list_join(), prepare_command() and other helpers used by templates and stage generators.
+
+## Templates and implementation notes
+
+-- CMake-stage templates: `tools/cmake/configure.cmake.in`, `tools/cmake/build.cmake.in`, `tools/cmake/install.cmake.in`.
+  - The configure template runs cmake -S <src> -B <build> via the environment-aware runner and fails the configure step on non-zero exit.
+  - The build template creates a `<component>_build` custom target that invokes the chosen build tool.
+  - The install template creates a `<component>_install` custom target and declares installed artifacts as `OUTPUT` so consumers can depend on them.
+
+-- Meson-stage templates: `tools/meson/setup.cmake.in`, `tools/meson/compile.cmake.in`, `tools/meson/install.cmake.in`.
+
+## Examples
+
+Simple mode (recommended for common use):
+
+```cmake
+add_subdirectory(path/to/buildmaster)
+include(buildmaster/helpers.cmake)
+
+set(options "-DENABLE_FEATURE=ON")
+create_cmake_component(LIB_CREATE_FILE
+                       mylib
+                       "My Library"
+                       ${CMAKE_SOURCE_DIR}/third_party/mylib
+                       ${CMAKE_BINARY_DIR}/third_party/mylib_build
+                       "${options}"
+                       shared
+                       "")
+include(${LIB_CREATE_FILE})
+
+# After include you get imported targets and install wiring.
+```
+
+Advanced mode (explicit stages):
+
+```cmake
+create_cmake_stages(cfg_script build_script install_script
+                    mylib "My Library"
+                    ${CMAKE_SOURCE_DIR}/third_party/mylib
+                    ${CMAKE_BINARY_DIR}/third_party/mylib_build
+                    "-DENABLE_FEATURE=ON"
+                    shared "/path/to/output/libmylib.so")
+
+include(${cfg_script})
+include(${build_script})
+include(${install_script})
+
+# Now you have 'mylib_build' and 'mylib_install' targets you can attach commands to:
+add_custom_command(TARGET mylib_install POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E echo "Installed mylib")
+```
+
+### Dependent components
+
+When an external component depends on another, use the dependant wrappers so Build Master will order configure/build stages automatically. The dependency argument should be one or more target names (for example `"b_install"`). The generated configure target for the dependant component will `add_dependencies()` on the provided targets.
+
+Example: `liba` depends on `libb`.
+
+```cmake
+# Create and include libb first
+create_cmake_component(B_FILE
+                       libb
+                       "LibB"
+                       ${CMAKE_SOURCE_DIR}/thirdparty/libb
+                       ${CMAKE_BINARY_DIR}/thirdparty/libb_build
+                       "${options}"
+                       shared
+                       "")
+include(${B_FILE})
+
+# Create liba which depends on libb's install stage
+create_cmake_dependant_component(A_FILE
+                                 liba
+                                 "LibA"
+                                 ${CMAKE_SOURCE_DIR}/thirdparty/liba
+                                 ${CMAKE_BINARY_DIR}/thirdparty/liba_build
+                                 "${options}"
+                                 shared
+                                 ""  # no subcomponents
+                                 "libb_install")
+include(${A_FILE})
+```
+
+In this example the `liba` configure target will wait for `libb_install` before running, and `liba`'s imported targets will be wired after `libb` is installed.
+
+## Why this matters
+
+- Running configuration at configure time allows the parent CMake to inspect results, write find/import helpers, and update environment or search paths immediately. That avoids the deferred, opaque behavior caused by build-time configuration with `ExternalProject_Add`.
+- Installing all third-party artifacts under a common `BUILDMASTER_INSTALL_DIR` simplifies consumption and linking from the parent project.
+
+## Next steps / where to inspect
+
+- High-level component helpers: `component/helpers.cmake`.
+- CMake stage generator: `tools/cmake/helpers.cmake` and `tools/cmake/*.in`
 
 ## License
 
-StormByte‑BuildMaster is licensed under the **MIT License**, allowing unrestricted use in external projects.
+Build Master is distributed under the MIT License.  
+See the LICENSE file for full details.

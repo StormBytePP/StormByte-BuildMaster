@@ -100,7 +100,7 @@ function(library_dll_hint _lib_full_path _lib_name)
 endfunction()
 
 ## create_component(_library_create_file, _component, _component_title,
-##                  _src_dir, _build_dir, _options, _library_mode,
+##                  _srcdir, _builddir, _options, _library_mode,
 ##                  _build_system, _subcomponents, _dependency [, indent_level])
 ##
 ## Generate a per-component generator fragment (CMake) which declares an
@@ -114,7 +114,7 @@ endfunction()
 ##  - _component: short identifier for the component (used in filenames
 ##                and stage names).
 ##  - _component_title: human-readable title inserted into templates.
-##  - _src_dir/_build_dir: component source and build directory paths.
+##  - _srcdir/_builddir: component source and build directory paths.
 ##  - _options: list of options forwarded to stage generator helpers.
 ##  - _library_mode: `static` or `shared` — chooses templates and filename helpers.
 ##  - _build_system: `cmake` or `meson` — selects which stage generator helper to call.
@@ -131,7 +131,7 @@ endfunction()
 ##  - When `_dependency` is non-empty the helper selects "dependant"
 ##    generator templates so the generated fragment can depend on another
 ##    staged target.
-##  - The configured template is written into `${BUILDMASTER_SCRIPTS_COMPONENT_DIR}`
+##  - The configured template is written into `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`
 ##    and the resulting path is returned via the variable named by
 ##    `_library_create_file` in the parent scope.
 ##
@@ -139,7 +139,7 @@ endfunction()
 ##  - Templates expect variables such as `_LIBRARY_NAME`,
 ##    `_LIBRARY_SHARED_FILE`, and `_LIBRARY_IMPORT_FILE` to be prepared
 ##    by this helper before `configure_file` is invoked.
-function(create_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _build_system _subcomponents _dependency)
+function(create_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _build_system _subcomponents _dependency)
 	# Optional indent level
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -151,7 +151,7 @@ function(create_component _library_create_file _component _component_title _src_
 	set(_LIBRARY_NAME "${_component}")
 	string(TOLOWER "${_library_mode}" _library_mode)
 	set(_LIBRARY_STAGE_INSTALL "${_component}_install")
-	set(_LIBRARY_SRC_DIR "${_src_dir}")
+	set(_LIBRARY_SRCDIR "${_SRCDIR}")
 	if(NOT _dependency STREQUAL "")
 		set(_LIBRARY_CONFIGURE_TARGET "${_component}_configure")
 		set(_LIBRARY_BUILD_TARGET "${_component}_build")
@@ -187,22 +187,22 @@ function(create_component _library_create_file _component _component_title _src_
 	endif()
 
 	if(_build_system STREQUAL "cmake")
-		create_cmake_stages(_LIBRARY_CONFIGURE_FILE _LIBRARY_BUILD_FILE _LIBRARY_INSTALL_FILE "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "${_LIBRARY_COMPONENT_FILES}" "${_indent_level}")
+		create_cmake_stages(_LIBRARY_CONFIGURE_FILE _LIBRARY_BUILD_FILE _LIBRARY_INSTALL_FILE "${_component}" "${_component_title}" "${_srcdir}" "${_builddir}" "${_options}" "${_library_mode}" "${_LIBRARY_COMPONENT_FILES}" "${_indent_level}")
 	elseif(_build_system STREQUAL "meson")
-		create_meson_stages(_LIBRARY_CONFIGURE_FILE _LIBRARY_BUILD_FILE _LIBRARY_INSTALL_FILE "${_component}" "${_component_title}" "${_src_dir}" "${_build_dir}" "${_options}" "${_library_mode}" "${_LIBRARY_COMPONENT_FILES}" "${_indent_level}")
+		create_meson_stages(_LIBRARY_CONFIGURE_FILE _LIBRARY_BUILD_FILE _LIBRARY_INSTALL_FILE "${_component}" "${_component_title}" "${_srcdir}" "${_builddir}" "${_options}" "${_library_mode}" "${_LIBRARY_COMPONENT_FILES}" "${_indent_level}")
 	else()
 		message(FATAL_ERROR "Unknown build system '${_build_system}' in create_library")
 	endif()
 
 	# Set needed variables for template
 	sanitize_for_filename(_LIBRARY_COMPONENT_SAFE "${_component}")
-	set(_LIBRARY_CREATE_FILE "${BUILDMASTER_SCRIPTS_COMPONENT_DIR}/${_LIBRARY_COMPONENT_SAFE}_library.cmake")
+	set(_LIBRARY_CREATE_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_LIBRARY_COMPONENT_SAFE}_library.cmake")
 
 	# Expose dependency list to the template (may be empty)
 	set(_LIBRARY_DEPENDENCIES "${_dependency}")
 
 	configure_file(
-		"${BUILDMASTER_COMPONENT_SRC_DIR}/${_LIBRARY_GENERATOR_FILE}"
+		"${BUILDMASTER_COMPONENT_SRCDIR}/${_LIBRARY_GENERATOR_FILE}"
 		"${_LIBRARY_CREATE_FILE}"
 		@ONLY
 	)
@@ -211,7 +211,7 @@ function(create_component _library_create_file _component _component_title _src_
 endfunction()
 
 ## create_cmake_component(_file_library, _component, _component_title,
-##                       _src_dir, _build_dir, _options, _library_mode, _subcomponents [, indent_level])
+##                       _srcdir, _builddir, _options, _library_mode, _subcomponents [, indent_level])
 ##
 ## Wrapper that calls `create_component` with `_build_system` set to
 ## `cmake`. Its parameters are the same order as `create_component` but
@@ -221,7 +221,7 @@ endfunction()
 ## The generated fragment path is returned via the parent-scope variable
 ## named by `_file_library` (the wrapper re-exposes that variable into
 ## the caller scope).
-function(create_cmake_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
+function(create_cmake_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _subcomponents)
 	# Optional indent level
 	if(ARGC GREATER 8)
 		set(_indent_level "${ARGV8}")
@@ -234,8 +234,8 @@ function(create_cmake_component _library_create_file _component _component_title
 		${_library_create_file}
 		"${_component}"
 		"${_component_title}"
-		"${_src_dir}"
-		"${_build_dir}"
+		"${_srcdir}"
+		"${_builddir}"
 		"${_options}"
 		"${_library_mode}"
 		"cmake"
@@ -249,7 +249,7 @@ function(create_cmake_component _library_create_file _component _component_title
 endfunction()
 
 ## create_meson_component(_file_library, _component, _component_title,
-##                       _src_dir, _build_dir, _options, _library_mode, _subcomponents [, indent_level])
+##                       _srcdir, _builddir, _options, _library_mode, _subcomponents [, indent_level])
 ##
 ## Wrapper that calls `create_component` with `_build_system` set to
 ## `meson`. Its parameters follow the same ordering as
@@ -259,7 +259,7 @@ endfunction()
 ## The generated fragment path is returned via the parent-scope variable
 ## named by `_file_library` (the wrapper re-exposes that variable into
 ## the caller scope).
-function(create_meson_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents)
+function(create_meson_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _subcomponents)
 	if(ARGC GREATER 8)
 		set(_indent_level "${ARGV8}")
 	else()
@@ -270,8 +270,8 @@ function(create_meson_component _library_create_file _component _component_title
 		${_library_create_file}
 		"${_component}"
 		"${_component_title}"
-		"${_src_dir}"
-		"${_build_dir}"
+		"${_srcdir}"
+		"${_builddir}"
 		"${_options}"
 		"${_library_mode}"
 		"meson"
@@ -284,7 +284,7 @@ function(create_meson_component _library_create_file _component _component_title
 endfunction()
 
 ## create_cmake_dependant_component(_file_library, _component, _component_title,
-##                                  _src_dir, _build_dir, _options, _library_mode,
+##                                  _srcdir, _builddir, _options, _library_mode,
 ##                                  _subcomponents, _dependency [, indent_level])
 ##
 ## Wrapper that calls `create_component` with `_build_system` set to
@@ -294,7 +294,7 @@ endfunction()
 ##
 ## The generated fragment path is returned in the parent-scope variable
 ## named by `_file_library` and is re-exposed into the caller's scope.
-function(create_cmake_dependant_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents _dependency)
+function(create_cmake_dependant_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _subcomponents _dependency)
 	# Optional indent level
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
@@ -307,8 +307,8 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 		${_library_create_file}
 		"${_component}"
 		"${_component_title}"
-		"${_src_dir}"
-		"${_build_dir}"
+		"${_srcdir}"
+		"${_builddir}"
 		"${_options}"
 		"${_library_mode}"
 		"cmake"
@@ -322,7 +322,7 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 endfunction()
 
 ## create_meson_dependant_component(_file_library, _component, _component_title,
-##                                   _src_dir, _build_dir, _options, _library_mode,
+##                                   _srcdir, _builddir, _options, _library_mode,
 ##                                   _subcomponents, _dependency [, indent_level])
 ##
 ## Wrapper that calls `create_component` with `_build_system` set to
@@ -332,7 +332,7 @@ endfunction()
 ##
 ## The generated fragment path is returned in the parent-scope variable
 ## named by `_file_library` and is re-exposed into the caller's scope.
-function(create_meson_dependant_component _library_create_file _component _component_title _src_dir _build_dir _options _library_mode _subcomponents _dependency)
+function(create_meson_dependant_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _subcomponents _dependency)
 	if(ARGC GREATER 9)
 		set(_indent_level "${ARGV9}")
 	else()
@@ -343,8 +343,8 @@ function(create_meson_dependant_component _library_create_file _component _compo
 		${_library_create_file}
 		"${_component}"
 		"${_component_title}"
-		"${_src_dir}"
-		"${_build_dir}"
+		"${_srcdir}"
+		"${_builddir}"
 		"${_options}"
 		"${_library_mode}"
 		"meson"
@@ -386,10 +386,10 @@ function(rename_static_library _rename_file _component _badname)
 	set(_LIBRARY_BAD_PATH "${BUILDMASTER_INSTALL_LIBDIR}/${_badname}")
 	library_import_static_hint(_LIBRARY_GOOD_PATH "${_component}")
 	set(_LIBRARY_STAGE_INSTALL "${_component}_install")
-	set(_LIBRARY_RENAME_FILE "${BUILDMASTER_SCRIPTS_COMPONENT_DIR}/${_badname}_rename.cmake")
+	set(_LIBRARY_RENAME_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_badname}_rename.cmake")
 
 	configure_file(
-		"${BUILDMASTER_COMPONENT_SRC_DIR}/rename_static_library.cmake.in"
+		"${BUILDMASTER_COMPONENT_SRCDIR}/rename_static_library.cmake.in"
 		"${_LIBRARY_RENAME_FILE}"
 		@ONLY
 	)
@@ -401,7 +401,7 @@ endfunction()
 ##
 ## Generate a platform-specific "bundler" script that aggregates one or
 ## more static library files for a component. The function writes the
-## generated script under `${BUILDMASTER_SCRIPTS_COMPONENT_DIR}` and
+## generated script under `${BUILDMASTER_SCRIPTS_COMPONENTDIR}` and
 ## returns its path via the parent-scope variable named by
 ## `_bundle_file`.
 ##
@@ -421,7 +421,7 @@ endfunction()
 ##    library; the script is made executable (`chmod +x`).
 ##  - The configured script is created from the templates
 ##    `bundler.bat.in` or `bundler.sh.in` located in
-##    `${BUILDMASTER_COMPONENT_SRC_DIR}`.
+##    `${BUILDMASTER_COMPONENT_SRCDIR}`.
 ##
 ## Notes
 ##  - `_libraries` must contain full paths (absolute or relative) to the
@@ -437,19 +437,19 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 
 	# Configure bundler script
 	if(MSVC)
-		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENT_DIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.bat")
+		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.bat")
 		# For MSVC we expand the list into a space-separated string
 		set(ADD_LIBRARIES "")
 		foreach(lib IN LISTS _libraries)
 			string(APPEND ADD_LIBRARIES "${lib} ")
 		endforeach()
 		configure_file(
-			"${BUILDMASTER_COMPONENT_SRC_DIR}/bundler.bat.in"
+			"${BUILDMASTER_COMPONENT_SRCDIR}/bundler.bat.in"
 			"${_BUNDLE_SCRIPT_FILE}"
 			@ONLY
 		)
 	else()
-		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENT_DIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.sh")
+		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.sh")
 		# In linux we expect ADDLIB lib\n
 		set(ADD_LIBRARIES "")
 		foreach(lib IN LISTS _libraries)
@@ -457,7 +457,7 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 ") # Real line break
 		endforeach()
 		configure_file(
-			"${BUILDMASTER_COMPONENT_SRC_DIR}/bundler.sh.in"
+			"${BUILDMASTER_COMPONENT_SRCDIR}/bundler.sh.in"
 			"${_BUNDLE_SCRIPT_FILE}"
 			@ONLY
 		)

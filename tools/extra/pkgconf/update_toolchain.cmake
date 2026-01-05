@@ -1,0 +1,5 @@
+if(DEFINED PKG_CONFIG)
+	file(APPEND "${BUILDMASTER_TOOLCHAIN_FILE}"
+		"set(PKG_CONFIG \"${PKG_CONFIG}\")\n"
+	)
+endif()
