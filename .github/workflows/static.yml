@@ -1,0 +1,77 @@
+name: Generate and Deploy Documentation
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      ###########################################################################
+      # 1. CHECKOUT
+      ###########################################################################
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      ###########################################################################
+      # 2. INSTALL DOXYGEN
+      ###########################################################################
+      - name: Install Doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+
+      ###########################################################################
+      # 3. GENERATE TEMPORARY DOXYFILE
+      ###########################################################################
+      - name: Generate temporary Doxyfile
+        run: doxygen -g Doxyfile.tmp
+
+      ###########################################################################
+      # 4. PATCH DOXYFILE
+      ###########################################################################
+      - name: Patch Doxyfile for Build Master docs
+        run: |
+          sed -i 's/^PROJECT_NAME.*/PROJECT_NAME = "Build Master"/' Doxyfile.tmp
+          sed -i 's/^OUTPUT_DIRECTORY.*/OUTPUT_DIRECTORY = docs/' Doxyfile.tmp
+          sed -i 's/^INPUT.*/INPUT = ./' Doxyfile.tmp
+          sed -i 's/^RECURSIVE.*/RECURSIVE = YES/' Doxyfile.tmp
+          sed -i 's/^FILE_PATTERNS.*/FILE_PATTERNS = README.md helpers.cmake/' Doxyfile.tmp
+          sed -i 's/^EXTENSION_MAPPING.*/EXTENSION_MAPPING = cmake=C/' Doxyfile.tmp
+          sed -i 's/^USE_MDFILE_AS_MAINPAGE.*/USE_MDFILE_AS_MAINPAGE = README.md/' Doxyfile.tmp
+          sed -i 's/^GENERATE_LATEX.*/GENERATE_LATEX = NO/' Doxyfile.tmp
+
+      ###########################################################################
+      # 5. RUN DOXYGEN
+      ###########################################################################
+      - name: Run Doxygen
+        run: doxygen Doxyfile.tmp
+
+      ###########################################################################
+      # 6. UPLOAD ARTIFACT FOR GITHUB PAGES
+      ###########################################################################
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/html
+
+  ###########################################################################
+  # 7. DEPLOY TO GITHUB PAGES
+  ###########################################################################
+  deploy:
+    needs: build-docs
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
