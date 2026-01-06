@@ -105,7 +105,7 @@ macro(propagate_all_vars_extra_tools)
 	# Get the list of configured extra tools
 	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
 	foreach(tool_name IN LISTS configured_extra_tools)
-		include(${tool_name}/propagate_vars.cmake)
+		include(${BUILDMASTER_TOOLS_SRCDIR}/extra/${tool_name}/propagate_vars.cmake)
 	endforeach()
 endmacro()
 
@@ -126,13 +126,21 @@ endmacro()
 # Notes:
 #   - This macro modifies the project configuration by adding a subdirectory.
 macro(configure_extra_tool tool_name)
-	# Ensure the tool is available
-	ensure_extra_tool_is_available(${tool_name})
-
-	# Append the tool name to the global property BUILDMASTER_PLUGINS_EXTRA
+	# Read the list of already-enabled tools (may be undefined)
 	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
+
+	# Check if the tool is already registered
 	list(FIND configured_extra_tools "${tool_name}" _found_index)
+
 	if(_found_index EQUAL -1)
+		# Append cleanly using list(APPEND) — works even if the variable is undefined
+		list(APPEND configured_extra_tools "${tool_name}")
+
+		# Write back to the global property
+		set_property(GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED
+					"${configured_extra_tools}")
+
+		# Add the tool directory and propagate its variables
 		add_subdirectory(${tool_name})
 		include(${tool_name}/propagate_vars.cmake)
 	endif()
