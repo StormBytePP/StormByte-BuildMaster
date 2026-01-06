@@ -14,6 +14,13 @@ if(NOT BUILDMASTER_CONFIGURED)
 	file(MAKE_DIRECTORY "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	set(PATH "${BUILDMASTER_INSTALL_BINDIR}")
 
+	# Enable/Disable debug
+	if(DEFINED ENV{BUILDMASTER_DEBUG} AND "$ENV{BUILDMASTER_DEBUG}" STREQUAL "1")
+		set(BUILDMASTER_DEBUG ON)
+	else()
+		set(BUILDMASTER_DEBUG OFF)
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

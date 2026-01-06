@@ -10,6 +10,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_NINJA_COMMAND "${_env_ninja_list}")
 	prepare_command(ENV_NINJA_SILENT_COMMAND "${_env_ninja_silent_list}")
 
+	# In debug mode, ENV_NINJA_SILENT is the same as ENV_NINJA
+	if(BUILDMASTER_DEBUG)
+		set(ENV_NINJA_SILENT_COMMAND "${ENV_NINJA_COMMAND}")
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

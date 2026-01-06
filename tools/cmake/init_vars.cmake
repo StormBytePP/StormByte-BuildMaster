@@ -8,6 +8,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_CMAKE_COMMAND "${_env_cmake_list}")
 	prepare_command(ENV_CMAKE_SILENT_COMMAND "${_env_cmake_silent_list}")
 
+	# In debug mode, ENV_CMAKE_SILENT is the same as ENV_CMAKE
+	if(BUILDMASTER_DEBUG)
+		set(ENV_CMAKE_SILENT_COMMAND "${ENV_CMAKE_COMMAND}")
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

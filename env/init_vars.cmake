@@ -46,6 +46,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 	# Prepare ENV_RUNNER for propagation
 	prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 
+	# In debug mode, ENV_RUNNER_SILENT is the same as ENV_RUNNER
+	if(BUILDMASTER_DEBUG)
+		set(ENV_RUNNER_SILENT "${ENV_RUNNER}")
+	endif()
+
 	# We create a basic env runner
 	update_env_runner()
 

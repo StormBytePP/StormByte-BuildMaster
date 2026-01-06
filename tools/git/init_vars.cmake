@@ -11,6 +11,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_GIT_COMMAND "${_env_git_list}")
 	prepare_command(ENV_GIT_SILENT_COMMAND "${_env_git_silent_list}")
 
+	# In debug mode, ENV_GIT_SILENT is the same as ENV_GIT
+	if(BUILDMASTER_DEBUG)
+		set(ENV_GIT_SILENT_COMMAND "${ENV_GIT_COMMAND}")
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()
