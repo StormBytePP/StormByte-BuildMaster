@@ -1,6 +1,6 @@
 # StormByte BuildMaster
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)(LICENSE)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-blue)
 ![CMake](https://img.shields.io/badge/cmake-%3E%3D3.20-blue)
 ![CMake DSL](https://img.shields.io/badge/CMake-DSL-blueviolet)

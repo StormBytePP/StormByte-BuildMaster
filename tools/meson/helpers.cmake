@@ -1,57 +1,41 @@
-### Function: create_meson_stages
-### Create setup/compile/install scripts for a Meson-built component.
-##
-## Parameters (positional):
-##  - _file_setup: name of the variable to set in parent scope with the
-##                 path to the generated Meson `*_configure.cmake` script.
-##  - _file_compile: name of the variable to set in parent scope with the
-##                   path to the generated Meson `*_compile.cmake` script.
-##  - _file_install: name of the variable to set in parent scope with the
-##                   path to the generated Meson `*_install.cmake` script.
-##  - _component: simple component name (used to form stage names and
-##                derive the file name).
-##  - _component_title: human-friendly component title (e.g. "opus").
-##  - _srcdir: path to the component source directory.
-##  - _builddir: path to the component build directory.
-##  - _meson_options: list of Meson options to pass to the component's setup.
-##  - _library_mode: either `static` or `shared` — controls template behavior.
-##  - _output_libraries: one or more full paths (or a single path) to the
-##                       built library/artifact(s) produced by the component.
-##                       Exported into `_MESON_OUTPUT_LIBRARIES` for use inside
-##                       the templates.
-##  - _indent_level (optional, passed as ARGV9): number of tab characters
-##                   to prepend to generated lines; when provided `_INDENT_`
-##                   is set for use inside templates. This optional argument
-##                   should come after `_output_libraries`.
-##
-### Behaviour:
-##  - Appends `_build` and `_install` to `_component` to form stage names.
-##  - Sets up template variables: `_MESON_COMPONENT_TITLE`, `_MESON_SRCDIR`,
-##    `_MESON_BUILD_DIR`, `_MESON_OUTPUT_LIBRARIES` and `_MESON_OPTIONS` (the
-##    `_meson_options` list is joined with a space; the Meson setup template
-##    will receive `--prefix`/`--libdir` arguments as appropriate when
-##    generating the runner invocation).
-##  - Calls `sanitize_for_filename` to produce `_MESON_COMPONENT_SAFE` used
-##    to create three output paths inside `${BUILDMASTER_SCRIPTS_MESON_DIR}`:
-##      * <safe>_configure.cmake
-##      * <safe>_compile.cmake
-##      * <safe>_install.cmake
-##  - Generates the three scripts from the templates in
-##    `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via `configure_file`.
-##  - Writes the generated file paths into the parent scope variables named
-##    by `_file_setup`, `_file_compile` and `_file_install` and exposes
-##    `_MESON_OUTPUT_LIBRARY` for template use.
-##
-### Return / Side effects:
-##  - No direct return value; results are provided through parent-scope
-##    variables.
-##  - `configure_file` calls create or overwrite files under
-##    `${BUILDMASTER_SCRIPTS_MESON_DIR}` when the function runs.
-##
-### Example (conceptual):
-##  create_meson_stages(setup_file compile_file install_file mylib "My Lib"
-##                      /path/to/src /path/to/build "${meson_options}"
-##                      shared "/path/to/mylibname.so" 1
+## @brief Create setup/compile/install scripts for a Meson-built component.
+## @param[out] _file_setup Name of the variable to set in parent scope
+##            with the generated Meson `*_configure.cmake` script path.
+## @param[out] _file_compile Name of the variable to set in parent scope
+##            with the generated Meson `*_compile.cmake` script path.
+## @param[out] _file_install Name of the variable to set in parent scope
+##            with the generated Meson `*_install.cmake` script path.
+## @param[in] _component Simple component name used to form stage names
+##            and derive the file name.
+## @param[in] _component_title Human-friendly component title.
+## @param[in] _srcdir Path to the component source directory.
+## @param[in] _builddir Path to the component build directory.
+## @param[in] _meson_options List of Meson options to pass to the
+##            component's setup.
+## @param[in] _library_mode Either `static` or `shared` — controls
+##            template behaviour.
+## @param[in] _output_libraries One or more full paths to the built
+##            library/artifact(s) produced by the component; exported as
+##            `_MESON_OUTPUT_LIBRARIES` for template use.
+## @param[in] _indent_level Optional (passed as ARGV9) number of tab
+##            characters to prepend to generated lines; when provided
+##            `_INDENT_` is set for template use.
+## @note Appends `_build` and `_install` to `_component` to form stage
+##       names; sets template variables such as `_MESON_COMPONENT_TITLE`,
+##       `_MESON_SRCDIR`, `_MESON_BUILD_DIR`, `_MESON_OUTPUT_LIBRARIES` and
+##       `_MESON_OPTIONS` (the `_meson_options` list is joined with a
+##       space). Calls `sanitize_for_filename` to produce
+##       `_MESON_COMPONENT_SAFE` used to create output paths inside
+##       `${BUILDMASTER_SCRIPTS_MESON_DIR}` and generates three scripts
+##       from templates in `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via
+##       `configure_file`.
+## @return Results are provided through parent-scope variables; the
+##         `configure_file` calls create or overwrite files under
+##         `${BUILDMASTER_SCRIPTS_MESON_DIR}`.
+## @example
+##   create_meson_stages(setup_file compile_file install_file mylib "My Lib"
+##                       /path/to/src /path/to/build "${meson_options}"
+##                       shared "/path/to/mylibname.so" 1
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	# Optional indent level
 	if(ARGC GREATER 10)

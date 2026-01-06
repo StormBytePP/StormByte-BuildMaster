@@ -1,7 +1,8 @@
-###
-# Helper function to update the bootstrap env runner script
-# based on the current global properties.
-###
+## @brief Update the bootstrap env runner script based on current global
+##        properties.
+## @note Generates a platform-specific runner script: a Windows batch
+##       file on WIN32 or a shell script on other platforms. Ensures the
+##       generated Linux runner has execute permissions.
 function(update_env_runner)
 	if(WIN32)
 		configure_file(
@@ -28,41 +29,31 @@ function(update_env_runner)
 	endif()
 endfunction()
 
-## prepare_command(_out _command_list)
-##
-## Prepare a tokenized command suitable for passing to
-## `execute_process(COMMAND ...)` by converting CMake's internal list
-## representation into a platform-appropriate sequence of arguments.
-##
-## Parameters:
-##  - _out: name of the variable to set in the parent scope. The value
-##          will be a CMake list where each element is a single token
-##          (i.e. an argument) suitable for expanding directly in
-##          `execute_process(COMMAND ${_out} ...)`.
-##  - _command_list: a CMake list (or the name of a variable containing
-##                   a list) representing the command and its
-##                   arguments. For example: `/bin/sh;${SCRIPT}` or
-##                   `cmd;/C;${SCRIPT}`.
-##
-## Behavior and notes:
-##  - Joins the CMake list elements with spaces and then calls
-##    `separate_arguments` using `WINDOWS_COMMAND` or `UNIX_COMMAND`
-##    depending on the platform. This handles quoting and token
-##    splitting so the caller does not need to perform manual parsing.
-##  - The returned `_out` is a proper CMake list of tokens; callers
-##    should expand it as multiple arguments in `execute_process`, not
-##    as a single quoted string.
-##  - The function requires exactly two arguments; it will `FATAL_ERROR`
-##    if called incorrectly.
+## @brief Prepare a tokenized command suitable for `execute_process(COMMAND ...)`.
+## @param[out] _out Name of the variable to set in the parent scope. The
+##            value will be a CMake list where each element is a single
+##            token (argument) suitable for expanding directly in
+##            `execute_process(COMMAND ${_out} ...)`.
+## @param[in] _command_list A CMake list (or the name of a variable
+##            containing a list) representing the command and its
+##            arguments. Examples: `/bin/sh;${SCRIPT}` or
+##            `cmd;/C;${SCRIPT}`.
+## @note Joins list elements with spaces then calls `separate_arguments`
+##       with `WINDOWS_COMMAND` or `UNIX_COMMAND` depending on the
+##       platform. The returned `_out` is a proper CMake list of tokens
+##       so callers must expand it as multiple arguments in
+##       `execute_process`, not as a single quoted string. The function
+##       requires exactly two arguments and will `FATAL_ERROR` if called
+##       incorrectly.
 ##
 ## Example:
-## ```cmake
-## set(_cmd /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
-## prepare_command(ENV_RUNNER "${_cmd}")
-## execute_process(COMMAND ${ENV_RUNNER} --version WORKING_DIRECTORY ${WD})
-## ```
-## This produces a token list like `/bin/sh` and `/path/to/runner.sh`
-## so `execute_process` receives them as two separate arguments.
+##   set(_cmd /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
+##   prepare_command(ENV_RUNNER "${_cmd}")
+##   execute_process(COMMAND ${ENV_RUNNER} --version WORKING_DIRECTORY ${WD})
+##
+## This produces a token list such as `/bin/sh` and
+## `/path/to/runner.sh` so `execute_process` receives them as separate
+## arguments.
 function(prepare_command _out _command_list)
 	if(NOT ARGC EQUAL 2)
 		message(FATAL_ERROR "prepare_command requires out variable and command list")

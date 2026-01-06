@@ -3,7 +3,7 @@ name: Generate and Deploy Documentation
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
 
 permissions:
@@ -25,8 +25,11 @@ jobs:
       ###########################################################################
       # 2. INSTALL DOXYGEN
       ###########################################################################
-      - name: Install Doxygen
-        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
+      - name: Install APT packages
+        uses: stormbytepp/githubactions/.github/actions/install-cached@master
+        with:
+          cache-key: apt-doxygen-graphviz
+          packages: 'doxygen graphviz'
 
       ###########################################################################
       # 3. GENERATE TEMPORARY DOXYFILE
@@ -39,12 +42,17 @@ jobs:
       ###########################################################################
       - name: Patch Doxyfile for Build Master docs
         run: |
-          sed -i 's/^PROJECT_NAME.*/PROJECT_NAME = "Build Master"/' Doxyfile.tmp
+          sed -i 's/^PROJECT_NAME.*/PROJECT_NAME = "StormByte - Build Master"/' Doxyfile.tmp
           sed -i 's/^OUTPUT_DIRECTORY.*/OUTPUT_DIRECTORY = docs/' Doxyfile.tmp
           sed -i 's/^INPUT.*/INPUT = ./' Doxyfile.tmp
           sed -i 's/^RECURSIVE.*/RECURSIVE = YES/' Doxyfile.tmp
-          sed -i 's/^FILE_PATTERNS.*/FILE_PATTERNS = README.md helpers.cmake/' Doxyfile.tmp
-          sed -i 's/^EXTENSION_MAPPING.*/EXTENSION_MAPPING = cmake=C/' Doxyfile.tmp
+          sed -i 's/^FILE_PATTERNS.*/FILE_PATTERNS = README.md *.md helpers.cmake/' Doxyfile.tmp
+          sed -i 's/^EXTENSION_MAPPING.*/EXTENSION_MAPPING = cmake=Python md=Markdown/' Doxyfile.tmp
+          # Ensure Doxygen extracts documented symbols and understands Markdown
+          sed -i 's/^EXTRACT_ALL.*/EXTRACT_ALL = YES/' Doxyfile.tmp
+          sed -i 's/^MARKDOWN_SUPPORT.*/MARKDOWN_SUPPORT = YES/' Doxyfile.tmp
+          sed -i 's/^SOURCE_BROWSER.*/SOURCE_BROWSER = YES/' Doxyfile.tmp
+          sed -i 's/^INLINE_SOURCES.*/INLINE_SOURCES = YES/' Doxyfile.tmp
           sed -i 's/^USE_MDFILE_AS_MAINPAGE.*/USE_MDFILE_AS_MAINPAGE = README.md/' Doxyfile.tmp
           sed -i 's/^GENERATE_LATEX.*/GENERATE_LATEX = NO/' Doxyfile.tmp
 
@@ -61,6 +69,13 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/html
+
+      ###########################################################################
+      # 6. UPLOAD ARTIFACT FOR GITHUB PAGES
+      ###########################################################################
+      - name: Clean temporary Doxyfile
+        run: rm Doxyfile.tmp
+
 
   ###########################################################################
   # 7. DEPLOY TO GITHUB PAGES

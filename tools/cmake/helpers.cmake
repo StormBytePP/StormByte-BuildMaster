@@ -1,59 +1,40 @@
-### Function: create_cmake_stages
-### Create configure/build/install scripts for a third-party component.
-##
-## Parameters (positional):
-##  - _file_configure: name of the variable to set in parent scope with the
-##                     path to the generated `configure_*.cmake` script.
-##  - _file_compile: name of the variable to set in parent scope with the
-##                   path to the generated `build_*.cmake` script.
-##  - _file_install: name of the variable to set in parent scope with the
-##                   path to the generated `install_*.cmake` script.
-##  - _component: short component identifier (used to form stage names and
-##                derive the file name).
-##  - _component_title: human-friendly component title (e.g. "Opus Codec").
-##  - _srcdir: path to the component source directory.
-##  - _builddir: path to the component build directory.
-##  - _options: list of CMake options to pass to the component's configure.
-##  - _library_mode: either `static` or `shared` — controls template behavior.
-##  - _output_libraries: one or more full paths (or a single path) to the
-##                       built library/artifact(s) produced by the component.
-##                       This value is exported into `_CMAKE_OUTPUT_LIBRARIES`
-##                       for use inside the templates.
-##  - _indent_level (optional, passed as ARGV10): number of tab characters
-##                  to prepend to generated lines; when provided an
-##                  `_CMAKE_INDENT_` variable is set for use inside templates.
-##                  This optional argument should come after `_output_libraries`.
-##
-### Behaviour:
-##  - Appends `_build` and `_install` to `_component` to form stage names.
-##  - Sets up template variables: `_CMAKE_COMPONENT_TITLE`, `_CMAKE_SRCDIR`,
-##    `_CMAKE_BUILD_DIR`, `_CMAKE_OUTPUT_LIBRARIES` and `_CMAKE_OPTIONS` (the
-##    `_options` list is joined with "\n\t\t").
-##  - Calls `sanitize_for_filename` to produce `_CMAKE_COMPONENT_SAFE` used
-##    to create three output paths inside `${BUILDMASTER_SCRIPTS_CMAKEDIR}`:
-##      * configure_<safe>.cmake
-##      * build_<safe>.cmake
-##      * install_<safe>.cmake
-##  - Generates the three scripts from the templates in
-##    `${BUILDMASTER_TOOLS_CMAKE_SRCDIR}` via `configure_file`.
-##  - Exports the generated file paths to the parent scope variables named
-##    by `_file_configure`, `_file_compile` and `_file_install` and exports
-##    `_CMAKE_OUTPUT_LIBRARY` for use by the templates.
-##
-### Return / Side effects:
-##  - No direct return value; results are provided through parent-scope
-##    variables.
-##  - The `configure_file` calls create or overwrite files under
-##    `${BUILDMASTER_SCRIPTS_CMAKEDIR}` when the function runs.
-##
-### Note / Observación:
-##  - The function calls `sanitize_for_filename(_CMAKE_COMPONENT_SAFE "${_component}")`.
-##    This produces a safe filename for use in the generated script paths.
-##
-### Example (conceptual):
-##  create_cmake_stages(cfg_file build_file install_file mylib "My Lib"
-##                      /path/to/src /path/to/build "${options}"
-##                      shared "/path/to/mylibname.so" 1
+## @brief Create configure/build/install scripts for a third-party component.
+## @param[out] _file_configure Name of the variable to set in parent scope
+##            with the path to the generated `configure_*.cmake` script.
+## @param[out] _file_compile Name of the variable to set in parent scope
+##            with the path to the generated `build_*.cmake` script.
+## @param[out] _file_install Name of the variable to set in parent scope
+##            with the path to the generated `install_*.cmake` script.
+## @param[in] _component Short component identifier used to form stage
+##            names and derive the file name.
+## @param[in] _component_title Human-friendly component title.
+## @param[in] _srcdir Path to the component source directory.
+## @param[in] _builddir Path to the component build directory.
+## @param[in] _options List of CMake options to pass to the component's
+##            configure step.
+## @param[in] _library_mode Either `static` or `shared` — controls
+##            template behavior.
+## @param[in] _output_libraries One or more full paths to the built
+##            library/artifact(s) produced by the component; exported as
+##            `_CMAKE_OUTPUT_LIBRARIES` for template use.
+## @param[in] _indent_level Optional (passed as ARGV10) number of tab
+##            characters to prepend to generated lines; sets `_CMAKE_INDENT_`
+##            for templates when provided.
+## @note Appends `_build` and `_install` to `_component` to form stage
+##       names; sets template variables such as `_CMAKE_COMPONENT_TITLE`,
+##       `_CMAKE_SRCDIR`, `_CMAKE_BUILD_DIR`, `_CMAKE_OUTPUT_LIBRARIES` and
+##       `_CMAKE_OPTIONS` (the `_options` list is joined with "\n\t\t").
+##       Calls `sanitize_for_filename` to produce `_CMAKE_COMPONENT_SAFE`
+##       used to create output paths inside `${BUILDMASTER_SCRIPTS_CMAKEDIR}`
+##       and generates three scripts from templates in
+##       `${BUILDMASTER_TOOLS_CMAKE_SRCDIR}` via `configure_file`.
+## @return Results are provided through parent-scope variables; the
+##         `configure_file` calls create/overwrite files under
+##         `${BUILDMASTER_SCRIPTS_CMAKEDIR}`.
+## @example
+##   create_cmake_stages(cfg_file build_file install_file mylib "My Lib"
+##                       /path/to/src /path/to/build "${options}"
+##                       shared "/path/to/mylibname.so" 1
 function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)
 	# Optional indent level
 	if(ARGC GREATER 10)

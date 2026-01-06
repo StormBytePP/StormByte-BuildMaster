@@ -1,16 +1,12 @@
-## windows_path(out_var, input_path)
-##
-## Normalize a path for Windows workspaces.
-## Parameters:
-##  - out_var: name of the variable to set (in parent scope) with the
-##             normalized path.
-##  - input_path: path to normalize. On WIN32 this will convert forward
-##                slashes to backslashes and remove surrounding quotes.
-##
-## Behaviour:
-##  - On WIN32: strips surrounding double quotes (if present) and replaces
-##    '/' with '\\' to produce a basic Windows-style path.
-##  - On non-WIN32 platforms: returns the original path unchanged.
+## @brief Normalize a path for Windows workspaces.
+## @param[out] out_var Name of the variable to set in the parent scope
+##            with the normalized path.
+## @param[in] input_path Path to normalize. On WIN32 this will convert
+##            forward slashes to backslashes and remove surrounding
+##            quotes.
+## @note On WIN32 this strips surrounding double quotes (if present)
+##       and replaces '/' with '\\' to produce a Windows-style path.
+##       On non-WIN32 platforms the input is returned unchanged.
 function(windows_path _out_path _input_path )
 	if(NOT ARGC EQUAL 2)
 		message(FATAL_ERROR "windows_path requires output variable name and input path")
@@ -27,22 +23,18 @@ function(windows_path _out_path _input_path )
 	endif()
 endfunction()
 
-## library_import_hint(out_var, lib_name, prefix_path)
-##
-## Construct a shared-library filename hint for `find_library`/importing.
-## Parameters:
-##  - out_var: variable name to set in parent scope with the constructed name.
-##  - lib_name: base library name without prefix/suffix (e.g. 'avcodec').
-##  - prefix_path: optional directory prefix to prepend before the library
-##                 filename (no trailing separator expected).
-##
-## Behaviour:
-##  - On WIN32 uses `CMAKE_IMPORT_LIBRARY_PREFIX`/`_SUFFIX` and backslash
-##    as separator.
-##  - On other platforms uses shared library prefix/suffix and '/' as
-##    separator.
-##  - If `prefix_path` is provided it is prepended using the platform
-##    separator followed by the library prefix/suffix and name.
+## @brief Construct a platform-appropriate shared-library filename hint.
+## @param[out] out_var Variable name to set in the parent scope with the
+##            constructed name.
+## @param[in] lib_name Base library name without prefix/suffix (for
+##            example: avcodec).
+## @param[in] prefix_path Optional directory prefix to prepend before the
+##            library filename (no trailing separator expected).
+## @note On WIN32 uses `CMAKE_IMPORT_LIBRARY_PREFIX`/
+##       `CMAKE_IMPORT_LIBRARY_SUFFIX` and backslash separators. On
+##       other platforms uses shared library prefix/suffix and '/'. When
+##       `prefix_path` is provided it is prepended before the platform
+##       prefix.
 function(library_import_hint _out_var _lib_name _prefix_path)
 	if(NOT ARGC EQUAL 3)
 		message(FATAL_ERROR "library_import_hint requires output variable name, library name and prefix.")
@@ -63,19 +55,15 @@ function(library_import_hint _out_var _lib_name _prefix_path)
 	set(${_out_var} "${_prefix}${_lib_name}${_suffix}" PARENT_SCOPE)
 endfunction()
 
-## library_import_static_hint(out_var, lib_name, prefix_path)
-##
-## Construct a static-library filename hint for importing/linking.
-## Parameters:
-##  - out_var: variable name to set in parent scope with the constructed name.
-##  - lib_name: base library name without prefix/suffix.
-##  - prefix_path: optional directory prefix to prepend before the library
-##                 filename (no trailing separator expected).
-##
-## Behaviour:
-##  - Uses `CMAKE_STATIC_LIBRARY_PREFIX` and `CMAKE_STATIC_LIBRARY_SUFFIX`.
-##  - Prepends `prefix_path` followed by the appropriate path separator if
-##    provided.
+## @brief Construct a static-library filename hint for importing/linking.
+## @param[out] out_var Variable name to set in the parent scope with the
+##            constructed name.
+## @param[in] lib_name Base library name without prefix/suffix.
+## @param[in] prefix_path Optional directory prefix to prepend before the
+##            library filename (no trailing separator expected).
+## @note Uses `CMAKE_STATIC_LIBRARY_PREFIX` and
+##       `CMAKE_STATIC_LIBRARY_SUFFIX`. If `prefix_path` is provided it
+##       is prepended with a '/' separator.
 function(library_import_static_hint _out_var _lib_name _prefix_path)
 	if(NOT ARGC EQUAL 3)
 		message(FATAL_ERROR "library_import_static_hint requires output variable name, library name and prefix.")
@@ -92,22 +80,13 @@ function(library_import_static_hint _out_var _lib_name _prefix_path)
 	set(${_out_var} "${_prefix}${_lib_name}${CMAKE_STATIC_LIBRARY_SUFFIX}" PARENT_SCOPE)
 endfunction()
 
-## sanitize_for_filename(_out _input)
-##
-## Produce a filesystem-safe string from an arbitrary input suitable for
-## use in filenames. The transformation is intentionally conservative to
-## avoid surprising characters in generated file names used by the
-## bootstrap helpers.
-##
-## Parameters:
-##  - _out: name of the variable to set in the parent scope with the
-##          sanitized string.
-##  - _input: input string to sanitize.
-##
-## Behavior:
-##  - Replaces any character not in the set [A-Za-z0-9._-] with '_'.
-##  - Collapses consecutive underscores to a single underscore.
-##  - Trims leading and trailing underscores.
+## @brief Produce a filesystem-safe string from an arbitrary input.
+## @param[out] _out Name of the variable to set in the parent scope
+##            with the sanitized string.
+## @param[in] _input Input string to sanitize.
+## @note Replaces any character not in [A-Za-z0-9._-] with '_',
+##       collapses repeated underscores to a single '_' and trims
+##       leading/trailing underscores.
 ##
 function(sanitize_for_filename _out _input)
 	if(NOT ARGC EQUAL 2)
@@ -125,11 +104,11 @@ function(sanitize_for_filename _out _input)
 	set(${_out} "${_output}" PARENT_SCOPE)
 endfunction()
 
-## toggle_bool(var_name)
-##
-## Toggle a variable between TRUE and FALSE in the caller (parent) scope.
-## - var_name: name of the variable to toggle. The function reads the
-##   current value and writes the negated value into the parent scope.
+## @brief Toggle a boolean-style variable between TRUE and FALSE in the
+##        parent scope.
+## @param[in] var_name Name of the variable to toggle; the current value
+##            is read and the negated value is written into the parent
+##            scope.
 function(toggle_bool _var)
 	if(NOT ARGC EQUAL 1)
 		message(FATAL_ERROR "toggle_bool requires one variable name")
@@ -142,48 +121,22 @@ function(toggle_bool _var)
 	endif()
 endfunction()
 
-## list_join(_out_var _list_var _separator [preserve_quotes])
-##
-## Join a CMake list into a single string using a provided separator while
-## preserving semicolons that appear inside single- or double-quoted
-## substrings. Optionally keeps the quote characters themselves in the
-## output.
-##
-## Parameters:
-##  - _out_var: name of the variable to set in the parent scope with the
-##              resulting joined string.
-##  - _list_var: name of a variable that contains a CMake list. The
-##               function reads the variable's raw serialization (which
-##               uses ';' as an element separator) and operates on that
-##               string. Pass the variable name, not a literal list.
-##  - _separator: string used to replace top-level semicolons (those not
-##                inside quotes). Typically a space or a single character.
-##  - preserve_quotes: optional boolean (TRUE/FALSE, default TRUE). If
-##                     TRUE the function will keep single and double quote
-##                     characters in the output; if FALSE quotes are
-##                     removed during processing.
-##
-## Behavior:
-##  - Serializes the list into CMake's internal form and iterates the
-##    characters one-by-one while tracking whether it is currently inside
-##    single or double quotes.
-##  - Semicolons encountered when not inside any quotes are replaced with
-##    the provided `_separator` value; semicolons inside quotes are left
-##    unchanged and escaped so CMake does not treat them as separators.
-##  - Quote characters are preserved in the output unless
-##    `preserve_quotes` is FALSE.
-##  - The final joined string is stored in `_out_var` in the parent scope.
-##
-## Notes and examples:
-##  - This function is intended as a safe alternative to `list(JOIN ...)`
-##    when list elements may contain quoted semicolons that must be
-##    preserved.
-##  - Example usage:
-##      set(mylist "a" "param=\"x;y\"" "b")
-##      list_join(joined mylist ",")          # quotes preserved by default
-##      list_join(joined mylist "," FALSE)    # remove quotes from output
-##  - The function does not validate matching quotes; unbalanced quotes
-##    may produce unexpected output.
+## @brief Join a CMake list into a single string while preserving
+##        semicolons inside quoted substrings.
+## @param[out] _out_var Name of the variable to set in the parent scope
+##            with the resulting joined string.
+## @param[in] _list_var Name of a variable that contains a CMake list
+##            (pass the variable name, not a literal list).
+## @param[in] _separator String used to replace top-level semicolons
+##            (those not inside quotes).
+## @param[in] preserve_quotes Optional boolean (TRUE/FALSE, default
+##            TRUE). If TRUE single and double quotes are preserved in
+##            the output; if FALSE quotes are removed.
+## @note Iterates the serialized list character-by-character tracking
+##       quote state; replaces semicolons only when not inside quotes
+##       and escapes semicolons inside quotes so they remain part of
+##       list elements. Does not validate matching quotes; unbalanced
+##       quotes may produce unexpected output.
 ##
 function(list_join _out_var _raw_string _separator)
 	set(result "\"")
@@ -233,22 +186,16 @@ function(list_join _out_var _raw_string _separator)
 endfunction()
 
 
-## ensure_build_dir(_out [_component])
-##
-## Ensure a per-component build directory exists under the current CMake
-## binary directory and return its path.
-##
-## Parameters:
-##  - _out: name of the variable to set in the parent scope with the
-##          created directory path.
-##  - _component: optional component name; if provided the resulting
-##                directory will be `${CMAKE_CURRENT_BINARY_DIR}/<sanitized>/`
-##                where `<sanitized>` is produced by
-##                `sanitize_for_filename` and prefixed with a '/'.
-##
-## Behavior:
-##  - Creates the directory (recursively) if it doesn't exist using
-##    `file(MAKE_DIRECTORY ...)` and returns the absolute path in `_out`.
+## @brief Ensure a per-component build directory exists and return its
+##        path.
+## @param[out] _out Name of the variable to set in the parent scope with
+##            the created directory path.
+## @param[in] _component Optional component name; when provided the
+##            directory will be `${CMAKE_CURRENT_BINARY_DIR}/<sanitized>/`
+##            where `<sanitized>` is produced by
+##            `sanitize_for_filename`.
+## @note Creates the directory with `file(MAKE_DIRECTORY ...)` if it
+##       does not already exist.
 ##
 function(ensure_build_dir _out)
 	if(ARGC LESS 1)
