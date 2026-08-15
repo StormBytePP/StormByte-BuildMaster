@@ -73,6 +73,14 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_component}")
 
+	# Compile args: on MSVC force /Z7 so parallel builds don't race on PDBs
+	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
+	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
+	if(MSVC)
+		string(APPEND _MESON_C_ARGS " /Z7")
+		string(APPEND _MESON_CXX_ARGS " /Z7")
+	endif()
+
 	set(_MESON_SETUP_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
 	)
