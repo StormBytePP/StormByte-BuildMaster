@@ -2,16 +2,12 @@
 
 update_pkg_config="@PKG_CONFIG@"
 update_pkgconfig_path="@PKG_CONFIG_PATH@"
-# C and C++ compiler variables
 update_c_compiler="@CMAKE_C_COMPILER@"
 update_cxx_compiler="@CMAKE_CXX_COMPILER@"
-# Optional compiler launchers (ccache / sccache). Empty = disabled.
 update_c_launcher="@CMAKE_C_COMPILER_LAUNCHER@"
 update_cxx_launcher="@CMAKE_CXX_COMPILER_LAUNCHER@"
-# Optional cache directories (only exported when non-empty at configure time)
 update_ccache_dir="@CCACHE_DIR@"
 update_sccache_dir="@SCCACHE_DIR@"
-# C/C++ compiler flags are no longer used by environment, they are passed directly to meson/cmake
 update_cflags="@CFLAGS@"
 update_cxxflags="@CXXFLAGS@"
 update_ldflags="@LDFLAGS@"
@@ -30,7 +26,6 @@ if [ -n "$update_pkgconfig_path" ]; then
 	fi
 fi
 
-# Propagate cache dirs only when the parent job actually enabled caching
 if [ -n "$update_ccache_dir" ]; then
 	export CCACHE_DIR="$update_ccache_dir"
 fi
@@ -38,26 +33,19 @@ if [ -n "$update_sccache_dir" ]; then
 	export SCCACHE_DIR="$update_sccache_dir"
 fi
 
-# Compiler (+ optional launcher). Example: CC="ccache /usr/bin/clang"
-# If only launcher is set, still export it so tools can use it.
+# Real compilers only — launchers go to CMAKE_*_COMPILER_LAUNCHER / meson setup
 if [ -n "$update_c_compiler" ]; then
-	if [ -n "$update_c_launcher" ]; then
-		export CC="$update_c_launcher $update_c_compiler"
-	else
-		export CC="$update_c_compiler"
-	fi
-elif [ -n "$update_c_launcher" ]; then
-	export CC="$update_c_launcher"
+	export CC="$update_c_compiler"
+fi
+if [ -n "$update_cxx_compiler" ]; then
+	export CXX="$update_cxx_compiler"
 fi
 
-if [ -n "$update_cxx_compiler" ]; then
-	if [ -n "$update_cxx_launcher" ]; then
-		export CXX="$update_cxx_launcher $update_cxx_compiler"
-	else
-		export CXX="$update_cxx_compiler"
-	fi
-elif [ -n "$update_cxx_launcher" ]; then
-	export CXX="$update_cxx_launcher"
+if [ -n "$update_c_launcher" ]; then
+	export CMAKE_C_COMPILER_LAUNCHER="$update_c_launcher"
+fi
+if [ -n "$update_cxx_launcher" ]; then
+	export CMAKE_CXX_COMPILER_LAUNCHER="$update_cxx_launcher"
 fi
 
 if [ -n "$update_cflags" ]; then

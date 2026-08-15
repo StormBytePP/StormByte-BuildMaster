@@ -1,6 +1,8 @@
 @echo off
-rem Runner for Windows: sets PKG_CONFIG/PKG_CONFIG_PATH/LIB/INCLUDE,
-rem optional SCCACHE_DIR / compiler launchers, then runs command
+rem Runner for Windows: PKG_CONFIG/LIB/INCLUDE/PATH, cache dirs, compilers.
+rem IMPORTANT: CC/CXX are the real compiler only (cl). Never prefix sccache
+rem here — CMake gets CMAKE_*_COMPILER_LAUNCHER via configure.cmake.in;
+rem Meson gets CC="sccache cl" only at meson setup via cmake -E env.
 setlocal
 
 set "update_pkg_config=@PKG_CONFIG@"
@@ -56,7 +58,6 @@ if not "%update_nproc%"=="" (
 	set "CMAKE_BUILD_PARALLEL_LEVEL=%update_nproc%"
 )
 
-rem Propagate cache dirs only when enabled in the parent job
 if not "%update_ccache_dir%"=="" (
 	set "CCACHE_DIR=%update_ccache_dir%"
 )
@@ -64,25 +65,20 @@ if not "%update_sccache_dir%"=="" (
 	set "SCCACHE_DIR=%update_sccache_dir%"
 )
 
-rem Optional launcher wrap (e.g. sccache cl). Empty launcher = plain compiler.
+rem Real compilers only (never "sccache cl" — that breaks nested CMake on MSVC)
 if not "%update_c_compiler%"=="" (
-	if not "%update_c_launcher%"=="" (
-		set "CC=%update_c_launcher% %update_c_compiler%"
-	) else (
-		set "CC=%update_c_compiler%"
-	)
-) else if not "%update_c_launcher%"=="" (
-	set "CC=%update_c_launcher%"
+	set "CC=%update_c_compiler%"
+)
+if not "%update_cxx_compiler%"=="" (
+	set "CXX=%update_cxx_compiler%"
 )
 
-if not "%update_cxx_compiler%"=="" (
-	if not "%update_cxx_launcher%"=="" (
-		set "CXX=%update_cxx_launcher% %update_cxx_compiler%"
-	) else (
-		set "CXX=%update_cxx_compiler%"
-	)
-) else if not "%update_cxx_launcher%"=="" (
-	set "CXX=%update_cxx_launcher%"
+rem Export launchers for tools that read them; do not fold into CC/CXX
+if not "%update_c_launcher%"=="" (
+	set "CMAKE_C_COMPILER_LAUNCHER=%update_c_launcher%"
+)
+if not "%update_cxx_launcher%"=="" (
+	set "CMAKE_CXX_COMPILER_LAUNCHER=%update_cxx_launcher%"
 )
 
 if "%~1"=="" (
@@ -91,7 +87,6 @@ if "%~1"=="" (
 	exit /b 1
 )
 
-rem Execute the passed command with its arguments
 cmd /c %*
 set "rc=%ERRORLEVEL%"
 endlocal & exit /b %rc%
