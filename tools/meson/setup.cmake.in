@@ -1,21 +1,70 @@
 if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	message(STATUS "@_MESON_INDENT_@Configuring @_MESON_COMPONENT_TITLE@")
-	execute_process(
-		COMMAND @ENV_MESON_COMMAND@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
-			"-Dc_args=@_MESON_C_ARGS@"
-			"-Dcpp_args=@_MESON_CXX_ARGS@"
-			"-Dc_link_args=@CMAKE_EXE_LINKER_FLAGS@"
-			"-Dcpp_link_args=@CMAKE_EXE_LINKER_FLAGS@"
-			"-Dbuildtype=@MESON_BUILD_TYPE@"
-			"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
-			"--prefix=@BUILDMASTER_INSTALL_DIR@"
-			"--libdir=@CMAKE_INSTALL_LIBDIR@"
-			"-Db_lto=@LTO_ENABLED@"
-			@_MESON_OPTIONS@
-		RESULT_VARIABLE MESON_SETUP_RESULT
-		OUTPUT_VARIABLE MESON_SETUP_OUT
-		ERROR_VARIABLE MESON_SETUP_ERR
-	)
+
+	# Build optional env prefix so ninja rules see ccache/sccache at setup time.
+	# Empty launchers → plain meson command (no cache injection).
+	set(_MESON_SETUP_ENV_ARGS "")
+	if(NOT "@CMAKE_C_COMPILER_LAUNCHER@" STREQUAL "")
+		if(NOT "@CMAKE_C_COMPILER@" STREQUAL "")
+			list(APPEND _MESON_SETUP_ENV_ARGS "CC=@CMAKE_C_COMPILER_LAUNCHER@ @CMAKE_C_COMPILER@")
+		else()
+			list(APPEND _MESON_SETUP_ENV_ARGS "CC=@CMAKE_C_COMPILER_LAUNCHER@")
+		endif()
+	elseif(NOT "@CMAKE_C_COMPILER@" STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "CC=@CMAKE_C_COMPILER@")
+	endif()
+	if(NOT "@CMAKE_CXX_COMPILER_LAUNCHER@" STREQUAL "")
+		if(NOT "@CMAKE_CXX_COMPILER@" STREQUAL "")
+			list(APPEND _MESON_SETUP_ENV_ARGS "CXX=@CMAKE_CXX_COMPILER_LAUNCHER@ @CMAKE_CXX_COMPILER@")
+		else()
+			list(APPEND _MESON_SETUP_ENV_ARGS "CXX=@CMAKE_CXX_COMPILER_LAUNCHER@")
+		endif()
+	elseif(NOT "@CMAKE_CXX_COMPILER@" STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "CXX=@CMAKE_CXX_COMPILER@")
+	endif()
+	if(NOT "@CCACHE_DIR@" STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "CCACHE_DIR=@CCACHE_DIR@")
+	endif()
+	if(NOT "@SCCACHE_DIR@" STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "SCCACHE_DIR=@SCCACHE_DIR@")
+	endif()
+
+	if(_MESON_SETUP_ENV_ARGS)
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E env ${_MESON_SETUP_ENV_ARGS}
+				@ENV_MESON_COMMAND@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
+				"-Dc_args=@_MESON_C_ARGS@"
+				"-Dcpp_args=@_MESON_CXX_ARGS@"
+				"-Dc_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dcpp_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dbuildtype=@MESON_BUILD_TYPE@"
+				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
+				"--prefix=@BUILDMASTER_INSTALL_DIR@"
+				"--libdir=@CMAKE_INSTALL_LIBDIR@"
+				"-Db_lto=@LTO_ENABLED@"
+				@_MESON_OPTIONS@
+			RESULT_VARIABLE MESON_SETUP_RESULT
+			OUTPUT_VARIABLE MESON_SETUP_OUT
+			ERROR_VARIABLE MESON_SETUP_ERR
+		)
+	else()
+		execute_process(
+			COMMAND @ENV_MESON_COMMAND@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
+				"-Dc_args=@_MESON_C_ARGS@"
+				"-Dcpp_args=@_MESON_CXX_ARGS@"
+				"-Dc_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dcpp_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dbuildtype=@MESON_BUILD_TYPE@"
+				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
+				"--prefix=@BUILDMASTER_INSTALL_DIR@"
+				"--libdir=@CMAKE_INSTALL_LIBDIR@"
+				"-Db_lto=@LTO_ENABLED@"
+				@_MESON_OPTIONS@
+			RESULT_VARIABLE MESON_SETUP_RESULT
+			OUTPUT_VARIABLE MESON_SETUP_OUT
+			ERROR_VARIABLE MESON_SETUP_ERR
+		)
+	endif()
 
 	if(NOT MESON_SETUP_RESULT EQUAL 0)
 		set(MESON_LOG_FILE "@_MESON_BUILD_DIR@/meson-logs/meson-log.txt")

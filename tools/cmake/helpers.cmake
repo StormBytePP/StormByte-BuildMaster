@@ -44,6 +44,23 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(_CMAKE_INDENT_ "")
 	endif()
 
+	# Child CMake projects (MariaDB, etc.): bake launcher into *_configure.cmake.
+	# Prefer CMake vars; fall back to ENV from the CI job.
+	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT CMAKE_CXX_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_CXX_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_CXX_COMPILER_LAUNCHER "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+		set(CMAKE_C_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+		set(CMAKE_CXX_COMPILER_LAUNCHER "")
+	endif()
+
 	if(${_library_mode} STREQUAL "static")
 		set(_CMAKE_SHARED_MODE "OFF")
 	elseif(${_library_mode} STREQUAL "shared")

@@ -17,7 +17,7 @@
 ## @param[in] _output_libraries One or more full paths to the built
 ##            library/artifact(s) produced by the component; exported as
 ##            `_MESON_OUTPUT_LIBRARIES` for template use.
-## @param[in] _indent_level Optional (passed as ARGV9) number of tab
+## @param[in] _indent_level Optional (passed as ARGV10) number of tab
 ##            characters to prepend to generated lines; when provided
 ##            `_INDENT_` is set for template use.
 ## @note Appends `_build` and `_install` to `_component` to form stage
@@ -79,6 +79,37 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	if(MSVC)
 		string(APPEND _MESON_C_ARGS " /Z7")
 		string(APPEND _MESON_CXX_ARGS " /Z7")
+	endif()
+
+	# Propagate compiler cache into meson setup templates.
+	# Prefer CMake vars; fall back to ENV from the CI job.
+	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT CMAKE_CXX_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_CXX_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_CXX_COMPILER_LAUNCHER "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+		set(CMAKE_C_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+		set(CMAKE_CXX_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CCACHE_DIR)
+		if(DEFINED ENV{CCACHE_DIR} AND NOT "$ENV{CCACHE_DIR}" STREQUAL "")
+			set(CCACHE_DIR "$ENV{CCACHE_DIR}")
+		else()
+			set(CCACHE_DIR "")
+		endif()
+	endif()
+	if(NOT DEFINED SCCACHE_DIR)
+		if(DEFINED ENV{SCCACHE_DIR} AND NOT "$ENV{SCCACHE_DIR}" STREQUAL "")
+			set(SCCACHE_DIR "$ENV{SCCACHE_DIR}")
+		else()
+			set(SCCACHE_DIR "")
+		endif()
 	endif()
 
 	set(_MESON_SETUP_FILE

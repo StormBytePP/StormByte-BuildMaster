@@ -3,7 +3,24 @@
 ## @note Generates a platform-specific runner script: a Windows batch
 ##       file on WIN32 or a shell script on other platforms. Ensures the
 ##       generated Linux runner has execute permissions.
+##       Propagates CMAKE_C/CXX_COMPILER_LAUNCHER and CCACHE_DIR/SCCACHE_DIR
+##       only when they are non-empty so child meson/cmake builds share
+##       the same compiler cache as the parent job.
 function(update_env_runner)
+	# Ensure template symbols exist even if the parent never set them
+	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+		set(CMAKE_C_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+		set(CMAKE_CXX_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CCACHE_DIR)
+		set(CCACHE_DIR "")
+	endif()
+	if(NOT DEFINED SCCACHE_DIR)
+		set(SCCACHE_DIR "")
+	endif()
+
 	if(WIN32)
 		configure_file(
 			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"

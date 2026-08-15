@@ -2,35 +2,25 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(BUILDMASTER_ENV_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 	set(BUILDMASTER_SCRIPTS_ENVDIR "${BUILDMASTER_BINDIR}/scripts/env")
 	if(WIN32)
-		# store as a list: interpreter and its first arg, then the script path
 		set(ENV_RUNNER cmd "/C" "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat")
 		set(ENV_RUNNER_SILENT cmd "/C" "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat")
-		# Strings for configure_file substitution (space-separated, portable)
 		set(ENV_RUNNER_CMD "cmd /C ${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat")
 		set(ENV_RUNNER_SILENT_CMD "cmd /C ${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat")
-		# Create silent runner
 		configure_file(
 			"${BUILDMASTER_ENV_SRCDIR}/runner_windows_silent.bat.in"
 			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat"
 			@ONLY
 		)
 	else()
-		# store as a list so that when expanded in COMMAND the interpreter and
-		# script become separate tokens instead of a single quoted string.
 		set(ENV_RUNNER /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
 		set(ENV_RUNNER_SILENT /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
-		# Strings for configure_file substitution (space-separated, portable)
 		set(ENV_RUNNER_CMD "/bin/sh ${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
 		set(ENV_RUNNER_SILENT_CMD "/bin/sh ${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
-		# Create silent runner
 		configure_file(
 			"${BUILDMASTER_ENV_SRCDIR}/runner_linux_silent.sh.in"
 			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh"
 			@ONLY
 		)
-		# Ensure the generated runner has execute permissions so it can be
-		# invoked directly by execute_process(). Some platforms require the
-		# executable bit even when a shebang is present.
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh"
 			RESULT_VARIABLE _chmod_result
@@ -39,21 +29,45 @@ if(NOT BUILDMASTER_CONFIGURED)
 		)
 	endif()
 
-	# Detect number of processors
 	include(ProcessorCount)
 	ProcessorCount(NPROC)
 
-	# Prepare ENV_RUNNER for propagation
+	# Compiler launchers: CMake does not load these from the environment by itself.
+	# Prefer already-set CMake vars (-D from CI); else take ENV from the job.
+	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT CMAKE_CXX_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_CXX_COMPILER_LAUNCHER}
+			AND NOT "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}" STREQUAL "")
+		set(CMAKE_CXX_COMPILER_LAUNCHER "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
+	endif()
+	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+		set(CMAKE_C_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+		set(CMAKE_CXX_COMPILER_LAUNCHER "")
+	endif()
+
+	# Cache dirs: only when the job actually enabled caching
+	if(DEFINED ENV{CCACHE_DIR} AND NOT "$ENV{CCACHE_DIR}" STREQUAL "")
+		set(CCACHE_DIR "$ENV{CCACHE_DIR}")
+	else()
+		set(CCACHE_DIR "")
+	endif()
+	if(DEFINED ENV{SCCACHE_DIR} AND NOT "$ENV{SCCACHE_DIR}" STREQUAL "")
+		set(SCCACHE_DIR "$ENV{SCCACHE_DIR}")
+	else()
+		set(SCCACHE_DIR "")
+	endif()
+
 	prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 
-	# In debug mode, ENV_RUNNER_SILENT is the same as ENV_RUNNER
 	if(BUILDMASTER_DEBUG)
 		set(ENV_RUNNER_SILENT "${ENV_RUNNER}")
 	endif()
 
-	# We create a basic env runner
 	update_env_runner()
 
-	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()
