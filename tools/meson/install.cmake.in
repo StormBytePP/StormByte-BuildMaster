@@ -5,6 +5,7 @@ add_custom_command(
 	WORKING_DIRECTORY "@_MESON_BUILD_DIR@"
 	DEPENDS @_MESON_STAGE_BUILD@
 	USES_TERMINAL
+	VERBATIM
 )
 
 add_custom_target(

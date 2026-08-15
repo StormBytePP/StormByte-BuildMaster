@@ -5,6 +5,7 @@ add_custom_command(
 	WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
 	DEPENDS @_CMAKE_STAGE_BUILD@
 	USES_TERMINAL
+	VERBATIM
 )
 
 add_custom_target(

@@ -30,8 +30,8 @@ if(NOT CMAKE_RESULT EQUAL 0)
 	)
 endif()
 
-# @BUILDMASTER_DEBUG@ is expanded at generation time (ON/OFF) so this works under cmake -P too
-if(@BUILDMASTER_DEBUG@)
+# Expanded at generation time as the string ON or OFF (avoid bare if(ON))
+if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
 	if(CMAKE_OUT)
 		message(STATUS "[BUILDMASTER_DEBUG] @_CMAKE_COMPONENT_TITLE@ configure stdout:\n${CMAKE_OUT}")
 	endif()

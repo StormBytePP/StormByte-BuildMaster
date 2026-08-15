@@ -32,7 +32,7 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 		)
 	endif()
 
-	if(@BUILDMASTER_DEBUG@)
+	if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
 		if(MESON_SETUP_OUT)
 			message(STATUS "[BUILDMASTER_DEBUG] @_MESON_COMPONENT_TITLE@ meson setup stdout:\n${MESON_SETUP_OUT}")
 		endif()
