@@ -20,3 +20,22 @@ execute_process(
 	OUTPUT_VARIABLE CMAKE_OUT
 	ERROR_VARIABLE CMAKE_ERROR
 )
+
+if(NOT CMAKE_RESULT EQUAL 0)
+	message(FATAL_ERROR
+		"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT})\n"
+		"Working directory: @_CMAKE_BUILD_DIR@\n"
+		"--- stdout ---\n${CMAKE_OUT}\n"
+		"--- stderr ---\n${CMAKE_ERROR}"
+	)
+endif()
+
+# @BUILDMASTER_DEBUG@ is expanded at generation time (ON/OFF) so this works under cmake -P too
+if(@BUILDMASTER_DEBUG@)
+	if(CMAKE_OUT)
+		message(STATUS "[BUILDMASTER_DEBUG] @_CMAKE_COMPONENT_TITLE@ configure stdout:\n${CMAKE_OUT}")
+	endif()
+	if(CMAKE_ERROR)
+		message(STATUS "[BUILDMASTER_DEBUG] @_CMAKE_COMPONENT_TITLE@ configure stderr:\n${CMAKE_ERROR}")
+	endif()
+endif()

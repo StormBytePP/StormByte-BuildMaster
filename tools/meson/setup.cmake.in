@@ -16,16 +16,28 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 		OUTPUT_VARIABLE MESON_SETUP_OUT
 		ERROR_VARIABLE MESON_SETUP_ERR
 	)
-	if(MESON_SETUP_ERR)
-		message(WARNING "${MESON_SETUP_ERR}")
-	endif()
+
 	if(NOT MESON_SETUP_RESULT EQUAL 0)
 		set(MESON_LOG_FILE "@_MESON_BUILD_DIR@/meson-logs/meson-log.txt")
+		set(_meson_log "")
 		if(EXISTS "${MESON_LOG_FILE}")
-			file(READ "${MESON_LOG_FILE}" MESON_LOG_CONTENT)
-			message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). Meson log: ${MESON_LOG_FILE}\n${MESON_LOG_CONTENT}")
-		else()
-			message(FATAL_ERROR "Meson setup failed (exit ${MESON_SETUP_RESULT}). See meson output above for details.")
+			file(READ "${MESON_LOG_FILE}" _meson_log)
+		endif()
+		message(FATAL_ERROR
+			"Meson setup failed for @_MESON_COMPONENT_TITLE@ (exit ${MESON_SETUP_RESULT})\n"
+			"Working directory / build dir: @_MESON_BUILD_DIR@\n"
+			"--- stdout ---\n${MESON_SETUP_OUT}\n"
+			"--- stderr ---\n${MESON_SETUP_ERR}\n"
+			"--- meson-log.txt ---\n${_meson_log}"
+		)
+	endif()
+
+	if(@BUILDMASTER_DEBUG@)
+		if(MESON_SETUP_OUT)
+			message(STATUS "[BUILDMASTER_DEBUG] @_MESON_COMPONENT_TITLE@ meson setup stdout:\n${MESON_SETUP_OUT}")
+		endif()
+		if(MESON_SETUP_ERR)
+			message(STATUS "[BUILDMASTER_DEBUG] @_MESON_COMPONENT_TITLE@ meson setup stderr:\n${MESON_SETUP_ERR}")
 		endif()
 	endif()
 endif()

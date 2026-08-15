@@ -7,5 +7,18 @@ execute_process(
 )
 
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Git fetch failed (exit ${GIT_RESULT}). See error output above for details.")
+	message(FATAL_ERROR
+		"Git fetch failed (exit ${GIT_RESULT}) in @GIT_REPO@\n"
+		"--- stdout ---\n${GIT_OUT}\n"
+		"--- stderr ---\n${GIT_ERROR}"
+	)
+endif()
+
+if(@BUILDMASTER_DEBUG@)
+	if(GIT_OUT)
+		message(STATUS "[BUILDMASTER_DEBUG] git fetch stdout:\n${GIT_OUT}")
+	endif()
+	if(GIT_ERROR)
+		message(STATUS "[BUILDMASTER_DEBUG] git fetch stderr:\n${GIT_ERROR}")
+	endif()
 endif()

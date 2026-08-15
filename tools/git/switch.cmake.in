@@ -7,5 +7,18 @@ execute_process(
 )
 
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Git switch failed (exit ${GIT_RESULT}). See error output above for details.")
+	message(FATAL_ERROR
+		"Git switch failed (exit ${GIT_RESULT}) branch=@GIT_BRANCH@ repo=@GIT_REPO@\n"
+		"--- stdout ---\n${GIT_OUT}\n"
+		"--- stderr ---\n${GIT_ERROR}"
+	)
+endif()
+
+if(@BUILDMASTER_DEBUG@)
+	if(GIT_OUT)
+		message(STATUS "[BUILDMASTER_DEBUG] git switch stdout:\n${GIT_OUT}")
+	endif()
+	if(GIT_ERROR)
+		message(STATUS "[BUILDMASTER_DEBUG] git switch stderr:\n${GIT_ERROR}")
+	endif()
 endif()

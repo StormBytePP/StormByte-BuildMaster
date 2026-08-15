@@ -3,9 +3,22 @@ execute_process(
 	WORKING_DIRECTORY @GIT_REPO@
 	RESULT_VARIABLE GIT_RESULT
 	OUTPUT_VARIABLE GIT_OUT
-	ERROR_VARIABLE GIT_ERROROR
+	ERROR_VARIABLE GIT_ERROR
 )
 
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR "Git patch failed (exit ${GIT_RESULT}). See error output above for details.")
+	message(FATAL_ERROR
+		"Git patch failed (exit ${GIT_RESULT}) in @GIT_REPO@\n"
+		"--- stdout ---\n${GIT_OUT}\n"
+		"--- stderr ---\n${GIT_ERROR}"
+	)
+endif()
+
+if(@BUILDMASTER_DEBUG@)
+	if(GIT_OUT)
+		message(STATUS "[BUILDMASTER_DEBUG] git apply stdout:\n${GIT_OUT}")
+	endif()
+	if(GIT_ERROR)
+		message(STATUS "[BUILDMASTER_DEBUG] git apply stderr:\n${GIT_ERROR}")
+	endif()
 endif()
