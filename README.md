@@ -3,309 +3,295 @@
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-linux%20%7C%20windows%20%7C%20macos-blue)
 ![CMake](https://img.shields.io/badge/cmake-%3E%3D3.20-blue)
-![CMake DSL](https://img.shields.io/badge/CMake-DSL-blueviolet)
-![Meson](https://img.shields.io/badge/build-meson%20supported-orange)
-![Ninja](https://img.shields.io/badge/build-ninja%20supported-0f4c81)
+![Meson](https://img.shields.io/badge/Meson-supported-orange)
+![Ninja](https://img.shields.io/badge/Ninja-supported-0f4c81)
 ![Status](https://img.shields.io/badge/status-active-success)
-![Type](https://img.shields.io/badge/type-build%20engine-lightgrey)
 
-## Table of Contents
+A small **CMake DSL** to configure, build, install and consume external
+**CMake** and **Meson** projects as first-class parts of a parent tree —
+with **configure-time** stages, explicit targets, and coherent environment
+propagation.
+
+## Table of contents
 
 - [Overview](#overview)
-- [Why Build Master exists](#why-build-master-exists)
-- [Why this matters](#why-this-matters)
-- [Design goals (brief)](#design-goals-brief)
-- [How to use (quick start)](#how-to-use-quick-start)
- - [Output verbosity](#output-verbosity)
- - [Recursive configurations](#recursive-configurations)
-- [Two usage modes](#two-usage-modes)
-  - [Simple mode — high level](#simple-mode---high-level)
-  - [Advanced mode — explicit stages](#advanced-mode---explicit-stages)
+- [Motivation](#motivation)
+- [Comparison](#comparison)
+- [Design goals](#design-goals)
+- [Quick start](#quick-start)
+- [Output verbosity](#output-verbosity)
+- [Recursive usage](#recursive-usage)
+- [Usage modes](#usage-modes)
 - [Targets and naming](#targets-and-naming)
-- [Important functions (where to look)](#important-functions-where-to-look)
-- [Helpers and utilities](#helpers-and-utilities)
-- [Templates and implementation notes](#templates-and-implementation-notes)
-- [Git handling](#git-handling)
+- [API reference (where to look)](#api-reference-where-to-look)
+- [Git helpers](#git-helpers)
 - [Examples](#examples)
-  - [Dependent components](#dependent-components)
-- [Next steps / where to inspect](#next-steps--where-to-inspect)
 - [License](#license)
 
 ---
 
 ## Overview
 
-Build Master is a small DSL extension for CMake that makes it simple and reliable to build, install and consume external CMake and Meson projects from a parent CMake tree. It was created to work around a common limitation of `ExternalProject_Add`: external projects are typically configured at build time, which prevents the parent CMake from observing and reacting to configure-time results.
+BuildMaster generates **configure / build / install** stages while the
+parent project is still in the **CMake configure phase**. That lets the
+parent:
 
-Build Master generates configure / compile / install stages **during CMake configure time**, allowing the parent project to inspect artifacts, create import targets, and adjust environment variables deterministically.
+- inspect installed headers and libraries before the main build
+- create deterministic **IMPORTED** targets
+- attach `POST_BUILD` / install hooks to real stage targets
+- share one install prefix and environment across a dependency tree
+
+It is **not** a source fetcher only (unlike a pure `FetchContent` workflow):
+it orchestrates full external builds. Sources may still be managed with the
+included Git helpers or any other means.
 
 ---
 
-## Why Build Master exists
+## Motivation
 
-When a CMake project needs to build external dependencies as part of its own build, the usual tool — `ExternalProject_Add` — has several structural limitations:
+`ExternalProject_Add` configures and builds dependencies **at build time**.
+By then it is too late for the parent to:
 
-- External projects are configured **at build time**, not at configure time.  
-  This prevents the parent CMake project from inspecting results, generating import targets, or adjusting logic based on the external project's configuration.
+- branch on configure results
+- generate import targets from real artifact paths
+- enforce a single, shared install layout
 
-- It does not provide **full, explicit targets** for each stage.  
-  You cannot attach `POST_BUILD` commands to a clean `<component>_build` or `<component>_install` target because those targets simply do not exist.
+`FetchContent` brings sources into the tree but does not, by itself, provide
+a uniform model for multi-system (CMake + Meson) build/install orchestration.
 
-- Environment propagation is inconsistent and must be manually handled.
+BuildMaster fills that gap with **configure-time** generated scripts and
+explicit targets:
 
-- Integration with Meson projects requires custom glue and is not deterministic.
-
-Additionally, unlike `FetchContent`, Build Master does not merely download sources — it orchestrates **full configure/build/install stages** with environment propagation and explicit targets.
-
-Build Master solves these issues by generating deterministic stages during configure time, exposing targets such as:
-
-```
+```text
 <component>_build
 <component>_install
 ```
 
-This makes it trivial to attach post-build actions, inspect installed artifacts, and integrate external projects as if they were native parts of the parent build.
+---
+
+## Comparison
+
+| Capability | FetchContent | ExternalProject_Add | BuildMaster |
+|------------|:------------:|:-------------------:|:-----------:|
+| Fetch / manage sources | Yes | Yes | Yes (Git helpers optional) |
+| Configure external project | N/A | Build time | **Configure time** |
+| Inspect artifacts before main build | No | No | **Yes** |
+| Explicit `_build` / `_install` targets | No | No | **Yes** |
+| Attach post-steps to those targets | No | Limited | **Yes** |
+| Native Meson stages | No | Manual | **Yes** |
+| Shared install + env propagation | No | Manual | **Yes** |
+| Safe recursive nesting | Fragile | Fragile | **Designed for it** |
 
 ---
 
-# Why this matters
+## Design goals
 
-Managing external dependencies in CMake has traditionally required a patchwork of ad‑hoc scripts, late‑executed logic, and build‑time orchestration that prevents the parent project from making informed decisions during the configuration phase. Tools like `FetchContent` and `ExternalProject_Add` each solve part of the problem, but neither provides a complete, deterministic, configure‑time model for building and integrating external components.
-
-`FetchContent` focuses on retrieving sources, but delegates all configuration to the external project. `ExternalProject_Add` performs configuration and build steps only at **build time**, when it is already too late for the parent project to inspect results, generate import targets, or adjust its own configuration based on the external dependency’s capabilities.
-
-This leaves a structural gap:
-
-**How can a CMake project reason about external dependencies during configure time, before the build begins, and without reinventing orchestration logic for each component?**
-
-Build Master exists to close that gap.
-
-By generating configure/build/install stages **during CMake’s configure phase**, Build Master allows the parent project to:
-
-- inspect artifacts before compilation begins  
-- generate deterministic imported targets  
-- propagate environment variables coherently  
-- unify CMake and Meson projects under a single orchestration model  
-- share a consistent installation layout across recursive dependency trees  
-- version and reproduce all external steps in CI and local builds  
-
-The result is a dependency model that is deterministic, inspectable, and reproducible — turning external integration from a fragile afterthought into a first‑class, declarative part of the build system.
-
-## Comparison: CMake mechanisms vs Build Master
-
-Build Master does not replace CMake’s existing tools. Instead, it extends them by providing deterministic configure‑time orchestration where CMake traditionally defers work to the build phase.
-
-### Conceptual comparison
-
-| Capability | FetchContent | ExternalProject_Add | Build Master |
-|-----------|--------------|---------------------|--------------|
-| Retrieve sources | ✔️ | ✔️ | ✔️ (via Git helpers) |
-| Configure external projects | ❌ | ✔️ (build time) | ✔️ configure time |
-| Inspect artifacts before build | ❌ | ❌ | ✔️ |
-| Deterministic imported targets | ❌ | Partial | ✔️ |
-| Meson integration | ❌ | Manual | ✔️ native |
-| Environment propagation | ❌ | Manual | ✔️ coherent |
-| Recursive usage without conflicts | ❌ | Fragile | ✔️ designed for it |
-| Reproducibility | Medium | Low | High |
-
-### Technical comparison
-
-| Feature | FetchContent | ExternalProject_Add | Build Master |
-|---------|--------------|---------------------|--------------|
-| When configuration happens | N/A | Build time | Configure time |
-| Explicit `<component>_build` / `<component>_install` targets | ❌ | ❌ | ✔️ |
-| Ability to attach post‑build steps to external components | ❌ | ❌ | ✔️ |
-| Unified installation layout | ❌ | Partial | ✔️ |
-| Multi‑build‑system support (CMake + Meson) | ❌ | Manual | ✔️ |
-| Versioned, generated scripts | ❌ | ❌ | ✔️ |
-| CI determinism | Medium | Low | High |
-| Inspect configuration results | ❌ | ❌ | ✔️ |
-| Stability in deep dependency trees | Low | Fragile | ✔️ robust |
-
-## Design goals (brief)
-
-- Deterministic configure-time behavior.
-- Coherent environment propagation (`PKG_CONFIG_PATH`, `PATH`, `LIB`, `INCLUDE`, etc.).
-- Cross-platform support (Windows, Linux, macOS).
-- Modular helpers and templates for CMake and Meson.
-- Reproducible builds: all external steps are scripted and version-controlled.
+- Deterministic **configure-time** orchestration
+- Coherent environment (`PATH`, `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`, compilers, flags)
+- **Linux / Windows / macOS**
+- CMake and Meson behind the same component API
+- Generated scripts that are inspectable and CI-friendly
+- One initialization, one install root, even in deep dependency trees
 
 ---
 
-## How to use (quick start)
-
-Using Build Master in a project is intentionally simple — three steps:
+## Quick start
 
 ```cmake
-# optional: enable extra tools (e.g. pkgconf)
+# Optional: enable extra tools (e.g. bundled pkgconf when needed)
 set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS "pkgconf")
 
-# add the Build Master tree to your project
-add_subdirectory(buildmaster)
+add_subdirectory(path/to/buildmaster)
+include(path/to/buildmaster/helpers.cmake)
 
-# import the helper DSL
-include(buildmaster/helpers.cmake)
-```
-
-What these lines do:
-
-- `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`: optional list of extra tools that are not initialized by default.
-- `add_subdirectory(buildmaster)`: configures and initializes Build Master.
-- `include(buildmaster/helpers.cmake)`: imports helper functions such as `create_component()`, `create_cmake_component()`, `create_meson_component()` and other utilities.
-
-After this you can declare components:
-
-```cmake
-set(options "-DENABLE_FOO=ON")
-create_cmake_component(OUT_FILE
-                       opus
-                       "Opus Audio Codec"
-                       ${CMAKE_SOURCE_DIR}/thirdparty/opus
-                       ${CMAKE_BINARY_DIR}/thirdparty/opus_build
-                       "${options}"
-                       shared
-                       "")
+set(_opts "-DENABLE_FOO=ON")
+create_cmake_component(
+  OUT_FILE
+  opus
+  "Opus Audio Codec"
+  ${CMAKE_SOURCE_DIR}/thirdparty/opus
+  ${CMAKE_BINARY_DIR}/thirdparty/opus_build
+  "${_opts}"
+  shared
+  "opus"          # subcomponent / artifact base name(s)
+)
 include(${OUT_FILE})
 ```
 
-Notes:
-
-- The first argument (`OUT_FILE`) receives the generated fragment path.
-- After `include(${OUT_FILE})`, the imported targets and stage targets (`<component>_build`, `<component>_install`) become available.
+After `include(${OUT_FILE})`, stage targets and imported libraries for that
+component are available to the rest of the parent project.
 
 ---
 
 ## Output verbosity
 
-By default Build Master produces minimal, concise output: a single brief line for each stage — configure, build and install — so that CMake output remains compact when managing many components. To enable full, verbose output for the configure and build stages set the environment variable `BUILDMASTER_DEBUG` to `1`. When `BUILDMASTER_DEBUG` is `1` Build Master will show the underlying configure and build tool output (stdout/stderr) to help diagnose configure-time or build-time problems.
+By default each stage prints a short status line (for example
+`Compiling …` / `Installing …`) so large dependency graphs stay readable.
 
-## Recursive configurations
+Set:
 
-Build Master is designed to support recursive usage: an external CMake project may itself use Build Master to orchestrate its dependencies, and those dependencies may also use Build Master, recursively. This is possible because Build Master is initialized only once (for example by `add_subdirectory(buildmaster)`) and all recursive instances share the same installation location (the unified `BUILDMASTER_INSTALL_DIR`). Nested projects therefore reuse the same initialization state and installation layout, avoiding duplicate initializations and conflicting install paths while ensuring deterministic behavior across parent and subproject boundaries.
+```bash
+export BUILDMASTER_DEBUG=1
+```
 
-## Two usage modes
+to surface underlying configure/build tool stdout and stderr (and to stop
+suppressing “silent” runners). Useful in CI when a third-party configure fails.
 
-### Simple mode — high level
+---
 
-- Call `create_component()` or the wrappers `create_cmake_component()` / `create_meson_component()`.
-- A per-component CMake fragment is generated and returned.
-- The fragment declares imported targets and wires build/install stages.
+## Recursive usage
 
-### Advanced mode — explicit stages
+An external CMake project may itself `add_subdirectory(buildmaster)`.  
+BuildMaster initializes **once** (`BUILDMASTER_CONFIGURED`) and reuses the
+same `BUILDMASTER_INSTALL_DIR` and generated script tree, so nested projects
+do not fight over prefixes or double-bootstrap tools.
 
-- Call `create_cmake_stages()` or `create_meson_stages()` directly.
-- Three scripts are generated: configure, build, install.
-- Include them manually to customize ordering or attach `POST_BUILD` steps.
+---
+
+## Usage modes
+
+### Simple (recommended)
+
+Use `create_cmake_component()`, `create_meson_component()`, or the dependant
+variants. One generated fragment declares imports and wires stages.
+
+### Advanced
+
+Call `create_cmake_stages()` / `create_meson_stages()` yourself, then
+`include()` the three scripts (configure, build, install) in the order you
+need—e.g. to insert custom commands between stages.
 
 ---
 
 ## Targets and naming
 
-- All components define stage targets:
+| Target | Role |
+|--------|------|
+| `<component>_build` | Compile the external project |
+| `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
 
-```
-<component>_build
-<component>_install
-```
+Install rules list produced libraries as `OUTPUT`, so other targets can
+`DEPENDS` on real files, not only on phony names.
 
-- Install commands declare their produced files as `OUTPUT`, so other targets can depend on them.
-
----
-
-## Important functions (where to look)
-
-- `create_component(_out_var _component _component_title _srcdir _builddir _options _library_mode _build_system _subcomponents _dependency)`
-- `create_cmake_stages(_file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)`
-- `create_meson_stages(...)`
+Component ids used in target names should stay filesystem-friendly; display
+titles (e.g. `VVenc (H266) codec`) may contain spaces or punctuation and are
+only used in status messages.
 
 ---
 
-## Helpers and utilities
+## API reference (where to look)
 
-- `library_import_hint()`
-- `library_import_static_hint()`
-- `library_dll_hint()`
-- `sanitize_for_filename()`
-- `list_join()`
-- `prepare_command()`
+| Area | File |
+|------|------|
+| Component factory (simple API) | `component/helpers.cmake` |
+| CMake stages | `tools/cmake/helpers.cmake` |
+| Meson stages | `tools/meson/helpers.cmake` |
+| Git fragments | `tools/git/helpers.cmake` |
+| Env runners / `prepare_command` | `env/helpers.cmake` |
+| Path / list / sanitize utils | `helpers.cmake` |
+| Tool registration | `tools/helpers.cmake` |
 
-These helpers are used internally by templates but can also be used by the user.
+Templates (generated into the build tree):
 
----
-
-## Templates and implementation notes
-
-CMake templates:
-
-- `tools/cmake/configure.cmake.in`
-- `tools/cmake/build.cmake.in`
-- `tools/cmake/install.cmake.in`
-
-Meson templates:
-
-- `tools/meson/setup.cmake.in`
-- `tools/meson/compile.cmake.in`
-- `tools/meson/install.cmake.in`
-
-Templates are versioned and can be customized if needed.
+- `tools/cmake/{configure,build,install}.cmake.in`
+- `tools/meson/{setup,compile,install}.cmake.in`
 
 ---
 
-## Git handling
+## Git helpers
 
-Build Master includes helpers that generate Git-related scripts under the generated scripts tree.
-
-Examples:
+Generate standalone CMake fragments and `include()` them when you need
+fetch / reset / patch / branch switch during bootstrap:
 
 ```cmake
-create_git_fetch(GIT_FETCH_FILE
-                 myrepo
-                 ${CMAKE_SOURCE_DIR}/thirdparty/myrepo)
+create_git_fetch(GIT_FETCH_FILE myrepo ${CMAKE_SOURCE_DIR}/thirdparty/myrepo)
 include(${GIT_FETCH_FILE})
-```
 
-```cmake
-create_git_patch_file(GIT_PATCH_FILE
-                      myrepo
-                      ${CMAKE_SOURCE_DIR}/thirdparty/myrepo
-                      "${CMAKE_SOURCE_DIR}/patches/patch1.diff;${CMAKE_SOURCE_DIR}/patches/patch2.diff}")
+create_git_patch_file(
+  GIT_PATCH_FILE
+  myrepo
+  ${CMAKE_SOURCE_DIR}/thirdparty/myrepo
+  "${CMAKE_SOURCE_DIR}/patches/a.diff;${CMAKE_SOURCE_DIR}/patches/b.diff"
+)
 include(${GIT_PATCH_FILE})
 ```
 
-Scripts are generated under `BUILDMASTER_SCRIPTS_GIT_DIR`.
+Scripts are written under `BUILDMASTER_SCRIPTS_GIT_DIR`.
 
 ---
 
 ## Examples
 
-### Simple mode
+### CMake component
 
 ```cmake
-add_subdirectory(path/to/buildmaster)
-include(buildmaster/helpers.cmake)
+add_subdirectory(thirdparty/buildmaster)
+include(thirdparty/buildmaster/helpers.cmake)
 
 set(options "-DENABLE_FEATURE=ON")
-create_cmake_component(LIB_CREATE_FILE
-                       mylib
-                       "My Library"
-                       ${CMAKE_SOURCE_DIR}/third_party/mylib
-                       ${CMAKE_BINARY_DIR}/third_party/mylib_build
-                       "${options}"
-                       shared
-                       "")
+create_cmake_component(
+  LIB_CREATE_FILE
+  mylib
+  "My Library"
+  ${CMAKE_SOURCE_DIR}/thirdparty/mylib
+  ${CMAKE_BINARY_DIR}/thirdparty/mylib_build
+  "${options}"
+  shared
+  "mylib"
+)
 include(${LIB_CREATE_FILE})
 ```
 
-### Advanced mode
+### Meson component
 
 ```cmake
-create_cmake_stages(cfg_script build_script install_script
-                    mylib "My Library"
-                    ${CMAKE_SOURCE_DIR}/third_party/mylib
-                    ${CMAKE_BINARY_DIR}/third_party/mylib_build
-                    "-DENABLE_FEATURE=ON"
-                    shared "/path/to/output/libmylib.so")
+create_meson_component(
+  OUT
+  opus
+  "Opus"
+  ${CMAKE_SOURCE_DIR}/thirdparty/opus
+  ${CMAKE_BINARY_DIR}/thirdparty/opus_build
+  "-Ddefault_library=shared"
+  shared
+  "opus"
+)
+include(${OUT})
+```
 
+### Dependent component
+
+Configure/build of `liba` waits on `libb`’s install stage:
+
+```cmake
+create_cmake_component(B_FILE libb "LibB" ... shared "libb")
+include(${B_FILE})
+
+create_cmake_dependant_component(
+  A_FILE
+  liba
+  "LibA"
+  ${CMAKE_SOURCE_DIR}/thirdparty/liba
+  ${CMAKE_BINARY_DIR}/thirdparty/liba_build
+  "${options}"
+  shared
+  "liba"
+  "libb_install"
+)
+include(${A_FILE})
+```
+
+### Explicit stages
+
+```cmake
+create_cmake_stages(
+  cfg_script build_script install_script
+  mylib "My Library"
+  ${CMAKE_SOURCE_DIR}/thirdparty/mylib
+  ${CMAKE_BINARY_DIR}/thirdparty/mylib_build
+  "-DENABLE_FEATURE=ON"
+  shared
+  "${BUILDMASTER_INSTALL_LIBDIR}/libmylib.so"
+)
 include(${cfg_script})
 include(${build_script})
 include(${install_script})
@@ -313,43 +299,6 @@ include(${install_script})
 
 ---
 
-## Dependent components
-
-```cmake
-create_cmake_component(B_FILE
-                       libb
-                       "LibB"
-                       ${CMAKE_SOURCE_DIR}/thirdparty/libb
-                       ${CMAKE_BINARY_DIR}/thirdparty/libb_build
-                       "${options}"
-                       shared
-                       "")
-include(${B_FILE})
-
-create_cmake_dependant_component(A_FILE
-                                 liba
-                                 "LibA"
-                                 ${CMAKE_SOURCE_DIR}/thirdparty/liba
-                                 ${CMAKE_BINARY_DIR}/thirdparty/liba_build
-                                 "${options}"
-                                 shared
-                                 ""
-                                 "libb_install")
-include(${A_FILE})
-```
-
----
-
-## Next steps / where to inspect
-
-- High-level helpers: `component/helpers.cmake`
-- CMake stage generator: `tools/cmake/helpers.cmake`
-- Meson stage generator: `tools/meson/helpers.cmake`
-- Git helpers: `tools/git`
-
----
-
 ## License
 
-Build Master is distributed under the MIT License.  
-See the `LICENSE` file for full details.
+MIT. See [`LICENSE`](LICENSE) for the full text.

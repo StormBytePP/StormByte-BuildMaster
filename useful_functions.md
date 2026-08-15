@@ -2,71 +2,65 @@
 
 @section uf_overview Overview
 
-This page collects short, hand-curated descriptions of the most
-useful helper modules provided by BuildMaster. It is intended as a
-quick reference for maintainers and integrators — full signatures and
-examples are available in the source files linked below.
+Short reference for BuildMaster helper modules. Full signatures and
+implementation details live in the linked sources.
 
-@section uf_tools Useful functions
-
-@subsection uf_tools_cmake tools/cmake/helpers.cmake
-
-Creates platform-aware `configure`, `build` and `install` fragment
-scripts for CMake-built components. The generator writes files into
-`${BUILDMASTER_SCRIPTS_CMAKEDIR}` and exposes template variables such
-as `_CMAKE_COMPONENT_TITLE`, `_CMAKE_SRCDIR`, `_CMAKE_BUILD_DIR` and
-`_CMAKE_OUTPUT_LIBRARIES` for use by the templates.
-
-Source: tools/cmake/helpers.cmake
-
-@subsection uf_tools_core tools/helpers.cmake
-
-High-level helpers to register and configure external tools. Includes
-macros to add tool subdirectories, conditionally include
-`propagate_vars.cmake` from tools, and ensure extra tools are
-available/enabled.
-
-Source: tools/helpers.cmake
-
-@subsection uf_tools_meson tools/meson/helpers.cmake
-
-Generates setup/compile/install fragment scripts for Meson-built
-components. Produces `_MESON_OPTIONS` and `_MESON_OUTPUT_LIBRARIES`
-template variables and handles library mode differences (static vs
-shared).
-
-Source: tools/meson/helpers.cmake
-
-@subsection uf_tools_git tools/git/helpers.cmake
-
-Small generators that create CMake fragments to perform git actions
-(`patch`, `reset`, `fetch`, `switch`). These fragments are intended to
-be executed by the bootstrap process to manipulate upstream sources.
-
-Source: tools/git/helpers.cmake
+@section uf_tools Modules
 
 @subsection uf_component component/helpers.cmake
 
-Component-level helpers which assemble per-component generator
-fragments, compute canonical import/static/DLL filenames and generate
-bundler or rename scripts for installed static libraries.
+High-level component API:
 
-Source: component/helpers.cmake
+- `create_component()` — core factory (CMake or Meson, static/shared)
+- `create_cmake_component()` / `create_meson_component()`
+- `create_cmake_dependant_component()` / `create_meson_dependant_component()`
+- `library_import_hint()`, `library_import_static_hint()`, `library_dll_hint()`
+- `rename_static_library()`, `create_bundle_static_libraries()`
+
+Generates per-component fragments under `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`
+and wires `<component>_build` / `<component>_install` plus IMPORTED targets.
+
+@subsection uf_tools_cmake tools/cmake/helpers.cmake
+
+`create_cmake_stages()` — writes configure/build/install scripts into
+`${BUILDMASTER_SCRIPTS_CMAKEDIR}` from `tools/cmake/*.cmake.in`.
+
+@subsection uf_tools_meson tools/meson/helpers.cmake
+
+`create_meson_stages()` — same pattern for Meson (`setup` / `compile` /
+`install` templates). Handles static vs shared and MSVC `/Z7` for parallel
+builds when applicable.
+
+@subsection uf_tools_git tools/git/helpers.cmake
+
+Generators for bootstrap Git fragments:
+
+- `create_git_fetch()`
+- `create_git_reset_file()`
+- `create_git_patch_file()`
+- `create_git_switch_branch()`
 
 @subsection uf_env env/helpers.cmake
 
-Helpers to produce platform-specific runner scripts (shell/batch) and
-to tokenize command lists for safe use with
-`execute_process(COMMAND ...)`.
+- `update_env_runner()` — regenerate platform runner scripts
+- `prepare_command()` — tokenize a command list for `execute_process(COMMAND …)`
 
-Source: env/helpers.cmake
+@subsection uf_tools_core tools/helpers.cmake
+
+Tool registration macros: `add_tool`, `configure_extra_tool`,
+`ensure_extra_tool_is_available`, propagation helpers for extra plugins
+(e.g. pkgconf).
 
 @subsection uf_global helpers.cmake
 
-Top-level utilities: path normalization, library filename hints,
-`sanitize_for_filename`, and `list_join` (a safe list-joining helper
-that preserves quoted semicolons). These are widely used across the
-bootstrap and generator scripts.
+Shared utilities:
 
-Source: helpers.cmake
+- `sanitize_for_filename()` — safe ids for generated script names
+- `list_join()` — join lists while respecting quoted segments
+- `windows_path()`, library filename hints
+- Includes env/cmake/git/meson/component helper trees
 
+@section uf_debug Debug output
+
+Set environment variable `BUILDMASTER_DEBUG=1` before configuring to
+propagate full configure/build tool logs through BuildMaster stages.
