@@ -12,7 +12,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_GIT_SILENT_COMMAND "${_env_git_silent_list}")
 
 	# In debug mode, ENV_GIT_SILENT is the same as ENV_GIT
-	if(BUILDMASTER_DEBUG)
+	if(BUILDMASTER_VERBOSE)
 		set(ENV_GIT_SILENT_COMMAND "${ENV_GIT_COMMAND}")
 	endif()
 

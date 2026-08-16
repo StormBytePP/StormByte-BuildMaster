@@ -131,7 +131,7 @@ By default each stage prints a short status line (for example
 Set:
 
 ```bash
-export BUILDMASTER_DEBUG=1
+export BUILDMASTER_VERBOSE=1
 ```
 
 to surface underlying configure/build tool stdout and stderr (and to stop

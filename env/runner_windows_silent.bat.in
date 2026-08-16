@@ -1,7 +1,18 @@
 @echo off
-rem Silent wrapper: invoke the normal runner but suppress its output
-rem Substitutions expected: @ENV_RUNNER_CMD@
+setlocal EnableExtensions
 
-:: Build command and redirect stdout/stderr to NUL
-set "CMD=@ENV_RUNNER_CMD@ %*"
-cmd /C "%CMD% >nul 2>&1"
+rem Unique log under %%TEMP%%
+set "_log=%TEMP%\buildmaster.%RANDOM%.%RANDOM%.log"
+
+call @ENV_RUNNER_CMD@ %* >"%_log%" 2>&1
+set "_rc=%ERRORLEVEL%"
+
+if %_rc% equ 0 (
+	del /f /q "%_log%" >nul 2>&1
+	endlocal & exit /b 0
+)
+
+rem Failure: dump log to stderr (execute_process / console)
+type "%_log%" 1>&2
+del /f /q "%_log%" >nul 2>&1
+endlocal & exit /b %_rc%

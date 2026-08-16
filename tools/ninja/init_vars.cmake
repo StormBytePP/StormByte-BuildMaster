@@ -11,7 +11,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_NINJA_SILENT_COMMAND "${_env_ninja_silent_list}")
 
 	# In debug mode, ENV_NINJA_SILENT is the same as ENV_NINJA
-	if(BUILDMASTER_DEBUG)
+	if(BUILDMASTER_VERBOSE)
 		set(ENV_NINJA_SILENT_COMMAND "${ENV_NINJA_COMMAND}")
 	endif()
 

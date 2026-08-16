@@ -12,7 +12,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_MESON_SILENT_COMMAND "${_env_meson_list_silent}")
 
 	# In debug mode, ENV_MESON_SILENT is the same as ENV_MESON
-	if(BUILDMASTER_DEBUG)
+	if(BUILDMASTER_VERBOSE)
 		set(ENV_MESON_SILENT_COMMAND "${ENV_MESON_COMMAND}")
 	endif()
 

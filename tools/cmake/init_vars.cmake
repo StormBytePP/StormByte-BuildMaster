@@ -9,7 +9,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_CMAKE_SILENT_COMMAND "${_env_cmake_silent_list}")
 
 	# In debug mode, ENV_CMAKE_SILENT is the same as ENV_CMAKE
-	if(BUILDMASTER_DEBUG)
+	if(BUILDMASTER_VERBOSE)
 		set(ENV_CMAKE_SILENT_COMMAND "${ENV_CMAKE_COMMAND}")
 	endif()
 

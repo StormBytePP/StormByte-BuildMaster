@@ -1,3 +1,16 @@
-#! /bin/bash
+#!/bin/sh
+# Silent runner: capture all output; on failure dump to stderr and re-exit.
+set -e
 
-exec @ENV_RUNNER_CMD@ "$@" >/dev/null 2>&1
+_log="$(mktemp "${TMPDIR:-/tmp}/buildmaster.XXXXXX")"
+# Always remove the temp file when this shell exits
+trap 'rm -f "$_log"' EXIT HUP INT TERM
+
+if @ENV_RUNNER_CMD@ "$@" >"$_log" 2>&1; then
+	exit 0
+fi
+
+_rc=$?
+# Failure: surface the captured log for CI / execute_process ERROR_VARIABLE
+cat "$_log" >&2
+exit "$_rc"

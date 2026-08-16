@@ -30,6 +30,6 @@ if(NOT GIT_RESULT EQUAL 0)
 	)
 endif()
 
-if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
-	message(STATUS "[BUILDMASTER_DEBUG] git reset/clean completed in @GIT_REPO@")
+if("@BUILDMASTER_VERBOSE@" STREQUAL "ON")
+	message(STATUS "[BUILDMASTER_VERBOSE] git reset/clean completed in @GIT_REPO@")
 endif()
