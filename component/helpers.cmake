@@ -424,7 +424,7 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.sh")
 		set(ADD_LIBRARIES "")
 		foreach(lib IN LISTS _libraries)
-			string(APPEND ADD_LIBRARIES "ADDLIB ${lib}")
+			string(APPEND ADD_LIBRARIES "ADDLIB ${lib}\n")
 		endforeach()
 		configure_file(
 			"${BUILDMASTER_COMPONENT_SRCDIR}/bundler.sh.in"
