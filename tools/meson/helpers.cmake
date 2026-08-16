@@ -112,6 +112,15 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		endif()
 	endif()
 
+	# Windows paths from the environment use backslashes; CMake string
+	# literals would treat \U, \A, … as escapes. Normalize to CMake paths.
+	if(NOT CCACHE_DIR STREQUAL "")
+		file(TO_CMAKE_PATH "${CCACHE_DIR}" CCACHE_DIR)
+	endif()
+	if(NOT SCCACHE_DIR STREQUAL "")
+		file(TO_CMAKE_PATH "${SCCACHE_DIR}" SCCACHE_DIR)
+	endif()
+
 	set(_MESON_SETUP_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
 	)
