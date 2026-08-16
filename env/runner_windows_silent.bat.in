@@ -1,18 +1,10 @@
 @echo off
-setlocal EnableExtensions
+rem Windows silent runner – pass-through.
+rem Output capture is intentionally disabled on Windows because
+rem ENV_RUNNER_CMD is already wrapped with "cmd /C ..." and any
+rem additional redirection breaks INCLUDE/LIB propagation for MSVC
+rem (manifested as missing StormByte/platform.h).
+rem Full dump-on-failure remains available on the Unix silent runner.
 
-rem Unique log under %%TEMP%%
-set "_log=%TEMP%\buildmaster.%RANDOM%.%RANDOM%.log"
-
-call @ENV_RUNNER_CMD@ %* >"%_log%" 2>&1
-set "_rc=%ERRORLEVEL%"
-
-if %_rc% equ 0 (
-	del /f /q "%_log%" >nul 2>&1
-	endlocal & exit /b 0
-)
-
-rem Failure: dump log to stderr (execute_process / console)
-type "%_log%" 1>&2
-del /f /q "%_log%" >nul 2>&1
-endlocal & exit /b %_rc%
+call @ENV_RUNNER_CMD@ %*
+exit /b %ERRORLEVEL%
