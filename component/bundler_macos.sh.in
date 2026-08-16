@@ -1,0 +1,5 @@
+#!/bin/sh
+set -e
+
+# Apple/BSD: merge static archives with libtool (GNU ar -M is not available)
+libtool -static -o "@LIBRARY_PATH@" @ADD_LIBRARIES@

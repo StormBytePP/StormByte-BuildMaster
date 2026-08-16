@@ -387,16 +387,11 @@ endfunction()
 ##       full paths; the function will not alter them. The generated
 ##       script path is exported to the parent scope via `_bundle_file`.
 function(create_bundle_static_libraries _bundle_file _component _libraries)
-	# Generate safe filename
 	sanitize_for_filename(_BUNDLE_COMPONENT_SAFE "${_component}")
-
-	# Compute output path
 	library_import_static_hint(LIBRARY_PATH "${_component}")
 
-	# Configure bundler script
 	if(MSVC)
 		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.bat")
-		# For MSVC we expand the list into a space-separated string
 		set(ADD_LIBRARIES "")
 		foreach(lib IN LISTS _libraries)
 			string(APPEND ADD_LIBRARIES "${lib} ")
@@ -406,23 +401,36 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 			"${_BUNDLE_SCRIPT_FILE}"
 			@ONLY
 		)
-	else()
+	elseif(APPLE)
+		# macOS / Apple Silicon: libtool -static (no MRI / ar -M)
 		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.sh")
-		# In linux we expect ADDLIB lib\n
 		set(ADD_LIBRARIES "")
 		foreach(lib IN LISTS _libraries)
-			string(APPEND ADD_LIBRARIES "ADDLIB ${lib}
-") # Real line break
+			string(APPEND ADD_LIBRARIES "\"${lib}\" ")
+		endforeach()
+		configure_file(
+			"${BUILDMASTER_COMPONENT_SRCDIR}/bundler_macos.sh.in"
+			"${_BUNDLE_SCRIPT_FILE}"
+			@ONLY
+		)
+		execute_process(
+			COMMAND ${ENV_RUNNER_SILENT} chmod +x "${_BUNDLE_SCRIPT_FILE}"
+			RESULT_VARIABLE _chmod_result
+			OUTPUT_QUIET
+			ERROR_QUIET
+		)
+	else()
+		# Linux / GNU ar MRI script
+		set(_BUNDLE_SCRIPT_FILE "${BUILDMASTER_SCRIPTS_COMPONENTDIR}/${_BUNDLE_COMPONENT_SAFE}_bundler.sh")
+		set(ADD_LIBRARIES "")
+		foreach(lib IN LISTS _libraries)
+			string(APPEND ADD_LIBRARIES "ADDLIB ${lib}")
 		endforeach()
 		configure_file(
 			"${BUILDMASTER_COMPONENT_SRCDIR}/bundler.sh.in"
 			"${_BUNDLE_SCRIPT_FILE}"
 			@ONLY
 		)
-
-		# Ensure the generated runner has execute permissions so it can be
-		# invoked directly by execute_process(). Some platforms require the
-		# executable bit even when a shebang is present.
 		execute_process(
 			COMMAND ${ENV_RUNNER_SILENT} chmod +x "${_BUNDLE_SCRIPT_FILE}"
 			RESULT_VARIABLE _chmod_result
@@ -431,6 +439,5 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 		)
 	endif()
 
-	# Set output variables
 	set(${_bundle_file} "${_BUNDLE_SCRIPT_FILE}" PARENT_SCOPE)
 endfunction()
