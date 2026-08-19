@@ -162,7 +162,7 @@ is removed). That way:
 ### Full live output
 
 ```bash
-export BUILDMASTER_VERBOSE=1
+export BUILDMASTER_DEBUG=1
 ```
 
 When set to `1`, silent runners are not used: all underlying tool output is

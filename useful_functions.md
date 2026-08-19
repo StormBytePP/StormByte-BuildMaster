@@ -62,5 +62,5 @@ Shared utilities:
 
 @section uf_debug Debug output
 
-Set environment variable `BUILDMASTER_VERBOSE=1` before configuring to
+Set environment variable `BUILDMASTER_DEBUG=1` before configuring to
 propagate full configure/build tool logs through BuildMaster stages.
