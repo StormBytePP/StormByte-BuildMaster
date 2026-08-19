@@ -1,4 +1,3 @@
-```markdown
 # StormByte BuildMaster
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
@@ -29,6 +28,7 @@ propagation, and portable static-library bundling.
 - [Static library bundling](#static-library-bundling)
 - [API reference (where to look)](#api-reference-where-to-look)
 - [Git helpers](#git-helpers)
+- [File download & decompress helpers](#file-download--decompress-helpers)
 - [Examples](#examples)
 - [License](#license)
 
@@ -47,7 +47,7 @@ parent:
 
 It is **not** only a source fetcher (unlike a pure `FetchContent` workflow):
 it orchestrates full external builds. Sources may still be managed with the
-included Git helpers or any other means.
+included Git helpers, the file download helpers, or any other means.
 
 Typical use cases: bundling FFmpeg and its plugins, multi-bitdepth codecs
 (e.g. x265 8/10/12-bit), and mixed CMake + Meson dependency graphs on
@@ -85,18 +85,19 @@ every child CMake/Meson/Ninja invocation:
 
 ## Comparison
 
-| Capability | FetchContent | ExternalProject_Add | BuildMaster |
-|------------|:------------:|:-------------------:|:-----------:|
-| Fetch / manage sources | Yes | Yes | Yes (Git helpers optional) |
-| Configure external project | N/A | Build time | **Configure time** |
-| Inspect artifacts before main build | No | No | **Yes** |
-| Explicit `_build` / `_install` targets | No | No | **Yes** |
-| Attach post-steps to those targets | No | Limited | **Yes** |
-| Native Meson stages | No | Manual | **Yes** |
-| Shared install + env propagation | No | Manual | **Yes** |
-| Compiler cache into child builds | Manual | Manual | **Yes** |
-| Portable static archive merge | No | Manual | **Yes** |
-| Safe recursive nesting | Fragile | Fragile | **Designed for it** |
+| Capability                              | FetchContent | ExternalProject_Add | BuildMaster          |
+|-----------------------------------------|:------------:|:-------------------:|:--------------------:|
+| Fetch / manage sources                  | Yes          | Yes                 | Yes (Git helpers)    |
+| **Intelligent / cacheable downloads**   | Partial      | Manual              | **Yes (built-in)**   |
+| Configure external project              | N/A          | Build time          | **Configure time**   |
+| Inspect artifacts before main build     | No           | No                  | **Yes**              |
+| Explicit `_build` / `_install` targets  | No           | No                  | **Yes**              |
+| Attach post-steps to those targets      | No           | Limited             | **Yes**              |
+| Native Meson stages                     | No           | Manual              | **Yes**              |
+| Shared install + env propagation        | No           | Manual              | **Yes**              |
+| Compiler cache into child builds        | Manual       | Manual              | **Yes**              |
+| Portable static archive merge           | No           | Manual              | **Yes**              |
+| Safe recursive nesting                  | Fragile      | Fragile             | **Designed for it**  |
 
 ---
 
@@ -110,6 +111,7 @@ every child CMake/Meson/Ninja invocation:
 - Generated scripts that are inspectable and CI-friendly
 - One initialization, one install root, even in deep dependency trees
 - Quiet default logs with **full diagnostics on failure**
+- Intelligent, cacheable and portable file download / decompression
 
 ---
 
@@ -278,6 +280,7 @@ create_bundle_static_libraries(
 | CMake stages | `tools/cmake/helpers.cmake` |
 | Meson stages | `tools/meson/helpers.cmake` |
 | Git fragments | `tools/git/helpers.cmake` |
+| **File download / decompress helpers** | **`tools/file/helpers.cmake`** |
 | Env runners / `prepare_command` | `env/helpers.cmake` |
 | Path / list / sanitize utils | `helpers.cmake` |
 | Tool registration | `tools/helpers.cmake` |
@@ -286,6 +289,7 @@ Templates (generated into the build tree):
 
 - `tools/cmake/{configure,build,install}.cmake.in`
 - `tools/meson/{setup,compile,install}.cmake.in`
+- `tools/file/{file_download,file_download_cached,file_decompress}.cmake.in`
 - `component/bundler.sh.in`, `bundler_macos.sh.in`, `bundler.bat.in`
 - `env/runner_*.in` (including silent variants)
 
@@ -310,6 +314,64 @@ include(${GIT_PATCH_FILE})
 ```
 
 Scripts are written under `BUILDMASTER_SCRIPTS_GIT_DIR`.
+
+---
+
+## File download & decompress helpers
+
+BuildMaster includes a small but powerful set of helpers for **downloading and
+decompressing files** in a portable, deterministic and cache-aware way. They
+are designed to be used both at configure-time and at build-time.
+
+### Key features
+
+- **Cache-aware downloads** (`file_download_cached`): reuses the local file when
+  the hash matches, avoiding unnecessary network traffic.
+- **Force download with retries** (`file_download`): always downloads, verifies
+  the hash and automatically retries on temporary failures.
+- **Portable decompression** (`file_decompress`): uses CMake’s native
+  `file(ARCHIVE_EXTRACT)` (works on Linux, Windows and macOS, no external tools
+  required).
+- Consistent, early status messages so the user never wonders if the process is
+  stuck (`Downloading TITLE...`, `Unpacking TITLE...`).
+- Strict path-traversal protection (`..` is rejected with a hard error).
+- Generated scripts follow the same pattern as the Git and stage helpers
+  (can be `include()`d or executed with `cmake -P`).
+
+**Important:**  
+No destination path is accepted from the caller.  
+The file is **always** saved under `${BUILDMASTER_DOWNLOADSDIR}/` using the
+basename of the URL.
+
+### Example
+
+```cmake
+# Recommended: cache-aware download
+file_download_cached(OPUS_DL
+	"https://media.xiph.org/opus/models/opus_data-${OPUS_DATA_HASH}.tar.gz"
+	TITLE "Opus DNN data"
+	EXPECTED_HASH "SHA256=${OPUS_DATA_HASH}"
+)
+include(${OPUS_DL})          # runs at configure-time
+
+# The file is now available at:
+# ${BUILDMASTER_DOWNLOADSDIR}/opus_data-<hash>.tar.gz
+
+# Decompress
+file_decompress(OPUS_UNPACK
+	"${BUILDMASTER_DOWNLOADSDIR}/opus_data-${OPUS_DATA_HASH}.tar.gz"
+	"${CMAKE_BINARY_DIR}/src/opus"
+	TITLE "Opus DNN data"
+)
+include(${OPUS_UNPACK})
+```
+
+Typical output:
+
+```
+Downloading Opus DNN data... (cached) OK
+Unpacking Opus DNN data... OK
+```
 
 ---
 

@@ -226,6 +226,7 @@ endfunction()
 # A convenience files to add all bootstrap helper functions
 include(${BUILDMASTER_SRCDIR}/env/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/cmake/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/tools/file/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/git/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/meson/helpers.cmake)
 # Component helpers need to be included after tools so cmake and

@@ -11,4 +11,6 @@ add_tool(git 2)
 add_tool(meson 2)
 add_tool(ninja 2)
 add_tool(extra 2)
+add_tool(file 2)
+
 include("${CMAKE_CURRENT_LIST_DIR}/propagate_vars.cmake")
