@@ -23,6 +23,16 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(BUILDMASTER_DEBUG OFF)
 	endif()
 
+	# Verbose compile only (cmake --build / meson compile). DEBUG does not imply VERBOSE.
+	if(DEFINED ENV{BUILDMASTER_VERBOSE} AND "$ENV{BUILDMASTER_VERBOSE}" STREQUAL "1")
+		set(BUILDMASTER_VERBOSE ON)
+	elseif(BUILDMASTER_VERBOSE)
+		# honour -DBUILDMASTER_VERBOSE=ON from the command line
+		set(BUILDMASTER_VERBOSE ON)
+	else()
+		set(BUILDMASTER_VERBOSE OFF)
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

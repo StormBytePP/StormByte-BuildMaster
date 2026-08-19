@@ -44,8 +44,7 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(_CMAKE_INDENT_ "")
 	endif()
 
-	# Child CMake projects (MariaDB, etc.): bake launcher into *_configure.cmake.
-	# Prefer CMake vars; fall back to ENV from the CI job.
+	# Child CMake projects: bake launcher into *_configure.cmake.
 	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
 			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
@@ -75,6 +74,13 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(_CMAKE_SRCDIR "${_srcdir}")
 	set(_CMAKE_BUILD_DIR "${_builddir}")
 	set(_CMAKE_OUTPUT_LIBRARIES "${_output_libraries}")
+
+	# Verbose compile args (empty = noop). Only BUILDMASTER_VERBOSE enables this.
+	if(BUILDMASTER_VERBOSE)
+		set(_CMAKE_BUILD_VERBOSE_ARGS "--verbose")
+	else()
+		set(_CMAKE_BUILD_VERBOSE_ARGS "")
+	endif()
 
 	list_join(_CMAKE_OPTIONS "${_options}" "\n\t\t")
 

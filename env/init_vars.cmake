@@ -67,6 +67,14 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(ENV_RUNNER_SILENT "${ENV_RUNNER}")
 	endif()
 
+	# Compile-only runner: silent by default; full output when BUILDMASTER_VERBOSE
+	# DEBUG alone does not force verbose compile flags — only this alias + *_VERBOSE_ARGS
+	if(BUILDMASTER_VERBOSE)
+		set(ENV_RUNNER_COMPILE ${ENV_RUNNER})
+	else()
+		set(ENV_RUNNER_COMPILE ${ENV_RUNNER_SILENT})
+	endif()
+
 	update_env_runner()
 
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")

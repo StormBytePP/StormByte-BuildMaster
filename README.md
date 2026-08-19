@@ -105,12 +105,13 @@ every child CMake/Meson/Ninja invocation:
 
 - Deterministic **configure-time** orchestration
 - Coherent environment (`PATH`, `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`,
-  compilers, flags, optional ccache/sccache)
+compilers, flags, optional ccache/sccache)
 - **Linux / Windows / macOS** (x86_64 and arm64)
 - CMake and Meson behind the same component API
 - Generated scripts that are inspectable and CI-friendly
 - One initialization, one install root, even in deep dependency trees
-- Quiet default logs with **full diagnostics on failure**
+- Quiet default logs with **full diagnostics on failure**, optional
+**DEBUG** (all stages) and **VERBOSE** (compile stages only)
 - Intelligent, cacheable and portable file download / decompression
 
 ---
@@ -159,15 +160,51 @@ is removed). That way:
 - CI consoles show configure/build failures without enabling full verbosity
 - parallel jobs do not clash on log paths (`mktemp` / unique names under `%TEMP%`)
 
-### Full live output
+### Full live output (DEBUG)
 
 ```bash
 export BUILDMASTER_DEBUG=1
+# or: cmake -DBUILDMASTER_DEBUG=ON ...
 ```
 
-When set to `1`, silent runners are not used: all underlying tool output is
-shown live. Prefer this locally when debugging; leave it **unset in CI** and
-rely on failure dumps instead.
+When enabled, silent runners are replaced by the full env runner for
+**all** stages that use them (configure, git, meson setup, install, etc.):
+underlying tool output is shown live. Prefer this locally when debugging
+bootstrap issues; leave it **unset in CI** and rely on failure dumps instead.
+
+### Verbose compiles only (VERBOSE)
+
+```bash
+export BUILDMASTER_VERBOSE=1
+# or: cmake -DBUILDMASTER_VERBOSE=ON ...
+```
+
+When enabled, **only compilation stages** become more chatty:
+
+| Stage | Effect |
+|-------|--------|
+| `cmake --build` (`*_build`) | Compile runner (live output) + `--verbose` |
+| `meson compile` (`*_build`) | Compile runner + `-v` |
+| Configure / meson setup | Unchanged (still quiet unless `DEBUG`) |
+| `cmake --install` / `meson install` | Unchanged |
+| Git / file download helpers | Unchanged |
+
+Internally this is driven by `ENV_RUNNER_COMPILE` (defaults to the silent
+runner; switches to the full runner when `BUILDMASTER_VERBOSE` is on) and
+by `ENV_CMAKE_COMPILE_COMMAND` / `ENV_MESON_COMPILE_COMMAND`.
+
+**DEBUG does not imply VERBOSE.** Enable both if you want full bootstrap
+logs **and** compiler command lines:
+
+| `DEBUG` | `VERBOSE` | Bootstrap tools | Compile command lines |
+|---------|-----------|-----------------|------------------------|
+| off | off | Quiet (dump on failure) | Quiet |
+| on | off | Live | Quiet (no `--verbose` / `-v`) |
+| off | on | Quiet (dump on failure) | Live + `--verbose` / `-v` |
+| on | on | Live | Live + `--verbose` / `-v` |
+
+Scripts are generated at **configure** time: change `BUILDMASTER_VERBOSE`
+or `BUILDMASTER_DEBUG`, then re-run CMake so stage scripts are regenerated.
 
 ---
 
@@ -176,7 +213,7 @@ rely on failure dumps instead.
 If the parent job sets:
 
 - `CMAKE_C_COMPILER_LAUNCHER` / `CMAKE_CXX_COMPILER_LAUNCHER` (or the same
-  via environment), and/or
+via environment), and/or
 - `CCACHE_DIR` / `SCCACHE_DIR`
 
 BuildMaster propagates them into:
@@ -326,17 +363,17 @@ are designed to be used both at configure-time and at build-time.
 ### Key features
 
 - **Cache-aware downloads** (`file_download_cached`): reuses the local file when
-  the hash matches, avoiding unnecessary network traffic.
+the hash matches, avoiding unnecessary network traffic.
 - **Force download with retries** (`file_download`): always downloads, verifies
-  the hash and automatically retries on temporary failures.
+the hash and automatically retries on temporary failures.
 - **Portable decompression** (`file_decompress`): uses CMake’s native
-  `file(ARCHIVE_EXTRACT)` (works on Linux, Windows and macOS, no external tools
-  required).
+`file(ARCHIVE_EXTRACT)` (works on Linux, Windows and macOS, no external tools
+required).
 - Consistent, early status messages so the user never wonders if the process is
-  stuck (`Downloading TITLE...`, `Unpacking TITLE...`).
+stuck (`Downloading TITLE...`, `Unpacking TITLE...`).
 - Strict path-traversal protection (`..` is rejected with a hard error).
 - Generated scripts follow the same pattern as the Git and stage helpers
-  (can be `include()`d or executed with `cmake -P`).
+(can be `include()`d or executed with `cmake -P`).
 
 **Important:**  
 No destination path is accepted from the caller.  

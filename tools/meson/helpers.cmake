@@ -54,7 +54,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_meson_stages")
 	endif()
 
-	# Original logic
 	set(_MESON_COMPONENT "${_component}")
 	set(_MESON_COMPONENT_TITLE "${_component_title}")
 	string(APPEND _MESON_STAGE_BUILD "${_component}" "_build")
@@ -62,18 +61,23 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(_MESON_BUILD_DIR "${_builddir}")
 	set(_MESON_SRCDIR "${_srcdir}")
 	set(_MESON_OUTPUT_LIBRARIES "${_output_libraries}")
-	# Enable LTO only on Release and if CMAKE_INTERPROCEDURAL_OPTIMIZATION is set
 	if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
 		set(LTO_ENABLED "true")
 	else()
 		set(LTO_ENABLED "false")
 	endif()
 
+	# Verbose compile args (empty = noop)
+	if(BUILDMASTER_VERBOSE)
+		set(_MESON_COMPILE_VERBOSE_ARGS "-v")
+	else()
+		set(_MESON_COMPILE_VERBOSE_ARGS "")
+	endif()
+
 	list_join(_MESON_OPTIONS "${_meson_options}" " ")
 
 	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_component}")
 
-	# Compile args: on MSVC force /Z7 so parallel builds don't race on PDBs
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
 	if(MSVC)
@@ -81,8 +85,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		string(APPEND _MESON_CXX_ARGS " /Z7")
 	endif()
 
-	# Propagate compiler cache into meson setup templates.
-	# Prefer CMake vars; fall back to ENV from the CI job.
 	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
 			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
@@ -112,8 +114,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		endif()
 	endif()
 
-	# Windows paths from the environment use backslashes; CMake string
-	# literals would treat \U, \A, … as escapes. Normalize to CMake paths.
 	if(NOT CCACHE_DIR STREQUAL "")
 		file(TO_CMAKE_PATH "${CCACHE_DIR}" CCACHE_DIR)
 	endif()
