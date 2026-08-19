@@ -5,18 +5,6 @@
 # and user-friendly way (configure-time or build-time via generated scripts).
 # =============================================================================
 
-# Recommended downloads directory (created if missing)
-if(NOT DEFINED BUILDMASTER_DOWNLOADSDIR)
-	set(BUILDMASTER_DOWNLOADSDIR "${BUILDMASTER_BINDIR}/downloads")
-	file(MAKE_DIRECTORY "${BUILDMASTER_DOWNLOADSDIR}")
-endif()
-
-# Scripts directory for this module
-if(NOT DEFINED BUILDMASTER_SCRIPTS_FILE_DIR)
-	set(BUILDMASTER_SCRIPTS_FILE_DIR "${BUILDMASTER_SCRIPTSDIR}/file")
-	file(MAKE_DIRECTORY "${BUILDMASTER_SCRIPTS_FILE_DIR}")
-endif()
-
 # -----------------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------------
