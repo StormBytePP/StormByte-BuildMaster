@@ -1,3 +1,8 @@
+# Mirror meson configure: visible line before nested cmake -S/-B
+if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt")
+	message(STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@")
+endif()
+
 execute_process(
 	COMMAND @ENV_CMAKE_SILENT_COMMAND@ -Wno-dev -S @_CMAKE_SRCDIR@ -B @_CMAKE_BUILD_DIR@ -G Ninja
 		"-DCMAKE_TOOLCHAIN_FILE=@BUILDMASTER_TOOLCHAIN_FILE@"
@@ -32,7 +37,6 @@ if(NOT CMAKE_RESULT EQUAL 0)
 	)
 endif()
 
-# Expanded at generation time as the string ON or OFF (avoid bare if(ON))
 if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
 	if(CMAKE_OUT)
 		message(STATUS "[BUILDMASTER_DEBUG] @_CMAKE_COMPONENT_TITLE@ configure stdout:\n${CMAKE_OUT}")
