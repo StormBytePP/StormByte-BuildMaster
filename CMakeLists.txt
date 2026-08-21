@@ -1,4 +1,10 @@
-message(STATUS "Bootstrapping StormByte-BuildMaster (https://github.com/StormBytePP/StormByte-BuildMaster)")
+# -----------------------------------------------------------------------------
+# Version
+# -----------------------------------------------------------------------------
+set(BUILDMASTER_VERSION "1.0.0")
+set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
+
+message(STATUS "Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")
 
 # -----------------------------------------------------------------------------
 # 1. Core directory variables
