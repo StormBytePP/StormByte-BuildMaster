@@ -24,10 +24,12 @@ endfunction()
 ## @brief Check whether a file matches an expected checksum.
 ## @param[out] _result Parent-scope variable that receives TRUE or FALSE.
 ## @param[in]  _file   Full path to the file to check.
-## @param[in]  _hash   Expected hash in the form "ALGO=value" (e.g. "SHA256=abc...").
-##                     If empty, the function returns FALSE.
-## @note Performs no output messages. Supports any algorithm accepted by
-##       file(<ALGO>).
+## @param[in]  _hash   Expected hash. Accepted forms:
+##                       - empty                    → always FALSE (caller should skip)
+##                       - "ALGO=hex"               → use the given algorithm
+##                       - bare hex                 → default algorithm (SHA256)
+## @note Supports any algorithm accepted by file(<ALGO>).
+##       Algorithm names may contain underscores (SHA3_256, etc.).
 function(file_checksum_correct _result _file _hash)
 	if("${_hash}" STREQUAL "")
 		set(${_result} FALSE PARENT_SCOPE)
@@ -39,18 +41,36 @@ function(file_checksum_correct _result _file _hash)
 		return()
 	endif()
 
-	# Parse ALGO=value
-	string(REGEX REPLACE "^([A-Za-z0-9]+)=(.*)$" "\\1;\\2" _parts "${_hash}")
-	list(LENGTH _parts _len)
-	if(NOT _len EQUAL 2)
+	set(_algo "")
+	set(_expected "")
+
+	# Form "ALGO=value" (underscore allowed in algorithm name)
+	if(_hash MATCHES "^([A-Za-z0-9_]+)=(.+)$")
+		set(_algo "${CMAKE_MATCH_1}")
+		set(_expected "${CMAKE_MATCH_2}")
+	else()
+		# Bare hex → default algorithm
+		set(_algo "SHA256")
+		set(_expected "${_hash}")
+	endif()
+
+	string(TOUPPER "${_algo}" _algo)
+
+	# Validate that CMake knows the algorithm
+	set(_known_algos
+		MD5 SHA1
+		SHA224 SHA256 SHA384 SHA512
+		SHA3_224 SHA3_256 SHA3_384 SHA3_512
+	)
+	list(FIND _known_algos "${_algo}" _idx)
+	if(_idx EQUAL -1)
+		message(WARNING
+			"Unknown hash algorithm '${_algo}' for ${_file}. "
+			"Known: ${_known_algos}. Treating as mismatch."
+		)
 		set(${_result} FALSE PARENT_SCOPE)
 		return()
 	endif()
-
-	list(GET _parts 0 _algo)
-	list(GET _parts 1 _expected)
-
-	string(TOUPPER "${_algo}" _algo)
 
 	file(${_algo} "${_file}" _actual)
 	if(_actual STREQUAL _expected)
