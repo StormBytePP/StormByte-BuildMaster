@@ -6,13 +6,15 @@ if(NOT TARGET @_LIBRARY_NAME@)
 	add_library(@_LIBRARY_NAME@ INTERFACE)
 	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
 
+	# Parent targets that link this INTERFACE must wait for install (headers + libs)
+	add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+
 	set(libs "@_LIBRARY_COMPONENT_NAMES@")
 	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
 	if(MSVC)
 		set(lib_dll_files "@_LIBRARY_COMPONENT_DLL_FILES@")
 	endif()
 
-	# Recorremos las listas en paralelo
 	if(MSVC)
 		foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
 			add_library(${lib} SHARED IMPORTED GLOBAL)
@@ -32,7 +34,7 @@ if(NOT TARGET @_LIBRARY_NAME@)
 				IMPORTED_LOCATION_MINSIZEREL "${lib_dll_file}"
 				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
 			)
-			
+
 			add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
 			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
 		endforeach()

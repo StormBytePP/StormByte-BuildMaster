@@ -26,9 +26,8 @@
 ##       `_MESON_OPTIONS` (the `_meson_options` list is joined with a
 ##       space). Calls `sanitize_for_filename` to produce
 ##       `_MESON_COMPONENT_SAFE` used to create output paths inside
-##       `${BUILDMASTER_SCRIPTS_MESON_DIR}` and generates three scripts
-##       from templates in `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via
-##       `configure_file`.
+##       `${BUILDMASTER_SCRIPTS_MESON_DIR}` and generates scripts from
+##       templates in `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via `configure_file`.
 ## @return Results are provided through parent-scope variables; the
 ##         `configure_file` calls create or overwrite files under
 ##         `${BUILDMASTER_SCRIPTS_MESON_DIR}`.
@@ -130,10 +129,26 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(_MESON_INSTALL_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install.cmake"
 	)
+	set(_MESON_COMPILE_EXEC_SCRIPT
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_compile_exec.cmake"
+	)
+	set(_MESON_INSTALL_EXEC_SCRIPT
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install_exec.cmake"
+	)
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/setup.cmake.in"
 		"${_MESON_SETUP_FILE}"
+		@ONLY
+	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/compile_exec.cmake.in"
+		"${_MESON_COMPILE_EXEC_SCRIPT}"
+		@ONLY
+	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/install_exec.cmake.in"
+		"${_MESON_INSTALL_EXEC_SCRIPT}"
 		@ONLY
 	)
 	configure_file(

@@ -10,7 +10,8 @@
 A small **CMake DSL** to configure, build, install and consume external
 **CMake** and **Meson** projects as first-class parts of a parent tree —
 with **configure-time** stages, explicit targets, coherent environment
-propagation, and portable static-library bundling.
+propagation, portable static-library bundling, and **controlled failure
+propagation** across the dependency graph.
 
 ## Table of contents
 
@@ -20,6 +21,7 @@ propagation, and portable static-library bundling.
 - [Design goals](#design-goals)
 - [Quick start](#quick-start)
 - [Output verbosity and diagnostics](#output-verbosity-and-diagnostics)
+- [Fail-fast and stage failure propagation](#fail-fast-and-stage-failure-propagation)
 - [Compiler cache (ccache / sccache)](#compiler-cache-ccache--sccache)
 - [Platform notes](#platform-notes)
 - [Recursive usage](#recursive-usage)
@@ -44,6 +46,8 @@ parent:
 - create deterministic **IMPORTED** targets
 - attach `POST_BUILD` / install hooks to real stage targets
 - share one install prefix and environment across a dependency tree
+- fail the parent when a required external stage fails (headers/libs never
+“half present”)
 
 It is **not** only a source fetcher (unlike a pure `FetchContent` workflow):
 it orchestrates full external builds. Sources may still be managed with the
@@ -72,9 +76,13 @@ does (`PKG_CONFIG_PATH`, install prefix, compilers, flags, cache launchers).
 Without a control layer, nested Meson setups often fail to find previous
 plugins’ `.pc` files or use the wrong toolchain.
 
+Without explicit stage targets and dependency edges, a failed external
+compile can still leave the parent compiling against missing headers
+(e.g. `mysql.h not found`) while other unrelated bundles keep installing.
+
 BuildMaster fills those gaps with **configure-time** generated scripts,
-explicit targets, and env runners that inject a coherent environment into
-every child CMake/Meson/Ninja invocation:
+explicit targets, env runners, and optional **fail-fast** markers so a stage
+failure is visible and can stop subsequent work:
 
 ```text
 <component>_build
@@ -98,6 +106,8 @@ every child CMake/Meson/Ninja invocation:
 | Compiler cache into child builds        | Manual       | Manual              | **Yes**              |
 | Portable static archive merge           | No           | Manual              | **Yes**              |
 | Safe recursive nesting                  | Fragile      | Fragile             | **Designed for it**  |
+| **Fail-fast / skip after stage failure**| No           | Manual              | **Yes (optional)**   |
+| **INTERFACE deps on `_install`**        | No           | Manual              | **Yes**              |
 
 ---
 
@@ -113,6 +123,8 @@ compilers, flags, optional ccache/sccache)
 - Quiet default logs with **full diagnostics on failure**, optional
 **DEBUG** (all stages) and **VERBOSE** (compile stages only)
 - Intelligent, cacheable and portable file download / decompression
+- Predictable failure behaviour: a broken required component must fail the
+parent graph, not surface as a missing include later
 
 ---
 
@@ -159,6 +171,10 @@ is removed). That way:
 - `execute_process(... ERROR_VARIABLE ...)` still receives the full log
 - CI consoles show configure/build failures without enabling full verbosity
 - parallel jobs do not clash on log paths (`mktemp` / unique names under `%TEMP%`)
+
+Stage exec scripts (`*_build_exec.cmake` / `*_install_exec.cmake` and Meson
+equivalents) also report a clear fatal error when the underlying
+`cmake --build` / `meson compile` / install command fails.
 
 ### Full live output (DEBUG)
 
@@ -208,6 +224,80 @@ or `BUILDMASTER_DEBUG`, then re-run CMake so stage scripts are regenerated.
 
 ---
 
+## Fail-fast and stage failure propagation
+
+Large superbuilds often continue after one component fails: other installs
+still run, and the parent may compile against a prefix that never received
+headers. BuildMaster addresses this in three layers.
+
+### 1. Stage exit codes (always)
+
+Build and install stages run through generated `*_exec.cmake` scripts.
+A non-zero exit from `cmake --build`, `meson compile`, `cmake --install`,
+or `meson install` fails that stage. Ninja/Make/`cmake --build` then fail
+any target that depends on it.
+
+### 2. INTERFACE → `_install` (always)
+
+Component templates (`component_static*.cmake.in`, `component_shared*.cmake.in`)
+attach:
+
+```text
+add_dependencies(<INTERFACE> <component>_install)
+add_dependencies(<IMPORTED lib> <component>_install)
+```
+
+So a parent that does:
+
+```cmake
+target_link_libraries(MyLib PRIVATE SomeBundledComponent)
+```
+
+waits for a **successful** install before treating the component as ready
+(headers under `BUILDMASTER_INSTALL_INCLUDEDIR` and the imported archives).
+
+### 3. Optional fail-fast markers (`BUILDMASTER_FAIL_FAST`)
+
+```bash
+export BUILDMASTER_FAIL_FAST=1
+# truthy: 1, ON, TRUE, YES (case-insensitive)
+# or: cmake -DBUILDMASTER_FAIL_FAST=ON ...
+```
+
+| Value | Behaviour |
+|-------|-----------|
+| **ON** | On the first failed build/install stage, write markers under `${BUILDMASTER_BINDIR}/markers/`. Later stages that still run see the global marker and print `Skipped <component title>`, then fail. Env runners also refuse to run if the global marker exists (`Skipped due to previous errors`). |
+| **OFF** (default) | **No markers are written.** Stages still fail on their own exit codes; independent components can continue. Prefer this when **warming ccache/sccache** so one broken bundle does not stop the rest. |
+
+Markers (only when fail-fast is ON and a stage fails):
+
+```text
+${BUILDMASTER_BINDIR}/markers/buildmaster.failed   # global halt signal
+${BUILDMASTER_BINDIR}/markers/<component_id>.failed  # which component failed
+```
+
+At the **start of every parent build** (ninja, make, or `cmake --build`), the
+unique target `buildmaster_build_init` removes and recreates the `markers/`
+directory so markers never leak across runs. That target is created only on
+the first BuildMaster bootstrap (`BUILDMASTER_CONFIGURED`), so nested
+`add_subdirectory(buildmaster)` does not redefine it.
+
+Scripts that honour fail-fast are regenerated at **configure** time: change
+`BUILDMASTER_FAIL_FAST`, then re-run CMake.
+
+### Typical CI vs cache-warming
+
+```bash
+# CI: stop early, clear logs
+BUILDMASTER_FAIL_FAST=1 cmake --build build
+
+# Populate compiler caches even if one third-party fails
+unset BUILDMASTER_FAIL_FAST   # or =0
+cmake --build build
+```
+
+---
+
 ## Compiler cache (ccache / sccache)
 
 If the parent job sets:
@@ -227,6 +317,9 @@ MSVC CMake). Real compilers stay in `CC`/`CXX`; launchers stay separate.
 
 Empty launcher/dir values mean “do not inject cache” — no accidental
 pollution when caching is disabled.
+
+When warming caches, leave **`BUILDMASTER_FAIL_FAST` unset** so independent
+components keep compiling after an unrelated failure.
 
 ---
 
@@ -248,8 +341,9 @@ Apple’s `ar` does not support MRI scripts (`ar -M`).
 
 An external CMake project may itself `add_subdirectory(buildmaster)`.  
 BuildMaster initializes **once** (`BUILDMASTER_CONFIGURED`) and reuses the
-same `BUILDMASTER_INSTALL_DIR` and generated script tree, so nested projects
-do not fight over prefixes or double-bootstrap tools.
+same `BUILDMASTER_INSTALL_DIR`, marker directory, and generated script tree,
+so nested projects do not fight over prefixes or double-bootstrap tools.
+`buildmaster_build_init` remains a single global target.
 
 ---
 
@@ -273,6 +367,7 @@ projects (x265 12-bit → 10-bit → 8-bit) with `create_cmake_dependant_compone
 
 | Target | Role |
 |--------|------|
+| `buildmaster_build_init` | Reset fail markers at the start of each parent build |
 | `<component>_build` | Compile the external project |
 | `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
 | `<component>_configure` | Configure only (dependant components) |
@@ -280,9 +375,12 @@ projects (x265 12-bit → 10-bit → 8-bit) with `create_cmake_dependant_compone
 Install rules list produced libraries as `OUTPUT`, so other targets can
 `DEPENDS` on real files, not only on phony names.
 
+Build/install stages depend on `buildmaster_build_init` when that target
+exists, so markers are cleared before any stage runs.
+
 Component ids used in target names should stay filesystem-friendly; display
 titles (e.g. `VVenc (H266) codec`) may contain spaces or punctuation and are
-only used in status messages.
+only used in status messages (including `Skipped <title>` under fail-fast).
 
 ---
 
@@ -321,13 +419,15 @@ create_bundle_static_libraries(
 | Env runners / `prepare_command` | `env/helpers.cmake` |
 | Path / list / sanitize utils | `helpers.cmake` |
 | Tool registration | `tools/helpers.cmake` |
+| Fail-fast / markers / init | `init_vars.cmake` |
 
 Templates (generated into the build tree):
 
-- `tools/cmake/{configure,build,install}.cmake.in`
-- `tools/meson/{setup,compile,install}.cmake.in`
+- `tools/cmake/{configure,build,install,build_exec,install_exec}.cmake.in`
+- `tools/meson/{setup,compile,install,compile_exec,install_exec}.cmake.in`
 - `tools/file/{file_download,file_download_cached,file_decompress}.cmake.in`
 - `component/bundler.sh.in`, `bundler_macos.sh.in`, `bundler.bat.in`
+- `component/component_{static,shared}{,_dependant}.cmake.in`
 - `env/runner_*.in` (including silent variants)
 
 ---
@@ -379,6 +479,9 @@ stuck (`Downloading TITLE...`, `Unpacking TITLE...`).
 No destination path is accepted from the caller.  
 The file is **always** saved under `${BUILDMASTER_DOWNLOADSDIR}/` using the
 basename of the URL.
+
+Hash strings accept `ALGORITHM=digest` (e.g. `SHA256=…`, `SHA3_256=…`).
+A bare digest defaults to SHA256.
 
 ### Example
 
@@ -503,6 +606,16 @@ add_custom_command(TARGET x265_install POST_BUILD
 	COMMAND ${BUNDLE_X265}
 	COMMENT "Repacking x265 static libraries"
 )
+```
+
+### Fail-fast in CI
+
+```bash
+export BUILDMASTER_FAIL_FAST=1
+cmake -S . -B build -G Ninja
+cmake --build build
+# On first stage failure: markers written, later stages may print
+# "Skipped <component>", parent build exits non-zero
 ```
 
 ---

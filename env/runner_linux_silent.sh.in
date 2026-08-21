@@ -1,16 +1,16 @@
 #!/bin/sh
 # Silent runner: capture all output; on failure dump to stderr and re-exit.
-set -e
+# IMPORTANT: do not use `if cmd; then; fi` + `$?` after it — a failed
+# condition makes the if-compound exit 0, swallowing the real status.
 
 _log="$(mktemp "${TMPDIR:-/tmp}/buildmaster.XXXXXX")"
-# Always remove the temp file when this shell exits
 trap 'rm -f "$_log"' EXIT HUP INT TERM
 
-if @ENV_RUNNER_CMD@ "$@" >"$_log" 2>&1; then
-	exit 0
-fi
-
+@ENV_RUNNER_CMD@ "$@" >"$_log" 2>&1
 _rc=$?
-# Failure: surface the captured log for CI / execute_process ERROR_VARIABLE
-cat "$_log" >&2
-exit "$_rc"
+
+if [ "$_rc" -ne 0 ]; then
+	cat "$_log" >&2
+	exit "$_rc"
+fi
+exit 0

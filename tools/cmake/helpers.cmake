@@ -95,10 +95,26 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(_CMAKE_INSTALL_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install.cmake"
 	)
+	set(_CMAKE_BUILD_EXEC_SCRIPT
+		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_build_exec.cmake"
+	)
+	set(_CMAKE_INSTALL_EXEC_SCRIPT
+		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install_exec.cmake"
+	)
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/configure.cmake.in"
 		"${_CMAKE_CONFIGURE_FILE}"
+		@ONLY
+	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/build_exec.cmake.in"
+		"${_CMAKE_BUILD_EXEC_SCRIPT}"
+		@ONLY
+	)
+	configure_file(
+		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/install_exec.cmake.in"
+		"${_CMAKE_INSTALL_EXEC_SCRIPT}"
 		@ONLY
 	)
 	configure_file(

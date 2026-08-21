@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - 2026-08-21
 
-Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, build, install and consume external CMake and Meson projects as first-class parts of a parent tree, with configure-time stages, explicit targets, coherent environment propagation and portable static-library bundling.
+Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, build, install and consume external CMake and Meson projects as first-class parts of a parent tree, with configure-time stages, explicit targets, coherent environment propagation, portable static-library bundling, and controlled failure propagation across the dependency graph.
 
 ### Added
 
@@ -17,9 +17,21 @@ Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, b
 - Shared install prefix (`BUILDMASTER_INSTALL_DIR`) and generated script tree across the whole dependency graph
 - Safe recursive nesting via `BUILDMASTER_CONFIGURED` (single initialization, no prefix fights)
 - IMPORTED targets (static and shared, including MSVC import libraries and DLLs) wired to install stages
+- INTERFACE libraries also depend on `<component>_install` so parent `target_link_libraries` waits for a successful install
 - Simple API: `create_cmake_component`, `create_meson_component`
 - Dependant variants: `create_cmake_dependant_component`, `create_meson_dependant_component`
 - Advanced/explicit API: `create_cmake_stages`, `create_meson_stages`
+- Project version exposed as `BUILDMASTER_VERSION` and shown in the bootstrap status line
+
+#### Fail-fast and failure propagation
+- Optional `BUILDMASTER_FAIL_FAST` (env or `-D`; truthy: `1` / `ON` / `TRUE` / `YES`; default OFF)
+- On stage failure with fail-fast ON: write `markers/buildmaster.failed` and `markers/<component_id>.failed`
+- Later stages print `Skipped <component title>` and exit non-zero when the global marker exists
+- Env runners refuse further work if the global fail marker is present (`Skipped due to previous errors`)
+- Unique `buildmaster_build_init` target resets the markers directory at the start of every parent build (Ninja, Make, `cmake --build`)
+- Markers directory under `${BUILDMASTER_BINDIR}/markers/` (no persistent success stamps)
+- Fail-fast OFF writes no markers so independent components can keep building (cache warming with ccache/sccache)
+- Stage exec scripts (`build_exec` / `install_exec` for CMake; `compile_exec` / `install_exec` for Meson) centralize exit-code handling and marker writes
 
 #### Environment and toolchain
 - Platform env runners (Linux/macOS shell, Windows batch) with silent variants
@@ -32,10 +44,12 @@ Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, b
 - Nested CMake configures with Ninja, toolchain file, PIC, LTO and launcher injection
 - Nested Meson setup/compile/install with matching environment and library type control
 - Parallel builds via `NPROC` / `CMAKE_BUILD_PARALLEL_LEVEL`
+- Stage targets depend on `buildmaster_build_init` when available
 
 #### File helpers
 - Cache-aware downloads (`file_download_cached`) with hash verification and retries
 - Force downloads (`file_download`) with progressive backoff
+- Flexible `EXPECTED_HASH` (`ALGORITHM=digest`, including forms such as `SHA3_256=…`; bare digest defaults to SHA256)
 - Portable archive extraction (`file_decompress`) via `file(ARCHIVE_EXTRACT)`
 - Strict path-traversal protection and consistent status messages
 
@@ -56,7 +70,7 @@ Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, b
 ### Notes
 
 - Requires CMake ≥ 3.20; Meson and Ninja when using the corresponding backends.
-- Stage scripts are generated at configure time — change `BUILDMASTER_DEBUG` / `BUILDMASTER_VERBOSE` and re-run CMake to regenerate them.
-- Designed as a building block for multi-dependency projects (e.g. FFmpeg plugin graphs, multi-bitdepth codecs).
+- Stage scripts are generated at configure time — change `BUILDMASTER_DEBUG` / `BUILDMASTER_VERBOSE` / `BUILDMASTER_FAIL_FAST` and re-run CMake to regenerate them.
+- Designed as a building block for multi-dependency projects (e.g. FFmpeg plugin graphs, multi-bitdepth codecs, database client bundles).
 
 [1.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/1.0.0

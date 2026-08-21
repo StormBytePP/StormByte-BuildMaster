@@ -37,6 +37,40 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(BUILDMASTER_VERBOSE OFF)
 	endif()
 
+	# Fail-fast: after a stage failure, subsequent stages can skip (see markers/).
+	# Truthy ENV: 1, ON, TRUE, YES (case-insensitive). Default OFF (cache warming).
+	if(DEFINED ENV{BUILDMASTER_FAIL_FAST})
+		string(TOUPPER "$ENV{BUILDMASTER_FAIL_FAST}" _BUILDMASTER_FF)
+		if(_BUILDMASTER_FF STREQUAL "1"
+				OR _BUILDMASTER_FF STREQUAL "ON"
+				OR _BUILDMASTER_FF STREQUAL "TRUE"
+				OR _BUILDMASTER_FF STREQUAL "YES")
+			set(BUILDMASTER_FAIL_FAST ON)
+		else()
+			set(BUILDMASTER_FAIL_FAST OFF)
+		endif()
+		unset(_BUILDMASTER_FF)
+	elseif(BUILDMASTER_FAIL_FAST)
+		set(BUILDMASTER_FAIL_FAST ON)
+	else()
+		set(BUILDMASTER_FAIL_FAST OFF)
+	endif()
+
+	set(BUILDMASTER_MARKERS_DIR "${BUILDMASTER_BINDIR}/markers")
+	set(BUILDMASTER_FAIL_MARKER "${BUILDMASTER_MARKERS_DIR}/buildmaster.failed")
+	file(MAKE_DIRECTORY "${BUILDMASTER_MARKERS_DIR}")
+
+	# Reset fail markers at the start of every parent build (ninja/make/cmake --build).
+	# Created only on first bootstrap so nested BuildMaster does not redefine the target.
+	if(NOT TARGET buildmaster_build_init)
+		add_custom_target(buildmaster_build_init
+			COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILDMASTER_MARKERS_DIR}"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILDMASTER_MARKERS_DIR}"
+			COMMENT "BuildMaster: reset fail markers"
+			VERBATIM
+		)
+	endif()
+
 	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

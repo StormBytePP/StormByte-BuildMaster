@@ -7,10 +7,12 @@ if(NOT TARGET @_LIBRARY_NAME@)
 
 	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
 
+	# Parent targets that link this INTERFACE must wait for install (headers + libs)
+	add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+
 	set(libs "@_LIBRARY_COMPONENT_NAMES@")
 	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
 
-	# Recorremos las listas en paralelo
 	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
 		add_library(${lib} STATIC IMPORTED GLOBAL)
 

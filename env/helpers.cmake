@@ -20,6 +20,9 @@ function(update_env_runner)
 	if(NOT DEFINED SCCACHE_DIR)
 		set(SCCACHE_DIR "")
 	endif()
+	if(NOT DEFINED BUILDMASTER_FAIL_MARKER)
+		set(BUILDMASTER_FAIL_MARKER "")
+	endif()
 
 	if(WIN32)
 		configure_file(

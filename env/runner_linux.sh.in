@@ -13,6 +13,7 @@ update_cxxflags="@CXXFLAGS@"
 update_ldflags="@LDFLAGS@"
 update_path="@PATH@"
 update_nproc="@NPROC@"
+bm_fail_marker="@BUILDMASTER_FAIL_MARKER@"
 
 if [ -n "$update_pkg_config" ]; then
 	export PKG_CONFIG="$update_pkg_config"
@@ -78,6 +79,12 @@ fi
 
 if [ -n "$update_nproc" ]; then
 	export CMAKE_BUILD_PARALLEL_LEVEL="$update_nproc"
+fi
+
+# Fail-fast: stages write this marker; do not run further runner commands
+if [ -n "$bm_fail_marker" ] && [ -f "$bm_fail_marker" ]; then
+	echo "Skipped due to previous errors"
+	exit 1
 fi
 
 if [ $# -eq 0 ]; then

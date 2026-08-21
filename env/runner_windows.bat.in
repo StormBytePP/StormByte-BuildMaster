@@ -17,6 +17,7 @@ set "update_c_launcher=@CMAKE_C_COMPILER_LAUNCHER@"
 set "update_cxx_launcher=@CMAKE_CXX_COMPILER_LAUNCHER@"
 set "update_ccache_dir=@CCACHE_DIR@"
 set "update_sccache_dir=@SCCACHE_DIR@"
+set "bm_fail_marker=@BUILDMASTER_FAIL_MARKER@"
 
 if not "%update_pkg_config%"=="" (
 	set "PKG_CONFIG=%update_pkg_config%"
@@ -79,6 +80,13 @@ if not "%update_c_launcher%"=="" (
 )
 if not "%update_cxx_launcher%"=="" (
 	set "CMAKE_CXX_COMPILER_LAUNCHER=%update_cxx_launcher%"
+)
+
+rem Fail-fast: stages write this marker; do not run further runner commands
+if not "%bm_fail_marker%"=="" if exist "%bm_fail_marker%" (
+	echo Skipped due to previous errors
+	endlocal
+	exit /b 1
 )
 
 if "%~1"=="" (
