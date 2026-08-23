@@ -7,6 +7,8 @@
 ## @note On WIN32 this strips surrounding double quotes (if present)
 ##       and replaces '/' with '\\' to produce a Windows-style path.
 ##       On non-WIN32 platforms the input is returned unchanged.
+##       Use for values passed to cmd.exe / bat. For paths consumed by
+##       CMake itself, prefer normalize_cmake_path().
 function(windows_path _out_path _input_path )
 	if(NOT ARGC EQUAL 2)
 		message(FATAL_ERROR "windows_path requires output variable name and input path")
@@ -21,6 +23,22 @@ function(windows_path _out_path _input_path )
 	else()
 		set(${_out_path} "${_input_path}" PARENT_SCOPE)
 	endif()
+endfunction()
+
+## @brief Normalize a filesystem path for use inside CMake (forward slashes).
+## @param[out] _out Name of the variable to set in the parent scope.
+## @param[in]  _input Path (may contain backslashes or surrounding quotes).
+## @note Strips optional surrounding quotes, then applies file(TO_CMAKE_PATH).
+##       Use for ENV-derived paths (BUILDMASTER_DOWNLOADSDIR, cache dirs, etc.)
+##       so they are safe in toolchain.cmake and CMake string expansion.
+function(normalize_cmake_path _out _input)
+	if(NOT ARGC EQUAL 2)
+		message(FATAL_ERROR "normalize_cmake_path requires output variable name and input path")
+	endif()
+	set(_p "${_input}")
+	string(REGEX REPLACE "^\"(.*)\"$" "\\1" _p "${_p}")
+	file(TO_CMAKE_PATH "${_p}" _p)
+	set(${_out} "${_p}" PARENT_SCOPE)
 endfunction()
 
 ## @brief Construct a platform-appropriate shared-library filename hint.
@@ -51,7 +69,7 @@ function(library_import_hint _out_var _lib_name _prefix_path)
 	if(NOT _prefix_path STREQUAL "")
 		set(_prefix "${_prefix_path}/${_prefix}")
 	endif()
-	
+
 	set(${_out_var} "${_prefix}${_lib_name}${_suffix}" PARENT_SCOPE)
 endfunction()
 
@@ -76,7 +94,7 @@ function(library_import_static_hint _out_var _lib_name _prefix_path)
 	else()
 		set(_prefix "${CMAKE_STATIC_LIBRARY_PREFIX}")
 	endif()
-	
+
 	set(${_out_var} "${_prefix}${_lib_name}${CMAKE_STATIC_LIBRARY_SUFFIX}" PARENT_SCOPE)
 endfunction()
 
