@@ -5,6 +5,9 @@ add_custom_target(
 	USES_TERMINAL
 	VERBATIM
 )
+if(TARGET @_MESON_STAGE_CONFIGURE@)
+	add_dependencies(@_MESON_STAGE_BUILD@ @_MESON_STAGE_CONFIGURE@)
+endif()
 if(TARGET buildmaster_build_init)
 	add_dependencies(@_MESON_STAGE_BUILD@ buildmaster_build_init)
 endif()

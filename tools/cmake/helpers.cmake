@@ -36,7 +36,6 @@
 ##                       /path/to/src /path/to/build "${options}"
 ##                       shared "/path/to/mylibname.so" 1
 function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)
-	# Optional indent level
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
 		string(REPEAT "\t" ${_indent_level} _CMAKE_INDENT_)
@@ -44,7 +43,6 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(_CMAKE_INDENT_ "")
 	endif()
 
-	# Child CMake projects: bake launcher into *_configure.cmake.
 	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
 			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
@@ -69,13 +67,13 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	endif()
 
 	set(_CMAKE_COMPONENT_TITLE "${_component_title}")
-	string(APPEND _CMAKE_STAGE_BUILD "${_component}" "_build")
-	string(APPEND _CMAKE_STAGE_INSTALL "${_component}" "_install")
+	set(_CMAKE_STAGE_CONFIGURE "${_component}_configure")
+	set(_CMAKE_STAGE_BUILD "${_component}_build")
+	set(_CMAKE_STAGE_INSTALL "${_component}_install")
 	set(_CMAKE_SRCDIR "${_srcdir}")
 	set(_CMAKE_BUILD_DIR "${_builddir}")
 	set(_CMAKE_OUTPUT_LIBRARIES "${_output_libraries}")
 
-	# Verbose compile args (empty = noop). Only BUILDMASTER_VERBOSE enables this.
 	if(BUILDMASTER_VERBOSE)
 		set(_CMAKE_BUILD_VERBOSE_ARGS "--verbose")
 	else()
@@ -83,8 +81,25 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	endif()
 
 	list_join(_CMAKE_OPTIONS "${_options}" "\n\t\t")
-
 	sanitize_for_filename(_CMAKE_COMPONENT_SAFE "${_component}")
+
+	# Git scripts registered for this component_id
+	set(_CMAKE_GIT_SCRIPTS "")
+	if(COMMAND buildmaster_git_scripts_for_component)
+		buildmaster_git_scripts_for_component(_CMAKE_GIT_SCRIPTS "${_component}")
+	endif()
+	# Join for @ONLY as a CMake list string
+	string(REPLACE ";" "\\;" _CMAKE_GIT_SCRIPTS "${_CMAKE_GIT_SCRIPTS}")
+
+	set(_CMAKE_GIT_POST_INSTALL_RESET "")
+	if(COMMAND buildmaster_git_post_install_marker_for_srcdir)
+		buildmaster_git_post_install_marker_for_srcdir(_CMAKE_GIT_POST_INSTALL_RESET "${_srcdir}")
+	endif()
+
+	# Bind builddir so buildmaster_clean can invalidate configure (option C)
+	if(COMMAND buildmaster_git_bind_component)
+		buildmaster_git_bind_component("${_component}" "${_builddir}" "cmake")
+	endif()
 
 	set(_CMAKE_CONFIGURE_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_configure.cmake"
@@ -95,6 +110,9 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(_CMAKE_INSTALL_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install.cmake"
 	)
+	set(_CMAKE_CONFIGURE_EXEC_SCRIPT
+		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_configure_exec.cmake"
+	)
 	set(_CMAKE_BUILD_EXEC_SCRIPT
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_build_exec.cmake"
 	)
@@ -102,6 +120,11 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install_exec.cmake"
 	)
 
+	configure_file(
+		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/configure_exec.cmake.in"
+		"${_CMAKE_CONFIGURE_EXEC_SCRIPT}"
+		@ONLY
+	)
 	configure_file(
 		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/configure.cmake.in"
 		"${_CMAKE_CONFIGURE_FILE}"
@@ -127,6 +150,7 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		"${_CMAKE_INSTALL_FILE}"
 		@ONLY
 	)
+
 	set(${_file_configure} "${_CMAKE_CONFIGURE_FILE}" PARENT_SCOPE)
 	set(${_file_compile} "${_CMAKE_BUILD_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_CMAKE_INSTALL_FILE}" PARENT_SCOPE)

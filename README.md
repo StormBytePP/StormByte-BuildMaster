@@ -85,6 +85,7 @@ explicit targets, env runners, and optional **fail-fast** markers so a stage
 failure is visible and can stop subsequent work:
 
 ```text
+<component>_configure
 <component>_build
 <component>_install
 ```
@@ -97,9 +98,9 @@ failure is visible and can stop subsequent work:
 |-----------------------------------------|:------------:|:-------------------:|:--------------------:|
 | Fetch / manage sources                  | Yes          | Yes                 | Yes (Git helpers)    |
 | **Intelligent / cacheable downloads**   | Partial      | Manual              | **Yes (built-in)**   |
-| Configure external project              | N/A          | Build time          | **Configure time**   |
+| Configure external project              | N/A          | Build time          | **Configure stage**  |
 | Inspect artifacts before main build     | No           | No                  | **Yes**              |
-| Explicit `_build` / `_install` targets  | No           | No                  | **Yes**              |
+| Explicit `_configure` / `_build` / `_install` | No     | No                  | **Yes**              |
 | Attach post-steps to those targets      | No           | Limited             | **Yes**              |
 | Native Meson stages                     | No           | Manual              | **Yes**              |
 | Shared install + env propagation        | No           | Manual              | **Yes**              |
@@ -108,12 +109,14 @@ failure is visible and can stop subsequent work:
 | Safe recursive nesting                  | Fragile      | Fragile             | **Designed for it**  |
 | **Fail-fast / skip after stage failure**| No           | Manual              | **Yes (optional)**   |
 | **INTERFACE deps on `_install`**        | No           | Manual              | **Yes**              |
+| **Git reset + reconfigure (`buildmaster_clean`)** | No   | Manual              | **Yes (optional)**   |
+| **Per-repo post-install git reset**     | No           | Manual              | **Yes**              |
 
 ---
 
 ## Design goals
 
-- Deterministic **configure-time** orchestration
+- Deterministic **stage-based** orchestration (configure / build / install)
 - Coherent environment (`PATH`, `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`,
 compilers, flags, optional ccache/sccache)
 - **Linux / Windows / macOS** (x86_64 and arm64)
@@ -125,6 +128,10 @@ compilers, flags, optional ccache/sccache)
 - Intelligent, cacheable and portable file download / decompression
 - Predictable failure behaviour: a broken required component must fail the
 parent graph, not surface as a missing include later
+- Git helpers bound to a **component id**: ops run at the start of that
+component’s **configure** stage; `buildmaster_clean` resets sources and
+**invalidates configure** so the next build re-applies patches; install
+resets **only that repo** afterward
 
 ---
 
@@ -159,8 +166,9 @@ component are available to the rest of the parent project.
 ## Output verbosity and diagnostics
 
 By default each stage prints a short status line (for example
-`Compiling …` / `Installing …`) so large dependency graphs stay readable.
-“Silent” runners suppress underlying tool stdout/stderr **on success**.
+`Configuring …` / `Compiling …` / `Installing …`) so large dependency graphs
+stay readable. “Silent” runners suppress underlying tool stdout/stderr
+**on success**.
 
 ### On failure
 
@@ -172,9 +180,9 @@ is removed). That way:
 - CI consoles show configure/build failures without enabling full verbosity
 - parallel jobs do not clash on log paths (`mktemp` / unique names under `%TEMP%`)
 
-Stage exec scripts (`*_build_exec.cmake` / `*_install_exec.cmake` and Meson
-equivalents) also report a clear fatal error when the underlying
-`cmake --build` / `meson compile` / install command fails.
+Stage exec scripts (`*_configure_exec` / `*_build_exec` / `*_install_exec`
+and Meson equivalents) also report a clear fatal error when the underlying
+tool fails.
 
 ### Full live output (DEBUG)
 
@@ -203,7 +211,7 @@ When enabled, **only compilation stages** become more chatty:
 | `meson compile` (`*_build`) | Compile runner + `-v` |
 | Configure / meson setup | Unchanged (still quiet unless `DEBUG`) |
 | `cmake --install` / `meson install` | Unchanged |
-| Git / file download helpers | Unchanged |
+| Git helpers | Unchanged |
 
 Internally this is driven by `ENV_RUNNER_COMPILE` (defaults to the silent
 runner; switches to the full runner when `BUILDMASTER_VERBOSE` is on) and
@@ -219,8 +227,9 @@ logs **and** compiler command lines:
 | off | on | Quiet (dump on failure) | Live + `--verbose` / `-v` |
 | on | on | Live | Live + `--verbose` / `-v` |
 
-Scripts are generated at **configure** time: change `BUILDMASTER_VERBOSE`
-or `BUILDMASTER_DEBUG`, then re-run CMake so stage scripts are regenerated.
+Scripts are generated at **parent configure** time: change
+`BUILDMASTER_VERBOSE` or `BUILDMASTER_DEBUG`, then re-run CMake so stage
+scripts are regenerated.
 
 ---
 
@@ -282,8 +291,8 @@ directory so markers never leak across runs. That target is created only on
 the first BuildMaster bootstrap (`BUILDMASTER_CONFIGURED`), so nested
 `add_subdirectory(buildmaster)` does not redefine it.
 
-Scripts that honour fail-fast are regenerated at **configure** time: change
-`BUILDMASTER_FAIL_FAST`, then re-run CMake.
+Scripts that honour fail-fast are regenerated at **parent configure** time:
+change `BUILDMASTER_FAIL_FAST`, then re-run CMake.
 
 ### Typical CI vs cache-warming
 
@@ -368,9 +377,10 @@ projects (x265 12-bit → 10-bit → 8-bit) with `create_cmake_dependant_compone
 | Target | Role |
 |--------|------|
 | `buildmaster_build_init` | Reset fail markers at the start of each parent build |
-| `<component>_build` | Compile the external project |
+| `buildmaster_clean` | Reset registered git repos **and** invalidate their component configure stages |
+| `<component>_configure` | Git pre-ops (if any) + nested CMake/Meson configure |
+| `<component>_build` | Compile (depends on `<component>_configure`) |
 | `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
-| `<component>_configure` | Configure only (dependant components) |
 
 Install rules list produced libraries as `OUTPUT`, so other targets can
 `DEPENDS` on real files, not only on phony names.
@@ -423,8 +433,8 @@ create_bundle_static_libraries(
 
 Templates (generated into the build tree):
 
-- `tools/cmake/{configure,build,install,build_exec,install_exec}.cmake.in`
-- `tools/meson/{setup,compile,install,compile_exec,install_exec}.cmake.in`
+- `tools/cmake/{configure,configure_exec,build,install,build_exec,install_exec}.cmake.in`
+- `tools/meson/{setup,setup_exec,compile,install,compile_exec,install_exec}.cmake.in`
 - `tools/file/{file_download,file_download_cached,file_decompress}.cmake.in`
 - `component/bundler.sh.in`, `bundler_macos.sh.in`, `bundler.bat.in`
 - `component/component_{static,shared}{,_dependant}.cmake.in`
@@ -434,23 +444,127 @@ Templates (generated into the build tree):
 
 ## Git helpers
 
-Generate standalone CMake fragments and `include()` them when you need
-fetch / reset / patch / branch switch during bootstrap:
+Git operations are bound to a **component id** (the same id used in
+`create_cmake_component` / `create_meson_component`, e.g. `vpx`).
 
 ```cmake
-create_git_fetch(GIT_FETCH_FILE myrepo ${CMAKE_SOURCE_DIR}/thirdparty/myrepo)
-include(${GIT_FETCH_FILE})
-
-create_git_patch_file(
-	GIT_PATCH_FILE
-	myrepo
-	${CMAKE_SOURCE_DIR}/thirdparty/myrepo
-	"${CMAKE_SOURCE_DIR}/patches/a.diff;${CMAKE_SOURCE_DIR}/patches/b.diff"
+create_git_reset_file(
+	VPX_RESET_REPO
+	vpx                    # component id → vpx_configure / vpx_build / …
+	"VPX reset"
+	${VPX_SRC_DIR}
 )
-include(${GIT_PATCH_FILE})
+create_git_patch_file(
+	VPX_PATCH_REPO
+	vpx
+	"VPX patch"
+	${VPX_SRC_DIR}
+	"${CMAKE_CURRENT_LIST_DIR}/0001-….patch"
+)
+# Optional: include() at parent configure for early patching.
+# The component configure stage always re-runs registered git scripts when it runs.
+create_meson_component(
+	OUT
+	vpx
+	"VPX codec"
+	${VPX_SRC_DIR}
+	${VPX_BUILD_DIR}
+	"${VPX_OPTIONS}"
+	shared
+	"vpx"
+)
+include(${OUT})
 ```
 
+| Function | Role |
+|----------|------|
+| `create_git_reset_file(out, component_id, title, repo)` | `git reset --hard` + `git clean -fd` |
+| `create_git_patch_file(out, component_id, title, repo, patches)` | `git apply` |
+| `create_git_fetch(out, component_id, title, repo)` | `git fetch` |
+| `create_git_switch_branch(out, component_id, title, repo, branch)` | branch switch |
+
 Scripts are written under `BUILDMASTER_SCRIPTS_GIT_DIR`.
+
+**Order:** call `create_git_*` **before** `create_*_component` /
+`create_*_stages` for that component id so registration is visible when
+stages are generated.
+
+### When git runs
+
+Registered scripts run at the **start of `<component>_configure`**
+(nested CMake/Meson configure), in registration order. That stage is a real
+build target; `<component>_build` depends on it.
+
+Typical sequence after a clean rebuild of one component:
+
+```text
+vpx_configure
+  → git reset / patch / …
+  → meson setup or cmake -S/-B (if not already configured)
+vpx_build
+vpx_install
+  → optional post-install git reset (this repo only)
+```
+
+### Post-install reset (automatic, per repo)
+
+If a component was registered via `create_git_*`, its `*_install` target
+runs after a successful install:
+
+- `git reset --hard`
+- `git clean -fd`
+
+from the **git toplevel** of that source tree only (subdirectory srcdirs such
+as `libvmaf/` still resolve to the repo root).
+
+No manual `POST_BUILD` reset hooks are required in consumer projects.
+
+### Aggregate clean: `buildmaster_clean`
+
+When `BUILDMASTER_CLEAN_RESET_REPOS` is enabled (**default ON**), every
+component that used `create_git_*` contributes a mini-target under:
+
+```bash
+cmake --build build --target buildmaster_clean
+```
+
+For each registered component that target:
+
+1. Resets the git working tree (`reset --hard` + `clean -fd`)
+2. **Invalidates configure** for that component only (removes Meson
+   `build.ninja` / `meson-private`, or CMake `CMakeCache.txt` / `build.ninja`
+   under that component’s build directory)
+
+The next `cmake --build` / `ninja` / `make` therefore re-enters
+`<component>_configure`, which re-applies git ops and re-runs nested setup.
+
+This is **not** wired to the generator’s native `clean` target (unreliable
+with Ninja).
+
+| Value | Behaviour |
+|-------|-----------|
+| **ON** (default) | `buildmaster_clean` resets repos + invalidates configure |
+| **OFF** | No aggregate git clean targets |
+
+```bash
+# Disable
+export BUILDMASTER_CLEAN_RESET_REPOS=0
+# or OFF / FALSE / NO
+
+# Enable (default)
+export BUILDMASTER_CLEAN_RESET_REPOS=1
+```
+
+Propagated to nested BuildMaster instances via the toolchain file. Change the
+variable and re-run CMake so targets/scripts are regenerated.
+
+Typical workflow:
+
+```bash
+cmake --build build --target clean              # build-tree artifacts only
+cmake --build build --target buildmaster_clean  # git sources + force reconfigure
+cmake --build build                             # configure → git → setup → build
+```
 
 ---
 
@@ -537,20 +651,24 @@ create_cmake_component(
 include(${LIB_CREATE_FILE})
 ```
 
-### Meson component
+### Meson component with git patch
 
 ```cmake
+create_git_reset_file(RESET_OUT vpx "VPX reset" ${VPX_SRC_DIR})
+create_git_patch_file(PATCH_OUT vpx "VPX patch" ${VPX_SRC_DIR} "${VPX_PATCH}")
 create_meson_component(
 	OUT
-	opus
-	"Opus"
-	${CMAKE_SOURCE_DIR}/thirdparty/opus
-	${CMAKE_BINARY_DIR}/thirdparty/opus_build
-	"-Ddefault_library=shared"
+	vpx
+	"VPX codec"
+	${VPX_SRC_DIR}
+	${VPX_BUILD_DIR}
+	"${VPX_OPTIONS}"
 	shared
-	"opus"
+	"vpx"
 )
 include(${OUT})
+# vpx_configure runs git scripts then meson setup
+# vpx_install resets only the VPX repo afterward
 ```
 
 ### Dependent component
@@ -616,6 +734,14 @@ cmake -S . -B build -G Ninja
 cmake --build build
 # On first stage failure: markers written, later stages may print
 # "Skipped <component>", parent build exits non-zero
+```
+
+### Git clean then rebuild
+
+```bash
+cmake --build build --target buildmaster_clean
+cmake --build build
+# configure stages re-run → git ops → nested setup → build
 ```
 
 ---

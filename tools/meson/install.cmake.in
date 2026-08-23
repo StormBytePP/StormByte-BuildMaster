@@ -16,3 +16,12 @@ add_dependencies(@_MESON_STAGE_INSTALL@ @_MESON_STAGE_BUILD@)
 if(TARGET buildmaster_build_init)
 	add_dependencies(@_MESON_STAGE_INSTALL@ buildmaster_build_init)
 endif()
+
+if(NOT "@_MESON_GIT_POST_INSTALL_RESET@" STREQUAL "")
+	add_custom_command(TARGET @_MESON_STAGE_INSTALL@ POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: resetting git repo after install (@_MESON_COMPONENT_TITLE@)"
+		COMMAND ${CMAKE_COMMAND} -P "@_MESON_GIT_POST_INSTALL_RESET@"
+		COMMENT "Resetting git source tree after install"
+		VERBATIM
+	)
+endif()

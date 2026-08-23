@@ -20,25 +20,20 @@ if(NOT BUILDMASTER_CONFIGURED)
 	file(MAKE_DIRECTORY "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	set(PATH "${BUILDMASTER_INSTALL_BINDIR}")
 
-	# Enable/Disable debug
 	if(DEFINED ENV{BUILDMASTER_DEBUG} AND "$ENV{BUILDMASTER_DEBUG}" STREQUAL "1")
 		set(BUILDMASTER_DEBUG ON)
 	else()
 		set(BUILDMASTER_DEBUG OFF)
 	endif()
 
-	# Verbose compile only (cmake --build / meson compile). DEBUG does not imply VERBOSE.
 	if(DEFINED ENV{BUILDMASTER_VERBOSE} AND "$ENV{BUILDMASTER_VERBOSE}" STREQUAL "1")
 		set(BUILDMASTER_VERBOSE ON)
 	elseif(BUILDMASTER_VERBOSE)
-		# honour -DBUILDMASTER_VERBOSE=ON from the command line
 		set(BUILDMASTER_VERBOSE ON)
 	else()
 		set(BUILDMASTER_VERBOSE OFF)
 	endif()
 
-	# Fail-fast: after a stage failure, subsequent stages can skip (see markers/).
-	# Truthy ENV: 1, ON, TRUE, YES (case-insensitive). Default OFF (cache warming).
 	if(DEFINED ENV{BUILDMASTER_FAIL_FAST})
 		string(TOUPPER "$ENV{BUILDMASTER_FAIL_FAST}" _BUILDMASTER_FF)
 		if(_BUILDMASTER_FF STREQUAL "1"
@@ -56,12 +51,27 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(BUILDMASTER_FAIL_FAST OFF)
 	endif()
 
+	# BUILDMASTER_CLEAN_RESET_REPOS — default ON
+	if(DEFINED ENV{BUILDMASTER_CLEAN_RESET_REPOS})
+		string(TOUPPER "$ENV{BUILDMASTER_CLEAN_RESET_REPOS}" _BM_CRR)
+		if(_BM_CRR STREQUAL "0"
+				OR _BM_CRR STREQUAL "OFF"
+				OR _BM_CRR STREQUAL "FALSE"
+				OR _BM_CRR STREQUAL "NO"
+				OR _BM_CRR STREQUAL "")
+			set(BUILDMASTER_CLEAN_RESET_REPOS OFF)
+		else()
+			set(BUILDMASTER_CLEAN_RESET_REPOS ON)
+		endif()
+		unset(_BM_CRR)
+	else()
+		set(BUILDMASTER_CLEAN_RESET_REPOS ON)
+	endif()
+
 	set(BUILDMASTER_MARKERS_DIR "${BUILDMASTER_BINDIR}/markers")
 	set(BUILDMASTER_FAIL_MARKER "${BUILDMASTER_MARKERS_DIR}/buildmaster.failed")
 	file(MAKE_DIRECTORY "${BUILDMASTER_MARKERS_DIR}")
 
-	# Reset fail markers at the start of every parent build (ninja/make/cmake --build).
-	# Created only on first bootstrap so nested BuildMaster does not redefine the target.
 	if(NOT TARGET buildmaster_build_init)
 		add_custom_target(buildmaster_build_init
 			COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILDMASTER_MARKERS_DIR}"
@@ -71,6 +81,5 @@ if(NOT BUILDMASTER_CONFIGURED)
 		)
 	endif()
 
-	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()
