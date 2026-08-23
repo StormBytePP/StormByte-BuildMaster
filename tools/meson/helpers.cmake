@@ -54,7 +54,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	set(_MESON_COMPONENT "${_component}")
 	set(_MESON_COMPONENT_TITLE "${_component_title}")
-	set(_MESON_STAGE_CONFIGURE "${_component}_configure")
 	set(_MESON_STAGE_BUILD "${_component}_build")
 	set(_MESON_STAGE_INSTALL "${_component}_install")
 	set(_MESON_BUILD_DIR "${_builddir}")
@@ -117,26 +116,13 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		file(TO_CMAKE_PATH "${SCCACHE_DIR}" SCCACHE_DIR)
 	endif()
 
-	set(_MESON_GIT_SCRIPTS "")
-	if(COMMAND buildmaster_git_scripts_for_component)
-		buildmaster_git_scripts_for_component(_MESON_GIT_SCRIPTS "${_component}")
-	endif()
-	string(REPLACE ";" "\\;" _MESON_GIT_SCRIPTS "${_MESON_GIT_SCRIPTS}")
-
 	set(_MESON_GIT_POST_INSTALL_RESET "")
 	if(COMMAND buildmaster_git_post_install_marker_for_srcdir)
 		buildmaster_git_post_install_marker_for_srcdir(_MESON_GIT_POST_INSTALL_RESET "${_srcdir}")
 	endif()
 
-	if(COMMAND buildmaster_git_bind_component)
-		buildmaster_git_bind_component("${_component}" "${_builddir}" "meson")
-	endif()
-
 	set(_MESON_SETUP_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
-	)
-	set(_MESON_SETUP_EXEC_SCRIPT
-		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_setup_exec.cmake"
 	)
 	set(_MESON_COMPILE_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_compile.cmake"
@@ -151,11 +137,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install_exec.cmake"
 	)
 
-	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/setup_exec.cmake.in"
-		"${_MESON_SETUP_EXEC_SCRIPT}"
-		@ONLY
-	)
 	configure_file(
 		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/setup.cmake.in"
 		"${_MESON_SETUP_FILE}"

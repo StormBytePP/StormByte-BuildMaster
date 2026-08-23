@@ -17,6 +17,7 @@ if(TARGET buildmaster_build_init)
 	add_dependencies(@_CMAKE_STAGE_INSTALL@ buildmaster_build_init)
 endif()
 
+# Post-install: reset ONLY this component's git repo (if create_git_* registered it)
 if(NOT "@_CMAKE_GIT_POST_INSTALL_RESET@" STREQUAL "")
 	add_custom_command(TARGET @_CMAKE_STAGE_INSTALL@ POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: resetting git repo after install (@_CMAKE_COMPONENT_TITLE@)"

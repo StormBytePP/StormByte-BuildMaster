@@ -1,19 +1,25 @@
 # =============================================================================
 # tools/git/helpers.cmake
 # =============================================================================
-# API (breaking vs older prototypes):
+# API:
 #   create_git_reset_file(<out> <component_id> <title> <repo_dir>)
 #   create_git_patch_file(<out> <component_id> <title> <repo_dir> <patches>)
 #   create_git_fetch(<out> <component_id> <title> <repo_dir>)
 #   create_git_switch_branch(<out> <component_id> <title> <repo_dir> <branch>)
 #
-# <component_id> must match create_cmake/meson_component's component name (e.g. vpx).
+# Git runs ONLY at parent configure time via:
+#   include(${out})
+#
+# component_id ties the repo to post-install reset and buildmaster_clean.
+# buildmaster_clean: reset --hard + clean -fd, then delete
+# BUILDMASTER_GIT_CONFIGURE_STAMP so the next cmake --build re-runs parent
+# configure (CMAKE_CONFIGURE_DEPENDS) and re-executes include(git) scripts.
 # =============================================================================
 
 function(_buildmaster_ensure_clean_target)
 	if(NOT TARGET buildmaster_clean)
 		add_custom_target(buildmaster_clean
-			COMMENT "BuildMaster: resetting registered git repositories and invalidating their configure"
+			COMMENT "BuildMaster: resetting registered git repos and invalidating parent configure"
 		)
 	endif()
 endfunction()
@@ -68,38 +74,28 @@ endif()
 ")
 endfunction()
 
-## Register a git script for a component (order preserved)
-function(_buildmaster_git_register_op _component_id _script_path _git_repo_dir)
+function(_buildmaster_git_register_op _component_id _git_repo_dir)
 	sanitize_for_filename(_cid "${_component_id}")
 	_buildmaster_git_toplevel(_git_root "${_git_repo_dir}")
 	_buildmaster_register_post_install_reset("${_git_root}")
-
-	get_property(_scripts GLOBAL PROPERTY BUILDMASTER_GIT_SCRIPTS_${_cid})
-	if(NOT _scripts)
-		set(_scripts "")
-	endif()
-	list(APPEND _scripts "${_script_path}")
-	list(REMOVE_DUPLICATES _scripts)
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_SCRIPTS_${_cid} "${_scripts}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_ROOT_${_cid} "${_git_root}")
 
-	# Aggregate clean: reset repo + invalidate configure of this component
 	if(BUILDMASTER_CLEAN_RESET_REPOS)
 		_buildmaster_ensure_clean_target()
 		set(_clean_target "buildmaster_clean_git_${_cid}")
 		if(NOT TARGET ${_clean_target})
-			# Build-dir invalidation paths filled later by buildmaster_git_bind_component()
-			set(_inv_script "${BUILDMASTER_SCRIPTS_GIT_DIR}/invalidate_${_cid}.cmake")
-			file(WRITE "${_inv_script}"
-"# Placeholder – rewritten when create_*_stages binds the component build dir
-message(STATUS \"BuildMaster: no build-dir bound yet for component ${_cid}\")
-")
+			if(NOT DEFINED BUILDMASTER_GIT_CONFIGURE_STAMP OR BUILDMASTER_GIT_CONFIGURE_STAMP STREQUAL "")
+				set(_stamp "${BUILDMASTER_SCRIPTSDIR}/git_configure.stamp")
+			else()
+				set(_stamp "${BUILDMASTER_GIT_CONFIGURE_STAMP}")
+			endif()
 			add_custom_target(${_clean_target}
 				COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: resetting git repo ${_git_root} (${_cid})"
 				COMMAND ${ENV_GIT_SILENT_COMMAND} -C "${_git_root}" reset --hard
 				COMMAND ${ENV_GIT_SILENT_COMMAND} -C "${_git_root}" clean -fd
-				COMMAND ${CMAKE_COMMAND} -P "${_inv_script}"
-				COMMENT "Resetting git + invalidating configure for ${_cid}"
+				COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: invalidating parent configure (remove git stamp)"
+				COMMAND ${CMAKE_COMMAND} -E rm -f "${_stamp}"
+				COMMENT "Resetting git repo ${_cid} and invalidating parent configure"
 				VERBATIM
 			)
 			add_dependencies(buildmaster_clean ${_clean_target})
@@ -107,62 +103,11 @@ message(STATUS \"BuildMaster: no build-dir bound yet for component ${_cid}\")
 	endif()
 endfunction()
 
-## Called from create_*_stages: bind builddir + system so clean can invalidate configure
-function(buildmaster_git_bind_component _component_id _builddir _build_system)
-	sanitize_for_filename(_cid "${_component_id}")
-	get_property(_root GLOBAL PROPERTY BUILDMASTER_GIT_ROOT_${_cid})
-	if(NOT _root)
-		return() # no git ops for this component
-	endif()
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_BUILDDIR_${_cid} "${_builddir}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_SYSTEM_${_cid} "${_build_system}")
-
-	set(_inv_script "${BUILDMASTER_SCRIPTS_GIT_DIR}/invalidate_${_cid}.cmake")
-	if(_build_system STREQUAL "meson")
-		file(WRITE "${_inv_script}"
-"# Auto-generated: invalidate Meson configure for ${_cid}
-set(_bd \"${_builddir}\")
-if(EXISTS \"\${_bd}/build.ninja\")
-	file(REMOVE \"\${_bd}/build.ninja\")
-	message(STATUS \"BuildMaster: removed \${_bd}/build.ninja (force reconfigure ${_cid})\")
-endif()
-# Also drop meson private stamp if present
-if(EXISTS \"\${_bd}/meson-private\")
-	file(REMOVE_RECURSE \"\${_bd}/meson-private\")
-endif()
-")
-	else()
-		file(WRITE "${_inv_script}"
-"# Auto-generated: invalidate CMake configure for ${_cid}
-set(_bd \"${_builddir}\")
-if(EXISTS \"\${_bd}/CMakeCache.txt\")
-	file(REMOVE \"\${_bd}/CMakeCache.txt\")
-	message(STATUS \"BuildMaster: removed \${_bd}/CMakeCache.txt (force reconfigure ${_cid})\")
-endif()
-if(EXISTS \"\${_bd}/build.ninja\")
-	file(REMOVE \"\${_bd}/build.ninja\")
-endif()
-")
-	endif()
-endfunction()
-
-## Path of post-install marker for a srcdir (empty if none)
 function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
 	_buildmaster_git_toplevel(_git_root "${_srcdir}")
 	_buildmaster_git_marker_path(_marker "${_git_root}")
 	if(EXISTS "${_marker}")
 		set(${_out} "${_marker}" PARENT_SCOPE)
-	else()
-		set(${_out} "" PARENT_SCOPE)
-	endif()
-endfunction()
-
-## Semicolon-separated list of git scripts for component (may be empty)
-function(buildmaster_git_scripts_for_component _out _component_id)
-	sanitize_for_filename(_cid "${_component_id}")
-	get_property(_scripts GLOBAL PROPERTY BUILDMASTER_GIT_SCRIPTS_${_cid})
-	if(_scripts)
-		set(${_out} "${_scripts}" PARENT_SCOPE)
 	else()
 		set(${_out} "" PARENT_SCOPE)
 	endif()
@@ -180,7 +125,7 @@ function(create_git_patch_file _file _component_id _title _git_repo_dir _git_pac
 		@ONLY
 	)
 	set(${_file} "${_GIT_PATCH_FILE}" PARENT_SCOPE)
-	_buildmaster_git_register_op("${_component_id}" "${_GIT_PATCH_FILE}" "${_git_repo_dir}")
+	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
 
@@ -194,7 +139,7 @@ function(create_git_reset_file _file _component_id _title _git_repo_dir)
 		@ONLY
 	)
 	set(${_file} "${_GIT_RESET_FILE}" PARENT_SCOPE)
-	_buildmaster_git_register_op("${_component_id}" "${_GIT_RESET_FILE}" "${_git_repo_dir}")
+	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
 
@@ -209,7 +154,7 @@ function(create_git_switch_branch _file _component_id _title _git_repo_dir _git_
 		@ONLY
 	)
 	set(${_file} "${_GIT_SWITCH_FILE}" PARENT_SCOPE)
-	_buildmaster_git_register_op("${_component_id}" "${_GIT_SWITCH_FILE}" "${_git_repo_dir}")
+	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
 
@@ -223,5 +168,5 @@ function(create_git_fetch _file _component_id _title _git_repo_dir)
 		@ONLY
 	)
 	set(${_file} "${_GIT_FETCH_FILE}" PARENT_SCOPE)
-	_buildmaster_git_register_op("${_component_id}" "${_GIT_FETCH_FILE}" "${_git_repo_dir}")
+	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()

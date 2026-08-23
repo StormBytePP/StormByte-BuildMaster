@@ -67,7 +67,6 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	endif()
 
 	set(_CMAKE_COMPONENT_TITLE "${_component_title}")
-	set(_CMAKE_STAGE_CONFIGURE "${_component}_configure")
 	set(_CMAKE_STAGE_BUILD "${_component}_build")
 	set(_CMAKE_STAGE_INSTALL "${_component}_install")
 	set(_CMAKE_SRCDIR "${_srcdir}")
@@ -83,22 +82,10 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	list_join(_CMAKE_OPTIONS "${_options}" "\n\t\t")
 	sanitize_for_filename(_CMAKE_COMPONENT_SAFE "${_component}")
 
-	# Git scripts registered for this component_id
-	set(_CMAKE_GIT_SCRIPTS "")
-	if(COMMAND buildmaster_git_scripts_for_component)
-		buildmaster_git_scripts_for_component(_CMAKE_GIT_SCRIPTS "${_component}")
-	endif()
-	# Join for @ONLY as a CMake list string
-	string(REPLACE ";" "\\;" _CMAKE_GIT_SCRIPTS "${_CMAKE_GIT_SCRIPTS}")
-
+	# Post-install git reset marker only (git itself runs at parent configure via include)
 	set(_CMAKE_GIT_POST_INSTALL_RESET "")
 	if(COMMAND buildmaster_git_post_install_marker_for_srcdir)
 		buildmaster_git_post_install_marker_for_srcdir(_CMAKE_GIT_POST_INSTALL_RESET "${_srcdir}")
-	endif()
-
-	# Bind builddir so buildmaster_clean can invalidate configure (option C)
-	if(COMMAND buildmaster_git_bind_component)
-		buildmaster_git_bind_component("${_component}" "${_builddir}" "cmake")
 	endif()
 
 	set(_CMAKE_CONFIGURE_FILE
@@ -110,9 +97,6 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(_CMAKE_INSTALL_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install.cmake"
 	)
-	set(_CMAKE_CONFIGURE_EXEC_SCRIPT
-		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_configure_exec.cmake"
-	)
 	set(_CMAKE_BUILD_EXEC_SCRIPT
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_build_exec.cmake"
 	)
@@ -120,11 +104,6 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install_exec.cmake"
 	)
 
-	configure_file(
-		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/configure_exec.cmake.in"
-		"${_CMAKE_CONFIGURE_EXEC_SCRIPT}"
-		@ONLY
-	)
 	configure_file(
 		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/configure.cmake.in"
 		"${_CMAKE_CONFIGURE_FILE}"

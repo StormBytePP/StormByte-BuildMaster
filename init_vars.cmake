@@ -72,6 +72,14 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(BUILDMASTER_FAIL_MARKER "${BUILDMASTER_MARKERS_DIR}/buildmaster.failed")
 	file(MAKE_DIRECTORY "${BUILDMASTER_MARKERS_DIR}")
 
+	# If this stamp is removed (buildmaster_clean), the next cmake --build
+	# re-runs parent configure via CMAKE_CONFIGURE_DEPENDS so include(git)
+	# scripts run again at configure time.
+	set(BUILDMASTER_GIT_CONFIGURE_STAMP "${BUILDMASTER_SCRIPTSDIR}/git_configure.stamp")
+	file(WRITE "${BUILDMASTER_GIT_CONFIGURE_STAMP}" "BuildMaster git configure stamp\n")
+	set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+		"${BUILDMASTER_GIT_CONFIGURE_STAMP}")
+
 	if(NOT TARGET buildmaster_build_init)
 		add_custom_target(buildmaster_build_init
 			COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILDMASTER_MARKERS_DIR}"
