@@ -118,6 +118,15 @@ function(create_component _library_create_file _component _component_title _srcd
 		set(_indent_level 0)
 	endif()
 
+	# 1 = configure script runs under add_custom_target (-P at build time);
+	#     setup/configure.cmake.in skip message(STATUS) (COMMENT is the banner).
+	# 0 = parent configure include(); keep hierarchical STATUS.
+	if(NOT _dependency STREQUAL "")
+		set(_BM_CONFIGURE_VIA_TARGET "1")
+	else()
+		set(_BM_CONFIGURE_VIA_TARGET "0")
+	endif()
+
 	# Common variables
 	set(_LIBRARY_NAME "${_component}")
 	string(TOLOWER "${_library_mode}" _library_mode)
