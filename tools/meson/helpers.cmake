@@ -12,29 +12,13 @@
 ## @param[in] _builddir Path to the component build directory.
 ## @param[in] _meson_options List of Meson options to pass to the
 ##            component's setup.
-## @param[in] _library_mode Either `static` or `shared` — controls
-##            template behaviour.
+## @param[in] _library_mode Either `static`, `shared`, or `headers`.
 ## @param[in] _output_libraries One or more full paths to the built
 ##            library/artifact(s) produced by the component; exported as
 ##            `_MESON_OUTPUT_LIBRARIES` for template use.
 ## @param[in] _indent_level Optional (passed as ARGV10) number of tab
 ##            characters to prepend to generated lines; when provided
-##            `_INDENT_` is set for template use.
-## @note Appends `_build` and `_install` to `_component` to form stage
-##       names; sets template variables such as `_MESON_COMPONENT_TITLE`,
-##       `_MESON_SRCDIR`, `_MESON_BUILD_DIR`, `_MESON_OUTPUT_LIBRARIES` and
-##       `_MESON_OPTIONS` (the `_meson_options` list is joined with a
-##       space). Calls `sanitize_for_filename` to produce
-##       `_MESON_COMPONENT_SAFE` used to create output paths inside
-##       `${BUILDMASTER_SCRIPTS_MESON_DIR}` and generates scripts from
-##       templates in `${BUILDMASTER_TOOLS_MESON_SRCDIR}` via `configure_file`.
-## @return Results are provided through parent-scope variables; the
-##         `configure_file` calls create or overwrite files under
-##         `${BUILDMASTER_SCRIPTS_MESON_DIR}`.
-## @example
-##   create_meson_stages(setup_file compile_file install_file mylib "My Lib"
-##                       /path/to/src /path/to/build "${meson_options}"
-##                       shared "/path/to/mylibname.so" 1
+##            `_MESON_INDENT_` is set for template use.
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -48,8 +32,12 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		list(APPEND _meson_options "-Db_staticpic=true")
 	elseif(${_library_mode} STREQUAL "shared")
 		set(_MESON_LIBRARY_TYPE "shared")
+	elseif(${_library_mode} STREQUAL "headers")
+		# Header-only: Meson still wants default_library; static is least surprising.
+		set(_MESON_LIBRARY_TYPE "static")
+		list(APPEND _meson_options "-Db_staticpic=true")
 	else()
-		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_meson_stages")
+		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_meson_stages (expected static, shared, or headers)")
 	endif()
 
 	set(_MESON_COMPONENT "${_component}")

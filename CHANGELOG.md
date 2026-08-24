@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### Header-only components
+- New library mode `headers` in `create_component` / `create_cmake_stages` / `create_meson_stages`
+- Templates `component_headers.cmake.in` and `component_headers_dependant.cmake.in`
+  - `INTERFACE` library only (no `IMPORTED` static/shared archives)
+  - `target_include_directories(... SYSTEM INTERFACE "${BUILDMASTER_INSTALL_INCLUDEDIR}")`
+  - Depends on `<component>_install` like library modes
+- Install `OUTPUT` is a stamp file `${builddir}/.buildmaster_headers_installed` (avoids empty `OUTPUT` / CMP0175 with header-only trees)
+- `install_exec` (CMake and Meson) creates missing stamp paths after a successful install
+- Simple API:
+  - `create_cmake_headers_component`
+  - `create_cmake_headers_dependant_component`
+  - `create_meson_headers_component`
+  - `create_meson_headers_dependant_component`
+- Build stage is kept for a uniform graph (header-only projects are typically no-ops)
+
+### Fixed
+
+- Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup
+
 ## [1.0.0] - 2026-08-21
 
 Initial public release of **StormByte-BuildMaster**: a CMake DSL to configure, build, install and consume external CMake and Meson projects as first-class parts of a parent tree, with stage-based orchestration, explicit targets, coherent environment propagation, portable static-library bundling, and controlled failure propagation across the dependency graph.

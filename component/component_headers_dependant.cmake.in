@@ -1,0 +1,21 @@
+if(NOT TARGET @_LIBRARY_NAME@)
+	add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
+		COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
+		COMMENT "Configuring @_LIBRARY_NAME@"
+	)
+
+	if(NOT "@_LIBRARY_DEPENDENCIES@" STREQUAL "")
+		add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ @_LIBRARY_DEPENDENCIES@)
+	endif()
+	if(TARGET buildmaster_build_init)
+		add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ buildmaster_build_init)
+	endif()
+
+	include(@_LIBRARY_BUILD_FILE@)
+	add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
+	include(@_LIBRARY_INSTALL_FILE@)
+
+	add_library(@_LIBRARY_NAME@ INTERFACE)
+	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
+	add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+endif()

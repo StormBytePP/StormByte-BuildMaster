@@ -94,22 +94,14 @@ endfunction()
 ## @param[in] _builddir Path to component build directory.
 ## @param[in] _options List of options forwarded to stage generator
 ##            helpers.
-## @param[in] _library_mode `static` or `shared` — selects templates
-##            and filename helpers.
-## @param[in] _build_system `cmake` or `meson` — selects which stage
-##            generator helper to call.
-## @param[in] _subcomponents List of subcomponent names referenced by
-##            templates.
+## @param[in] _library_mode `static`, `shared`, or `headers`.
+## @param[in] _build_system `cmake` or `meson`.
+## @param[in] _subcomponents List of subcomponent names (ignored for headers).
 ## @param[in] _dependency Optional; when non-empty selects dependant
 ##            templates so the generated fragment can express ordering
 ##            to another stage.
 ## @param[in] indent_level Optional numeric indentation level passed as
 ##            ARGV10 when present.
-## @note In `static` mode this computes static-library filenames via
-##       `library_import_static_hint`. In `shared` mode it computes
-##       import-library names and (on MSVC) DLL names. The configured
-##       template is written into `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`
-##       and the resulting path is returned in `_library_create_file`.
 function(create_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _build_system _subcomponents _dependency)
 	# Optional indent level
 	if(ARGC GREATER 10)
@@ -129,6 +121,7 @@ function(create_component _library_create_file _component _component_title _srcd
 	else()
 		set(_component_suffix "")
 	endif()
+
 	if(_library_mode STREQUAL "static")
 		set(_LIBRARY_GENERATOR_FILE "component_static${_component_suffix}.cmake.in")
 		set(_LIBRARY_COMPONENT_NAMES "")
@@ -152,8 +145,14 @@ function(create_component _library_create_file _component _component_title _srcd
 				list(APPEND _LIBRARY_COMPONENT_DLL_FILES "${_LIBRARY_DLL_FILE_SUB}")
 			endif()
 		endforeach()
+	elseif(_library_mode STREQUAL "headers")
+		# Header-only: no IMPORTED libs; stamp is the install OUTPUT artifact.
+		set(_LIBRARY_GENERATOR_FILE "component_headers${_component_suffix}.cmake.in")
+		set(_LIBRARY_COMPONENT_NAMES "")
+		set(_LIBRARY_COMPONENT_FILES "${_builddir}/.buildmaster_headers_installed")
+		set(_LIBRARY_COMPONENT_DLL_FILES "")
 	else()
-		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_library")
+		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_component (expected static, shared, or headers)")
 	endif()
 
 	if(_build_system STREQUAL "cmake")
@@ -161,7 +160,7 @@ function(create_component _library_create_file _component _component_title _srcd
 	elseif(_build_system STREQUAL "meson")
 		create_meson_stages(_LIBRARY_CONFIGURE_FILE _LIBRARY_BUILD_FILE _LIBRARY_INSTALL_FILE "${_component}" "${_component_title}" "${_srcdir}" "${_builddir}" "${_options}" "${_library_mode}" "${_LIBRARY_COMPONENT_FILES}" "${_indent_level}")
 	else()
-		message(FATAL_ERROR "Unknown build system '${_build_system}' in create_library")
+		message(FATAL_ERROR "Unknown build system '${_build_system}' in create_component")
 	endif()
 
 	# Set needed variables for template
@@ -200,7 +199,6 @@ function(create_cmake_component _library_create_file _component _component_title
 		set(_indent_level 0)
 	endif()
 
-	# Llamamos a create_component, que deja el resultado en *este* scope
 	create_component(
 		${_library_create_file}
 		"${_component}"
@@ -215,7 +213,6 @@ function(create_cmake_component _library_create_file _component _component_title
 		${_indent_level}
 	)
 
-	# Reexpone la variable al scope del llamador real
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
 endfunction()
 
@@ -278,7 +275,6 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 		set(_indent_level 0)
 	endif()
 
-	# Llamamos a create_component, que deja el resultado en *este* scope
 	create_component(
 		${_library_create_file}
 		"${_component}"
@@ -293,7 +289,6 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 		${_indent_level}
 	)
 
-	# Reexpone la variable al scope del llamador real
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
 endfunction()
 
@@ -440,4 +435,131 @@ function(create_bundle_static_libraries _bundle_file _component _libraries)
 	endif()
 
 	set(${_bundle_file} "${_BUNDLE_SCRIPT_FILE}" PARENT_SCOPE)
+endfunction()
+
+## @brief Header-only CMake component (configure + build + install, INTERFACE only).
+## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
+## @param[in] _component Component id (e.g. vulkan-headers).
+## @param[in] _component_title Human-readable title.
+## @param[in] _srcdir Source directory.
+## @param[in] _builddir Build directory.
+## @param[in] _options CMake -D options list.
+## @param[in] indent_level Optional (ARGV6).
+## @note Uses library mode `headers`: stamp OUTPUT, no IMPORTED archives.
+function(create_cmake_headers_component _library_create_file _component _component_title _srcdir _builddir _options)
+	if(ARGC GREATER 6)
+		set(_indent_level "${ARGV6}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_srcdir}"
+		"${_builddir}"
+		"${_options}"
+		"headers"
+		"cmake"
+		""
+		""
+		${_indent_level}
+	)
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
+endfunction()
+
+## @brief Header-only CMake component that waits on another *_install target.
+## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
+## @param[in] _component Component id.
+## @param[in] _component_title Human-readable title.
+## @param[in] _srcdir Source directory.
+## @param[in] _builddir Build directory.
+## @param[in] _options CMake -D options list.
+## @param[in] _dependency Install target name (e.g. other_headers_install).
+## @param[in] indent_level Optional (ARGV7).
+function(create_cmake_headers_dependant_component _library_create_file _component _component_title _srcdir _builddir _options _dependency)
+	if(ARGC GREATER 7)
+		set(_indent_level "${ARGV7}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_srcdir}"
+		"${_builddir}"
+		"${_options}"
+		"headers"
+		"cmake"
+		""
+		"${_dependency}"
+		${_indent_level}
+	)
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
+endfunction()
+
+## @brief Header-only Meson component (configure + compile + install, INTERFACE only).
+## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
+## @param[in] _component Component id.
+## @param[in] _component_title Human-readable title.
+## @param[in] _srcdir Source directory.
+## @param[in] _builddir Build directory.
+## @param[in] _options Meson -D options list.
+## @param[in] indent_level Optional (ARGV6).
+function(create_meson_headers_component _library_create_file _component _component_title _srcdir _builddir _options)
+	if(ARGC GREATER 6)
+		set(_indent_level "${ARGV6}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_srcdir}"
+		"${_builddir}"
+		"${_options}"
+		"headers"
+		"meson"
+		""
+		""
+		${_indent_level}
+	)
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
+endfunction()
+
+## @brief Header-only Meson component that waits on another *_install target.
+## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
+## @param[in] _component Component id.
+## @param[in] _component_title Human-readable title.
+## @param[in] _srcdir Source directory.
+## @param[in] _builddir Build directory.
+## @param[in] _options Meson -D options list.
+## @param[in] _dependency Install target name (e.g. other_headers_install).
+## @param[in] indent_level Optional (ARGV7).
+function(create_meson_headers_dependant_component _library_create_file _component _component_title _srcdir _builddir _options _dependency)
+	if(ARGC GREATER 7)
+		set(_indent_level "${ARGV7}")
+	else()
+		set(_indent_level 0)
+	endif()
+
+	create_component(
+		${_library_create_file}
+		"${_component}"
+		"${_component_title}"
+		"${_srcdir}"
+		"${_builddir}"
+		"${_options}"
+		"headers"
+		"meson"
+		""
+		"${_dependency}"
+		${_indent_level}
+	)
+	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
 endfunction()

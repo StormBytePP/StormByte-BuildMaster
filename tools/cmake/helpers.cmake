@@ -12,29 +12,13 @@
 ## @param[in] _builddir Path to the component build directory.
 ## @param[in] _options List of CMake options to pass to the component's
 ##            configure step.
-## @param[in] _library_mode Either `static` or `shared` — controls
-##            template behavior.
+## @param[in] _library_mode Either `static`, `shared`, or `headers`.
 ## @param[in] _output_libraries One or more full paths to the built
 ##            library/artifact(s) produced by the component; exported as
 ##            `_CMAKE_OUTPUT_LIBRARIES` for template use.
 ## @param[in] _indent_level Optional (passed as ARGV10) number of tab
 ##            characters to prepend to generated lines; sets `_CMAKE_INDENT_`
 ##            for templates when provided.
-## @note Appends `_build` and `_install` to `_component` to form stage
-##       names; sets template variables such as `_CMAKE_COMPONENT_TITLE`,
-##       `_CMAKE_SRCDIR`, `_CMAKE_BUILD_DIR`, `_CMAKE_OUTPUT_LIBRARIES` and
-##       `_CMAKE_OPTIONS` (the `_options` list is joined with "\n\t\t").
-##       Calls `sanitize_for_filename` to produce `_CMAKE_COMPONENT_SAFE`
-##       used to create output paths inside `${BUILDMASTER_SCRIPTS_CMAKEDIR}`
-##       and generates three scripts from templates in
-##       `${BUILDMASTER_TOOLS_CMAKE_SRCDIR}` via `configure_file`.
-## @return Results are provided through parent-scope variables; the
-##         `configure_file` calls create/overwrite files under
-##         `${BUILDMASTER_SCRIPTS_CMAKEDIR}`.
-## @example
-##   create_cmake_stages(cfg_file build_file install_file mylib "My Lib"
-##                       /path/to/src /path/to/build "${options}"
-##                       shared "/path/to/mylibname.so" 1
 function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -62,8 +46,11 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(_CMAKE_SHARED_MODE "OFF")
 	elseif(${_library_mode} STREQUAL "shared")
 		set(_CMAKE_SHARED_MODE "ON")
+	elseif(${_library_mode} STREQUAL "headers")
+		# Header-only: BUILD_SHARED_LIBS is irrelevant; OFF is a harmless default.
+		set(_CMAKE_SHARED_MODE "OFF")
 	else()
-		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_cmake_stages")
+		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_cmake_stages (expected static, shared, or headers)")
 	endif()
 
 	set(_CMAKE_COMPONENT_TITLE "${_component_title}")

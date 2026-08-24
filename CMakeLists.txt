@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Version
 # -----------------------------------------------------------------------------
-set(BUILDMASTER_VERSION "1.0.0")
+set(BUILDMASTER_VERSION "1.0.1-9999")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
 message(STATUS "Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")

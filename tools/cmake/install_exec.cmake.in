@@ -18,3 +18,14 @@ if(NOT _BM_STAGE_RC EQUAL 0)
 	endif()
 	message(FATAL_ERROR "Installing @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 endif()
+
+# Header-only (and any stamp OUTPUT): ensure declared OUTPUT paths exist after install.
+# Real libraries are created by cmake --install; stamps are not.
+set(_BM_OUTPUTS "@_CMAKE_OUTPUT_LIBRARIES@")
+foreach(_bm_out IN LISTS _BM_OUTPUTS)
+	if(NOT _bm_out STREQUAL "" AND NOT EXISTS "${_bm_out}")
+		get_filename_component(_bm_out_dir "${_bm_out}" DIRECTORY)
+		file(MAKE_DIRECTORY "${_bm_out_dir}")
+		file(WRITE "${_bm_out}" "")
+	endif()
+endforeach()

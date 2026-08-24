@@ -10,8 +10,8 @@
 A small **CMake DSL** to configure, build, install and consume external
 **CMake** and **Meson** projects as first-class parts of a parent tree —
 with **configure-time** stages, explicit targets, coherent environment
-propagation, portable static-library bundling, and **controlled failure
-propagation** across the dependency graph.
+propagation, portable static-library bundling, **header-only components**,
+and **controlled failure propagation** across the dependency graph.
 
 ## Table of contents
 
@@ -27,6 +27,7 @@ propagation** across the dependency graph.
 - [Recursive usage](#recursive-usage)
 - [Usage modes](#usage-modes)
 - [Targets and naming](#targets-and-naming)
+- [Header-only components](#header-only-components)
 - [Static library bundling](#static-library-bundling)
 - [API reference (where to look)](#api-reference-where-to-look)
 - [Git helpers](#git-helpers)
@@ -43,7 +44,8 @@ parent project is still in the **CMake configure phase**. That lets the
 parent:
 
 - inspect installed headers and libraries before the main build
-- create deterministic **IMPORTED** targets
+- create deterministic **IMPORTED** targets (or **INTERFACE**-only targets
+  for header-only packages)
 - attach `POST_BUILD` / install hooks to real stage targets
 - share one install prefix and environment across a dependency tree
 - fail the parent when a required external stage fails (headers/libs never
@@ -54,8 +56,8 @@ it orchestrates full external builds. Sources may still be managed with the
 included Git helpers, the file download helpers, or any other means.
 
 Typical use cases: bundling FFmpeg and its plugins, multi-bitdepth codecs
-(e.g. x265 8/10/12-bit), and mixed CMake + Meson dependency graphs on
-Linux, Windows, and macOS (including Apple Silicon).
+(e.g. x265 8/10/12-bit), Vulkan headers + loader graphs, and mixed CMake +
+Meson dependency trees on Linux, Windows, and macOS (including Apple Silicon).
 
 ---
 
@@ -106,6 +108,7 @@ failure is visible and can stop subsequent work:
 | Shared install + env propagation        | No           | Manual              | **Yes**              |
 | Compiler cache into child builds        | Manual       | Manual              | **Yes**              |
 | Portable static archive merge           | No           | Manual              | **Yes**              |
+| **Header-only components (INTERFACE)**  | Manual       | Manual              | **Yes**              |
 | Safe recursive nesting                  | Fragile      | Fragile             | **Designed for it**  |
 | **Fail-fast / skip after stage failure**| No           | Manual              | **Yes (optional)**   |
 | **INTERFACE deps on `_install`**        | No           | Manual              | **Yes**              |
@@ -121,6 +124,7 @@ failure is visible and can stop subsequent work:
 compilers, flags, optional ccache/sccache)
 - **Linux / Windows / macOS** (x86_64 and arm64)
 - CMake and Meson behind the same component API
+- First-class **header-only** packages (no fake `.a` / empty OUTPUT lists)
 - Generated scripts that are inspectable and CI-friendly
 - One initialization, one install root, even in deep dependency trees
 - Quiet default logs with **full diagnostics on failure**, optional
@@ -248,14 +252,14 @@ any target that depends on it.
 
 ### 2. INTERFACE → `_install` (always)
 
-Component templates (`component_static*.cmake.in`, `component_shared*.cmake.in`)
-attach:
+Component templates (`component_static*.cmake.in`, `component_shared*.cmake.in`,
+`component_headers*.cmake.in`) attach:
 
 ```text
 add_dependencies(<INTERFACE> <component>_install)
-add_dependencies(<IMPORTED lib> <component>_install)
 ```
 
+Library modes also attach the same dependency to each **IMPORTED** archive.
 So a parent that does:
 
 ```cmake
@@ -263,7 +267,8 @@ target_link_libraries(MyLib PRIVATE SomeBundledComponent)
 ```
 
 waits for a **successful** install before treating the component as ready
-(headers under `BUILDMASTER_INSTALL_INCLUDEDIR` and the imported archives).
+(headers under `BUILDMASTER_INSTALL_INCLUDEDIR` and, for library modes, the
+imported archives).
 
 ### 3. Optional fail-fast markers (`BUILDMASTER_FAIL_FAST`)
 
@@ -360,15 +365,25 @@ so nested projects do not fight over prefixes or double-bootstrap tools.
 
 ### Simple (recommended)
 
-Use `create_cmake_component()`, `create_meson_component()`, or the dependant
-variants. One generated fragment declares imports and wires stages.
+Use:
+
+| Function | Role |
+|----------|------|
+| `create_cmake_component()` / `create_meson_component()` | Static or shared libraries |
+| `create_cmake_dependant_component()` / `create_meson_dependant_component()` | Same, ordered after another `*_install` |
+| `create_cmake_headers_component()` / `create_meson_headers_component()` | Header-only packages |
+| `create_cmake_headers_dependant_component()` / `create_meson_headers_dependant_component()` | Header-only, ordered after another `*_install` |
+
+One generated fragment declares the INTERFACE (and IMPORTED libs when
+applicable) and wires stages.
 
 ### Advanced
 
 Call `create_cmake_stages()` / `create_meson_stages()` yourself, then
 `include()` the three scripts (configure, build, install) in the order you
 need—e.g. to insert custom commands between stages, or to build multi-phase
-projects (x265 12-bit → 10-bit → 8-bit) with `create_cmake_dependant_component()`.
+projects (x265 12-bit → 10-bit → 8-bit) with dependant components.
+`_library_mode` may be `static`, `shared`, or `headers`.
 
 ---
 
@@ -382,8 +397,9 @@ projects (x265 12-bit → 10-bit → 8-bit) with `create_cmake_dependant_compone
 | `<component>_build` | Compile (depends on `<component>_configure`) |
 | `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
 
-Install rules list produced libraries as `OUTPUT`, so other targets can
-`DEPENDS` on real files, not only on phony names.
+Install rules list produced libraries (or a **headers stamp file**) as
+`OUTPUT`, so other targets can `DEPENDS` on real files, not only on phony
+names.
 
 Build/install stages depend on `buildmaster_build_init` when that target
 exists, so markers are cleared before any stage runs.
@@ -391,6 +407,84 @@ exists, so markers are cleared before any stage runs.
 Component ids used in target names should stay filesystem-friendly; display
 titles (e.g. `VVenc (H266) codec`) may contain spaces or punctuation and are
 only used in status messages (including `Skipped <title>` under fail-fast).
+
+---
+
+## Header-only components
+
+Some third-party projects install **only headers** (and CMake package files),
+with no `.a` / `.lib` / `.so`. Using `create_cmake_component` with an empty
+subcomponent list used to produce an empty `OUTPUT` list and break under
+modern CMake (policy CMP0175).
+
+BuildMaster models this as a dedicated **`headers`** library mode:
+
+| Stage | Behaviour |
+|-------|-----------|
+| configure | Nested CMake or Meson setup (same as library components) |
+| build | Still runs (`cmake --build` / `meson compile`). Header-only trees are typically no-ops or dummy targets; the stage remains for a uniform graph |
+| install | `cmake --install` / `meson install` into `BUILDMASTER_INSTALL_DIR` |
+| OUTPUT artifact | Stamp file: `${builddir}/.buildmaster_headers_installed` (written by install if missing) |
+| CMake target | `add_library(<component> INTERFACE)` + `target_include_directories(... SYSTEM INTERFACE "${BUILDMASTER_INSTALL_INCLUDEDIR}")` + dependency on `<component>_install` |
+| **No** | `IMPORTED` static/shared libraries |
+
+### API
+
+```cmake
+create_cmake_headers_component(
+	OUT_FILE
+	vulkan-headers
+	"Vulkan-Headers"
+	${HEADERS_SRC}
+	${HEADERS_BUILD}
+	"${HEADERS_OPTIONS}"
+	# optional indent level
+)
+
+create_cmake_headers_dependant_component(
+	OUT_FILE
+	...
+	"other_component_install"   # wait on this install target
+)
+
+# Meson equivalents:
+#   create_meson_headers_component(...)
+#   create_meson_headers_dependant_component(...)
+```
+
+Signatures mirror the library helpers but **omit** `_library_mode` and
+`_subcomponents` (always `headers`, no artifact base names).
+
+### Example (Vulkan-Headers)
+
+```cmake
+set(VULKAN_HEADERS_OPTIONS
+	"-DVULKAN_HEADERS_ENABLE_MODULE=OFF"
+	"-DVULKAN_HEADERS_ENABLE_TESTS=OFF"
+)
+create_cmake_headers_component(
+	VULKAN_HEADERS_FILE
+	"vulkan-headers"
+	"Vulkan-Headers"
+	"${CMAKE_CURRENT_LIST_DIR}/src"
+	"${CMAKE_CURRENT_BINARY_DIR}/build"
+	"${VULKAN_HEADERS_OPTIONS}"
+	${PLUGIN_LEVEL}
+)
+include("${VULKAN_HEADERS_FILE}")
+
+# Loader still uses a normal library component, ordered after headers:
+create_cmake_dependant_component(
+	VULKAN_LOADER_FILE
+	"vulkan-loader"
+	"Vulkan-Loader"
+	...
+	static
+	"vulkan"
+	"vulkan-headers_install"
+)
+include("${VULKAN_LOADER_FILE}")
+```
 
 ---
 
@@ -421,6 +515,7 @@ create_bundle_static_libraries(
 | Area | File |
 |------|------|
 | Component factory (simple API) | `component/helpers.cmake` |
+| Header-only wrappers | `component/helpers.cmake` → `create_*_headers_*` |
 | Static bundler | `component/helpers.cmake` → `create_bundle_static_libraries` |
 | CMake stages | `tools/cmake/helpers.cmake` |
 | Meson stages | `tools/meson/helpers.cmake` |
@@ -433,11 +528,11 @@ create_bundle_static_libraries(
 
 Templates (generated into the build tree):
 
-- `tools/cmake/{configure,configure_exec,build,install,build_exec,install_exec}.cmake.in`
-- `tools/meson/{setup,setup_exec,compile,install,compile_exec,install_exec}.cmake.in`
+- `tools/cmake/{configure,build,install,build_exec,install_exec}.cmake.in`
+- `tools/meson/{setup,compile,install,compile_exec,install_exec}.cmake.in`
 - `tools/file/{file_download,file_download_cached,file_decompress}.cmake.in`
 - `component/bundler.sh.in`, `bundler_macos.sh.in`, `bundler.bat.in`
-- `component/component_{static,shared}{,_dependant}.cmake.in`
+- `component/component_{static,shared,headers}{,_dependant}.cmake.in`
 - `env/runner_*.in` (including silent variants)
 
 ---
@@ -445,7 +540,8 @@ Templates (generated into the build tree):
 ## Git helpers
 
 Git operations are bound to a **component id** (the same id used in
-`create_cmake_component` / `create_meson_component`, e.g. `vpx`).
+`create_cmake_component` / `create_meson_component` / headers helpers,
+e.g. `vpx`).
 
 ```cmake
 create_git_reset_file(
@@ -649,6 +745,21 @@ create_cmake_component(
 	"mylib"
 )
 include(${LIB_CREATE_FILE})
+```
+
+### Header-only CMake component
+
+```cmake
+create_cmake_headers_component(
+	HEADERS_FILE
+	vulkan-headers
+	"Vulkan-Headers"
+	${CMAKE_SOURCE_DIR}/thirdparty/vulkan-headers
+	${CMAKE_BINARY_DIR}/thirdparty/vulkan-headers_build
+	"-DVULKAN_HEADERS_ENABLE_TESTS=OFF"
+)
+include(${HEADERS_FILE})
+# Target "vulkan-headers" is INTERFACE; depends on vulkan-headers_install
 ```
 
 ### Meson component with git patch
