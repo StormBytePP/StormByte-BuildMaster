@@ -101,12 +101,20 @@ endfunction()
 ##            templates so the generated fragment can express ordering
 ##            to another stage.
 ## @param[in] indent_level Optional numeric indentation level passed as
-##            ARGV10 when present.
+##            ARGV10 when present. Ignored (forced to 0) when
+##            `_dependency` is non-empty: dependant configure runs at
+##            parent build time, not in the hierarchical configure log.
 function(create_component _library_create_file _component _component_title _srcdir _builddir _options _library_mode _build_system _subcomponents _dependency)
-	# Optional indent level
+	# Optional indent level (hierarchical parent configure log only)
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
 	else()
+		set(_indent_level 0)
+	endif()
+
+	# Dependant stages run at parent *build* time (Ninja/Make). Indent is only
+	# meaningful in the initial configure hierarchy (message_indented); force 0.
+	if(NOT _dependency STREQUAL "")
 		set(_indent_level 0)
 	endif()
 
