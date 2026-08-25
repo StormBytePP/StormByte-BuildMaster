@@ -8,7 +8,6 @@
 ##       the same compiler cache as the parent job.
 ##       Also propagates AR/RANLIB/NM for clang-cl LTO static archives.
 function(update_env_runner)
-	# Ensure template symbols exist even if the parent never set them
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
 		set(CMAKE_C_COMPILER_LAUNCHER "")
 	endif()
@@ -25,7 +24,6 @@ function(update_env_runner)
 		set(BUILDMASTER_FAIL_MARKER "")
 	endif()
 
-	# AR/RANLIB/NM: prefer CMake vars from CI, else ENV
 	if(NOT DEFINED AR OR AR STREQUAL "")
 		if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
 			set(AR "${CMAKE_AR}")
@@ -54,7 +52,6 @@ function(update_env_runner)
 		endif()
 	endif()
 
-	# Paths safe for CMake templates / runners
 	if(NOT AR STREQUAL "")
 		normalize_cmake_path(AR "${AR}")
 	endif()
@@ -98,20 +95,8 @@ endfunction()
 ##            `cmd;/C;${SCRIPT}`.
 ## @note Joins list elements with spaces then calls `separate_arguments`
 ##       with `WINDOWS_COMMAND` or `UNIX_COMMAND` depending on the
-##       platform. The returned `_out` is a proper CMake list of tokens
-##       so callers must expand it as multiple arguments in
-##       `execute_process`, not as a single quoted string. The function
-##       requires exactly two arguments and will `FATAL_ERROR` if called
-##       incorrectly.
-##
-## Example:
-##   set(_cmd /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
-##   prepare_command(ENV_RUNNER "${_cmd}")
-##   execute_process(COMMAND ${ENV_RUNNER} --version WORKING_DIRECTORY ${WD})
-##
-## This produces a token list such as `/bin/sh` and
-## `/path/to/runner.sh` so `execute_process` receives them as separate
-## arguments.
+##       platform. Paths that already contain spaces must NOT be passed
+##       through this function a second time (use the list as-is).
 function(prepare_command _out _command_list)
 	if(NOT ARGC EQUAL 2)
 		message(FATAL_ERROR "prepare_command requires out variable and command list")
@@ -123,7 +108,164 @@ function(prepare_command _out _command_list)
 	else()
 		separate_arguments(_separated_command_list UNIX_COMMAND "${_command_list_spaces}")
 	endif()
-	# Return the tokenized command as a proper CMake list so callers can
-	# pass it directly to `execute_process(COMMAND ...)` as multiple args.
 	set(${_out} ${_separated_command_list} PARENT_SCOPE)
 endfunction()
+
+## @brief Format a command token list for embedding in a generated `.cmake` script.
+## @param[out] out_var Parent-scope variable receiving a single string such as
+##            `"cmd" "/C" "C:/path/runner.bat" "C:/Program Files/.../cmake.exe"`.
+## @param[in] ARGN Command tokens (already split; paths may contain spaces).
+## @note Always normalizes backslashes to forward slashes so the generated
+##       script does not hit invalid CMake escapes (`\S`, `\P`, …). Each
+##       token is double-quoted so `set(x ...)` and `execute_process(COMMAND ...)`
+##       keep paths with spaces as a single argument.
+function(buildmaster_quote_cmd_list_for_script out_var)
+	set(_acc "")
+	foreach(_tok IN LISTS ARGN)
+		string(REPLACE "\\" "/" _tok "${_tok}")
+		string(REPLACE "\"" "\\\"" _tok "${_tok}")
+		if(_acc STREQUAL "")
+			set(_acc "\"${_tok}\"")
+		else()
+			set(_acc "${_acc} \"${_tok}\"")
+		endif()
+	endforeach()
+	set(${out_var} "${_acc}" PARENT_SCOPE)
+endfunction()
+
+## @brief Generate component-local env runners from a loaded toolchain profile.
+## @param[out] out_runner Caller-scope variable receiving the tokenized
+##            normal runner command (same shape as ENV_RUNNER).
+## @param[out] out_runner_silent Caller-scope variable receiving the tokenized
+##            silent runner command (same shape as ENV_RUNNER_SILENT).
+## @param[in] component Component id used to name the generated scripts.
+## @param[in] toolchain_name Normalized toolchain name (e.g. msvc, clang-cl).
+## @note Implemented as a macro so BM_TC_* and PATH from the caller
+##       (create_*_stages after buildmaster_load_toolchain_profile) are visible.
+##       Requires BM_TC_* already set in the caller. Writes runner_<safe> and
+##       runner_silent_<safe> under BUILDMASTER_SCRIPTS_ENVDIR. The silent
+##       script invokes the matching component normal runner (not the global
+##       parent runner). Paths in CMake lists use forward slashes; the .bat
+##       body uses windows_path only for call "runner.bat".
+macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
+	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] buildmaster_create_component_env_runners: "
+			"component and toolchain_name must be non-empty"
+		)
+	endif()
+
+	sanitize_for_filename(_bm_tc_safe "${component}_${toolchain_name}")
+
+	set(CMAKE_C_COMPILER "${BM_TC_C_COMPILER}")
+	set(CMAKE_CXX_COMPILER "${BM_TC_CXX_COMPILER}")
+	set(AR "${BM_TC_AR}")
+	set(RANLIB "${BM_TC_RANLIB}")
+	set(NM "${BM_TC_NM}")
+
+	if(NOT AR STREQUAL "")
+		normalize_cmake_path(AR "${AR}")
+	endif()
+	if(NOT RANLIB STREQUAL "")
+		normalize_cmake_path(RANLIB "${RANLIB}")
+	endif()
+	if(NOT NM STREQUAL "")
+		normalize_cmake_path(NM "${NM}")
+	endif()
+
+	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
+		set(CMAKE_C_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CMAKE_CXX_COMPILER_LAUNCHER)
+		set(CMAKE_CXX_COMPILER_LAUNCHER "")
+	endif()
+	if(NOT DEFINED CCACHE_DIR)
+		set(CCACHE_DIR "")
+	endif()
+	if(NOT DEFINED SCCACHE_DIR)
+		set(SCCACHE_DIR "")
+	endif()
+	if(NOT DEFINED BUILDMASTER_FAIL_MARKER)
+		set(BUILDMASTER_FAIL_MARKER "")
+	endif()
+	if(NOT DEFINED PKG_CONFIG)
+		set(PKG_CONFIG "")
+	endif()
+	if(NOT DEFINED PKG_CONFIG_PATH)
+		set(PKG_CONFIG_PATH "")
+	endif()
+	if(NOT DEFINED PATH)
+		set(PATH "")
+	endif()
+	if(NOT DEFINED NPROC)
+		set(NPROC "")
+	endif()
+	if(NOT DEFINED CFLAGS)
+		set(CFLAGS "")
+	endif()
+	if(NOT DEFINED CXXFLAGS)
+		set(CXXFLAGS "")
+	endif()
+	if(NOT DEFINED LDFLAGS)
+		set(LDFLAGS "")
+	endif()
+	if(NOT DEFINED LIB)
+		set(LIB "")
+	endif()
+	if(NOT DEFINED INCLUDE)
+		set(INCLUDE "")
+	endif()
+
+	if(WIN32)
+		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.bat")
+		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.bat")
+		normalize_cmake_path(_bm_tc_runner_path_cmake "${_bm_tc_runner_path}")
+		normalize_cmake_path(_bm_tc_silent_path_cmake "${_bm_tc_silent_path}")
+		windows_path(_bm_tc_runner_path_win "${_bm_tc_runner_path}")
+
+		configure_file(
+			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"
+			"${_bm_tc_runner_path}"
+			@ONLY
+		)
+		# Direct call — no nested cmd /C.
+		set(ENV_RUNNER_CMD "\"${_bm_tc_runner_path_win}\"")
+		configure_file(
+			"${BUILDMASTER_SRCDIR}/env/runner_windows_silent.bat.in"
+			"${_bm_tc_silent_path}"
+			@ONLY
+		)
+		# Do not prepare_command: paths may contain spaces.
+		set(_bm_tc_runner_cmd cmd "/C" "${_bm_tc_runner_path_cmake}")
+		set(_bm_tc_silent_cmd cmd "/C" "${_bm_tc_silent_path_cmake}")
+	else()
+		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.sh")
+		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.sh")
+		configure_file(
+			"${BUILDMASTER_SRCDIR}/env/runner_linux.sh.in"
+			"${_bm_tc_runner_path}"
+			@ONLY
+		)
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${_bm_tc_runner_path}"
+			OUTPUT_QUIET
+			ERROR_QUIET
+		)
+		set(ENV_RUNNER_CMD "/bin/sh \"${_bm_tc_runner_path}\"")
+		configure_file(
+			"${BUILDMASTER_SRCDIR}/env/runner_linux_silent.sh.in"
+			"${_bm_tc_silent_path}"
+			@ONLY
+		)
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${_bm_tc_silent_path}"
+			OUTPUT_QUIET
+			ERROR_QUIET
+		)
+		set(_bm_tc_runner_cmd /bin/sh "${_bm_tc_runner_path}")
+		set(_bm_tc_silent_cmd /bin/sh "${_bm_tc_silent_path}")
+	endif()
+
+	set(${out_runner} ${_bm_tc_runner_cmd})
+	set(${out_runner_silent} ${_bm_tc_silent_cmd})
+endmacro()

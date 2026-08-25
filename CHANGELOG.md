@@ -39,6 +39,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Env runners** (`runner_linux.sh.in` / `runner_windows.bat.in`) export `AR`, `RANLIB`, and `NM` so any command launched through `ENV_RUNNER` inherits the same binutils as nested CMake/Meson
 - `env/init_vars.cmake` and `update_env_runner()` resolve `AR` / `RANLIB` / `NM` from `CMAKE_AR` / `CMAKE_RANLIB` / `CMAKE_NM` or `ENV{…}` before regenerating the runner scripts
 
+#### Per-component toolchains
+- Optional trailing `TOOLCHAIN` argument on the **simple** component API (`create_cmake_*` / `create_meson_*`, including headers and dependant variants) **and** on the **atomic stage** helpers (`create_cmake_stages` / `create_meson_stages`); the same profile applies to that component’s configure, build and install whether stages are generated via the factory or wired explicitly
+- Named profiles under `toolchain/profiles/`: `gcc`, `clang`, `clang-cl`, `msvc`
+  - `clang`: LLD required on Linux; LLD **not** forced on macOS
+  - `clang-cl`: LLD (`lld-link`) + `llvm-lib` (Windows only)
+  - `msvc`: `cl` + `link.exe` + `lib.exe` (Windows only)
+  - `gcc`: system linker/archiver (LLD not forced)
+- New module `toolchain/` (init, helpers, profiles): validation, platform guards, profile load
+- `buildmaster_clean_ldflags()` / `buildmaster_clean_cflags()` strip known LLD / Clang-LTO tokens when targeting `msvc`; other flags are preserved (no blind wipe)
+- Component-local env runners (normal + silent) when `TOOLCHAIN` is set; parent global runners and toolchain file are not rewritten
+- When `TOOLCHAIN` is set, configure and build status lines (and dependant configure `COMMENT`) include `(with toolchain <name>)`; omitted when inheriting the parent job
+- IPO/LTO is never enabled by a profile; if the parent already had IPO on, nested stages keep a coherent setting
+- Fully backward compatible: omitting `TOOLCHAIN` keeps previous behaviour
+
 ### Fixed
 
 - Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup

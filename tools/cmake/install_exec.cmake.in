@@ -5,7 +5,7 @@ if(EXISTS "@BUILDMASTER_FAIL_MARKER@")
 endif()
 
 execute_process(
-	COMMAND @ENV_CMAKE_SILENT_COMMAND@ --install "@_CMAKE_BUILD_DIR@"
+	COMMAND @_CMAKE_SILENT_CMD_PREFIX@ --install "@_CMAKE_BUILD_DIR@"
 	WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
 	RESULT_VARIABLE _BM_STAGE_RC
 )
@@ -19,8 +19,6 @@ if(NOT _BM_STAGE_RC EQUAL 0)
 	message(FATAL_ERROR "Installing @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 endif()
 
-# Header-only (and any stamp OUTPUT): ensure declared OUTPUT paths exist after install.
-# Real libraries are created by cmake --install; stamps are not.
 set(_BM_OUTPUTS "@_CMAKE_OUTPUT_LIBRARIES@")
 foreach(_bm_out IN LISTS _BM_OUTPUTS)
 	if(NOT _bm_out STREQUAL "" AND NOT EXISTS "${_bm_out}")

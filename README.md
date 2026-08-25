@@ -11,7 +11,8 @@ A small **CMake DSL** to configure, build, install and consume external
 **CMake** and **Meson** projects as first-class parts of a parent tree —
 with **configure-time** stages, explicit targets, coherent environment
 propagation, portable static-library bundling, **header-only components**,
-and **controlled failure propagation** across the dependency graph.
+**optional per-component toolchains**, and **controlled failure propagation**
+across the dependency graph.
 
 ## Table of contents
 
@@ -23,6 +24,7 @@ and **controlled failure propagation** across the dependency graph.
 - [Output verbosity and diagnostics](#output-verbosity-and-diagnostics)
 - [Fail-fast and stage failure propagation](#fail-fast-and-stage-failure-propagation)
 - [Compiler cache (ccache / sccache)](#compiler-cache-ccache--sccache)
+- [Per-component toolchains](#per-component-toolchains)
 - [Platform notes](#platform-notes)
 - [Recursive usage](#recursive-usage)
 - [Usage modes](#usage-modes)
@@ -50,6 +52,9 @@ parent:
 - share one install prefix and environment across a dependency tree
 - fail the parent when a required external stage fails (headers/libs never
 “half present”)
+- optionally build a single component with a **different toolchain** than the
+  parent job (for example Crypto++ with MSVC while the rest of the tree uses
+  clang-cl)
 
 It is **not** only a source fetcher (unlike a pure `FetchContent` workflow):
 it orchestrates full external builds. Sources may still be managed with the
@@ -82,9 +87,15 @@ Without explicit stage targets and dependency edges, a failed external
 compile can still leave the parent compiling against missing headers
 (e.g. `mysql.h not found`) while other unrelated bundles keep installing.
 
+Some third-party projects also refuse or misbehave under a given compiler
+(for example Crypto++’s hard error when both `_MSC_VER` and `__clang__` are
+defined). BuildMaster can pin **only that component** to another toolchain
+without changing the parent job.
+
 BuildMaster fills those gaps with **configure-time** generated scripts,
-explicit targets, env runners, and optional **fail-fast** markers so a stage
-failure is visible and can stop subsequent work:
+explicit targets, env runners, optional **per-component toolchains**, and
+optional **fail-fast** markers so a stage failure is visible and can stop
+subsequent work:
 
 ```text
 <component>_configure
@@ -107,6 +118,7 @@ failure is visible and can stop subsequent work:
 | Native Meson stages                     | No           | Manual              | **Yes**              |
 | Shared install + env propagation        | No           | Manual              | **Yes**              |
 | Compiler cache into child builds        | Manual       | Manual              | **Yes**              |
+| **Per-component toolchain override**    | No           | Manual              | **Yes (optional)**   |
 | Portable static archive merge           | No           | Manual              | **Yes**              |
 | **Header-only components (INTERFACE)**  | Manual       | Manual              | **Yes**              |
 | Safe recursive nesting                  | Fragile      | Fragile             | **Designed for it**  |
@@ -125,6 +137,8 @@ compilers, flags, optional ccache/sccache)
 - **Linux / Windows / macOS** (x86_64 and arm64)
 - CMake and Meson behind the same component API
 - First-class **header-only** packages (no fake `.a` / empty OUTPUT lists)
+- Optional **per-component toolchains** (isolated runners; never rewrite the
+  parent toolchain)
 - Generated scripts that are inspectable and CI-friendly
 - One initialization, one install root, even in deep dependency trees
 - Quiet default logs with **full diagnostics on failure**, optional
@@ -337,14 +351,92 @@ components keep compiling after an unrelated failure.
 
 ---
 
+## Per-component toolchains
+
+By default every component inherits the **parent job** compilers, linker and
+archiver (same as before).
+
+An optional trailing **`TOOLCHAIN`** argument on the component factory
+functions selects a named profile for **that component only**:
+
+| Name | Typical drivers | Linker policy |
+|------|-----------------|---------------|
+| `gcc` | `gcc` / `g++` | System default (LLD not forced) |
+| `clang` | `clang` / `clang++` | **LLD required on Linux**; not forced on **macOS** |
+| `clang-cl` | `clang-cl` | **LLD** (`lld-link`) + `llvm-lib` (Windows only) |
+| `msvc` | `cl` | **`link.exe`** + `lib.exe` (Windows only) |
+
+### Rules
+
+- **Optional and backward compatible** — omit the argument and behaviour is
+  unchanged.
+- **Override is complete for that component** — configure, build and install
+  all use the same profile.
+- **Isolated** — does not rewrite the parent toolchain file or global env
+  runner; component-local runners (normal + silent) are generated instead.
+  When a component `TOOLCHAIN` is set, nested CMake **does not** load the
+  parent `BUILDMASTER_TOOLCHAIN_FILE` (avoids `FORCE` of parent `CMAKE_AR` /
+  linker); compilers and binutils are passed explicitly from the profile.
+- **Unknown names** fail at configure with a list of known toolchains.
+- **Platform guards** — `msvc` / `clang-cl` only on Windows; `gcc` / `clang`
+  are not accepted as component toolchains on Windows.
+- **Linker flags** are not wiped: known LLD / Clang-LTO tokens are stripped
+  when targeting `msvc`; other flags are kept.
+- **IPO / LTO** is never turned on by the profile. If the parent already had
+  IPO enabled, nested stages keep a coherent setting; if not, it stays off.
+
+### Where it is accepted
+
+Trailing optional arguments (after the existing optional indent level):
+
+| Function | Optional trailing args |
+|----------|------------------------|
+| `create_cmake_component` / `create_meson_component` | `[indent] [toolchain]` |
+| `create_cmake_dependant_component` / `create_meson_dependant_component` | `[indent] [toolchain]` |
+| `create_cmake_headers_component` / `create_meson_headers_component` | `[indent] [toolchain]` |
+| `create_cmake_headers_dependant_component` / `create_meson_headers_dependant_component` | `[indent] [toolchain]` |
+| `create_cmake_stages` / `create_meson_stages` | `[indent] [toolchain] [configure_via_target]` |
+
+`configure_via_target` is only meaningful on the **atomic stage** API. Pass
+`"1"` when configure will run under a dependant-style custom target (suppress
+the hierarchical `message(STATUS "Configuring …")`; the target `COMMENT` is
+enough). Pass `"0"` or omit it for normal configure-time `include()` of the
+configure script. The simple `create_*_component` / `create_*_dependant_*`
+helpers set this automatically.
+
+### Example (MSVC only for one library)
+
+```cmake
+create_cmake_component(
+	CRYPTOPP_FILE
+	CryptoPP
+	"Crypto++ Library"
+	${CRYPTOPP_SRC}
+	${CRYPTOPP_BUILD}
+	"${CRYPTOPP_OPTIONS}"
+	static
+	"cryptopp"
+	0          # indent (optional, same as before)
+	msvc       # TOOLCHAIN (optional)
+)
+include(${CRYPTOPP_FILE})
+```
+
+Profiles live under `toolchain/profiles/`; validation and flag cleanup live
+in `toolchain/helpers.cmake`.
+
+---
+
 ## Platform notes
 
-| Topic | Linux | Windows (MSVC) | macOS |
-|-------|-------|----------------|-------|
+| Topic | Linux | Windows (MSVC / clang-cl) | macOS |
+|-------|-------|---------------------------|-------|
 | Env runner | `runner.sh` | `runner.bat` | same as Linux |
 | Static merge | GNU `ar -M` (MRI) | `lib /OUT:` | **`libtool -static`** |
 | PDB / parallel MSVC | — | `/Z7` forced for Meson | — |
 | Path separators in generated CMake | forward | normalized (`TO_CMAKE_PATH` where needed) | forward |
+| Component `TOOLCHAIN clang` | LLD required | not used (use `clang-cl`) | LLD **not** forced |
+| Component `TOOLCHAIN msvc` / `clang-cl` | invalid | supported | invalid |
 
 Apple’s `ar` does not support MRI scripts (`ar -M`).  
 `create_bundle_static_libraries()` selects the correct tool per platform.
@@ -358,6 +450,10 @@ BuildMaster initializes **once** (`BUILDMASTER_CONFIGURED`) and reuses the
 same `BUILDMASTER_INSTALL_DIR`, marker directory, and generated script tree,
 so nested projects do not fight over prefixes or double-bootstrap tools.
 `buildmaster_build_init` remains a single global target.
+
+Per-component toolchain overrides remain local to the component that requested
+them; they are not promoted into the shared toolchain file for nested
+bootstraps.
 
 ---
 
@@ -375,7 +471,8 @@ Use:
 | `create_cmake_headers_dependant_component()` / `create_meson_headers_dependant_component()` | Header-only, ordered after another `*_install` |
 
 One generated fragment declares the INTERFACE (and IMPORTED libs when
-applicable) and wires stages.
+applicable) and wires stages. Optional trailing **`TOOLCHAIN`** selects a
+named profile for that component only.
 
 ### Advanced
 
@@ -384,6 +481,21 @@ Call `create_cmake_stages()` / `create_meson_stages()` yourself, then
 need—e.g. to insert custom commands between stages, or to build multi-phase
 projects (x265 12-bit → 10-bit → 8-bit) with dependant components.
 `_library_mode` may be `static`, `shared`, or `headers`.
+
+Optional trailing arguments on the stage helpers:
+
+```text
+[indent_level] [toolchain] [configure_via_target]
+```
+
+- **`toolchain`** — same named profiles as the simple API (`gcc`, `clang`,
+  `clang-cl`, `msvc`), or empty to inherit the parent job.
+- **`configure_via_target`** — `"1"` if you will drive configure through a
+  custom target (dependant-style); `"0"` or omit when the configure script is
+  `include()`d at parent configure time.
+
+`TOOLCHAIN` and `configure_via_target` are independent: you can override the
+toolchain for a component that still configures at parent configure time.
 
 ---
 
@@ -439,6 +551,7 @@ create_cmake_headers_component(
 	${HEADERS_BUILD}
 	"${HEADERS_OPTIONS}"
 	# optional indent level
+	# optional TOOLCHAIN
 )
 
 create_cmake_headers_dependant_component(
@@ -519,9 +632,10 @@ create_bundle_static_libraries(
 | Static bundler | `component/helpers.cmake` → `create_bundle_static_libraries` |
 | CMake stages | `tools/cmake/helpers.cmake` |
 | Meson stages | `tools/meson/helpers.cmake` |
+| **Toolchain profiles / validation** | **`toolchain/helpers.cmake`**, **`toolchain/profiles/`** |
 | Git fragments | `tools/git/helpers.cmake` |
 | **File download / decompress helpers** | **`tools/file/helpers.cmake`** |
-| Env runners / `prepare_command` | `env/helpers.cmake` |
+| Env runners / `prepare_command` / component runners | `env/helpers.cmake` |
 | Path / list / sanitize utils | `helpers.cmake` |
 | Tool registration | `tools/helpers.cmake` |
 | Fail-fast / markers / init | `init_vars.cmake` |
@@ -533,7 +647,8 @@ Templates (generated into the build tree):
 - `tools/file/{file_download,file_download_cached,file_decompress}.cmake.in`
 - `component/bundler.sh.in`, `bundler_macos.sh.in`, `bundler.bat.in`
 - `component/component_{static,shared,headers}{,_dependant}.cmake.in`
-- `env/runner_*.in` (including silent variants)
+- `env/runner_*.in` (including silent variants; per-component copies when `TOOLCHAIN` is set)
+- `toolchain/profiles/{gcc,clang,clang-cl,msvc}.cmake`
 
 ---
 
@@ -804,6 +919,25 @@ create_cmake_dependant_component(
 include(${A_FILE})
 ```
 
+### Component with an explicit toolchain
+
+```cmake
+# Parent job may be clang-cl; this component alone uses MSVC
+create_cmake_component(
+	CRYPTOPP_FILE
+	CryptoPP
+	"Crypto++ Library"
+	${CRYPTOPP_SRC}
+	${CRYPTOPP_BUILD}
+	"${CRYPTOPP_OPTIONS}"
+	static
+	"cryptopp"
+	0
+	msvc
+)
+include(${CRYPTOPP_FILE})
+```
+
 ### Explicit stages
 
 ```cmake
@@ -815,6 +949,9 @@ create_cmake_stages(
 	"-DENABLE_FEATURE=ON"
 	shared
 	"${BUILDMASTER_INSTALL_LIBDIR}/libmylib.so"
+	# optional: indent_level
+	# optional: toolchain (e.g. msvc)
+	# optional: configure_via_target ("1" = dependant-style custom target)
 )
 include(${cfg_script})
 include(${build_script})

@@ -241,7 +241,9 @@ function(ensure_build_dir _out)
 	set(${_out_var} "${_builddir}" PARENT_SCOPE)
 endfunction()
 
-# A convenience files to add all bootstrap helper functions
+# Toolchain helpers first so create_* stages can validate/resolve profiles
+include(${BUILDMASTER_SRCDIR}/toolchain/helpers.cmake)
+
 include(${BUILDMASTER_SRCDIR}/env/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/cmake/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/file/helpers.cmake)

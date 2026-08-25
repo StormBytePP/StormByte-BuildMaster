@@ -4,6 +4,9 @@ rem AR/RANLIB/NM for clang-cl LTO static archives.
 rem IMPORTANT: CC/CXX are the real compiler only (cl/clang-cl). Never prefix sccache
 rem here — CMake gets CMAKE_*_COMPILER_LAUNCHER via configure.cmake.in;
 rem Meson gets CC="sccache cl" only at meson setup via cmake -E env.
+rem
+rem Final command: use %* directly (NOT "cmd /c %*"). Nested cmd re-parses the
+rem command line and breaks paths with spaces (e.g. C:\Program Files\...).
 setlocal
 
 set "update_pkg_config=@PKG_CONFIG@"
@@ -110,6 +113,7 @@ if "%~1"=="" (
 	exit /b 1
 )
 
-cmd /c %*
+rem Run the forwarded command in this cmd context (preserves quoted args).
+%*
 set "rc=%ERRORLEVEL%"
 endlocal & exit /b %rc%
