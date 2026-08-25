@@ -1,6 +1,7 @@
 @echo off
-rem Runner for Windows: PKG_CONFIG/LIB/INCLUDE/PATH, cache dirs, compilers.
-rem IMPORTANT: CC/CXX are the real compiler only (cl). Never prefix sccache
+rem Runner for Windows: PKG_CONFIG/LIB/INCLUDE/PATH, cache dirs, compilers,
+rem AR/RANLIB/NM for clang-cl LTO static archives.
+rem IMPORTANT: CC/CXX are the real compiler only (cl/clang-cl). Never prefix sccache
 rem here — CMake gets CMAKE_*_COMPILER_LAUNCHER via configure.cmake.in;
 rem Meson gets CC="sccache cl" only at meson setup via cmake -E env.
 setlocal
@@ -17,6 +18,9 @@ set "update_c_launcher=@CMAKE_C_COMPILER_LAUNCHER@"
 set "update_cxx_launcher=@CMAKE_CXX_COMPILER_LAUNCHER@"
 set "update_ccache_dir=@CCACHE_DIR@"
 set "update_sccache_dir=@SCCACHE_DIR@"
+set "update_ar=@AR@"
+set "update_ranlib=@RANLIB@"
+set "update_nm=@NM@"
 set "bm_fail_marker=@BUILDMASTER_FAIL_MARKER@"
 
 if not "%update_pkg_config%"=="" (
@@ -80,6 +84,17 @@ if not "%update_c_launcher%"=="" (
 )
 if not "%update_cxx_launcher%"=="" (
 	set "CMAKE_CXX_COMPILER_LAUNCHER=%update_cxx_launcher%"
+)
+
+rem Archiver / ranlib / nm (llvm-lib / llvm-ar for clang-cl LTO)
+if not "%update_ar%"=="" (
+	set "AR=%update_ar%"
+)
+if not "%update_ranlib%"=="" (
+	set "RANLIB=%update_ranlib%"
+)
+if not "%update_nm%"=="" (
+	set "NM=%update_nm%"
 )
 
 rem Fail-fast: stages write this marker; do not run further runner commands

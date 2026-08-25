@@ -6,6 +6,7 @@
 ##       Propagates CMAKE_C/CXX_COMPILER_LAUNCHER and CCACHE_DIR/SCCACHE_DIR
 ##       only when they are non-empty so child meson/cmake builds share
 ##       the same compiler cache as the parent job.
+##       Also propagates AR/RANLIB/NM for clang-cl LTO static archives.
 function(update_env_runner)
 	# Ensure template symbols exist even if the parent never set them
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
@@ -24,6 +25,46 @@ function(update_env_runner)
 		set(BUILDMASTER_FAIL_MARKER "")
 	endif()
 
+	# AR/RANLIB/NM: prefer CMake vars from CI, else ENV
+	if(NOT DEFINED AR OR AR STREQUAL "")
+		if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
+			set(AR "${CMAKE_AR}")
+		elseif(DEFINED ENV{AR} AND NOT "$ENV{AR}" STREQUAL "")
+			set(AR "$ENV{AR}")
+		else()
+			set(AR "")
+		endif()
+	endif()
+	if(NOT DEFINED RANLIB OR RANLIB STREQUAL "")
+		if(DEFINED CMAKE_RANLIB AND NOT CMAKE_RANLIB STREQUAL "")
+			set(RANLIB "${CMAKE_RANLIB}")
+		elseif(DEFINED ENV{RANLIB} AND NOT "$ENV{RANLIB}" STREQUAL "")
+			set(RANLIB "$ENV{RANLIB}")
+		else()
+			set(RANLIB "")
+		endif()
+	endif()
+	if(NOT DEFINED NM OR NM STREQUAL "")
+		if(DEFINED CMAKE_NM AND NOT CMAKE_NM STREQUAL "")
+			set(NM "${CMAKE_NM}")
+		elseif(DEFINED ENV{NM} AND NOT "$ENV{NM}" STREQUAL "")
+			set(NM "$ENV{NM}")
+		else()
+			set(NM "")
+		endif()
+	endif()
+
+	# Paths safe for CMake templates / runners
+	if(NOT AR STREQUAL "")
+		normalize_cmake_path(AR "${AR}")
+	endif()
+	if(NOT RANLIB STREQUAL "")
+		normalize_cmake_path(RANLIB "${RANLIB}")
+	endif()
+	if(NOT NM STREQUAL "")
+		normalize_cmake_path(NM "${NM}")
+	endif()
+
 	if(WIN32)
 		configure_file(
 			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"
@@ -37,9 +78,6 @@ function(update_env_runner)
 			@ONLY
 		)
 
-		# Ensure the generated runner has execute permissions so it can be
-		# invoked directly by execute_process(). Some platforms require the
-		# executable bit even when a shebang is present.
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} -E chmod 0755 "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh"
 			RESULT_VARIABLE _chmod_result

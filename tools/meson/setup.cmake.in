@@ -13,6 +13,8 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	set(_bm_cxx_compiler [[@CMAKE_CXX_COMPILER@]])
 	set(_bm_ccache_dir [[@CCACHE_DIR@]])
 	set(_bm_sccache_dir [[@SCCACHE_DIR@]])
+	set(_bm_ar [[@_MESON_AR@]])
+	set(_bm_ranlib [[@_MESON_RANLIB@]])
 
 	set(_MESON_SETUP_ENV_ARGS "")
 	if(NOT _bm_c_launcher STREQUAL "")
@@ -39,6 +41,12 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	if(NOT _bm_sccache_dir STREQUAL "")
 		list(APPEND _MESON_SETUP_ENV_ARGS "SCCACHE_DIR=${_bm_sccache_dir}")
 	endif()
+	if(NOT _bm_ar STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "AR=${_bm_ar}")
+	endif()
+	if(NOT _bm_ranlib STREQUAL "")
+		list(APPEND _MESON_SETUP_ENV_ARGS "RANLIB=${_bm_ranlib}")
+	endif()
 
 	if(_MESON_SETUP_ENV_ARGS)
 		execute_process(
@@ -46,8 +54,8 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 				@ENV_MESON_COMMAND@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
 				"-Dc_args=@_MESON_C_ARGS@"
 				"-Dcpp_args=@_MESON_CXX_ARGS@"
-				"-Dc_link_args=@CMAKE_EXE_LINKER_FLAGS@"
-				"-Dcpp_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dc_link_args=@_MESON_LINK_ARGS@"
+				"-Dcpp_link_args=@_MESON_LINK_ARGS@"
 				"-Dbuildtype=@MESON_BUILD_TYPE@"
 				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
 				"--prefix=@BUILDMASTER_INSTALL_DIR@"
@@ -63,8 +71,8 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 			COMMAND @ENV_MESON_COMMAND@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
 				"-Dc_args=@_MESON_C_ARGS@"
 				"-Dcpp_args=@_MESON_CXX_ARGS@"
-				"-Dc_link_args=@CMAKE_EXE_LINKER_FLAGS@"
-				"-Dcpp_link_args=@CMAKE_EXE_LINKER_FLAGS@"
+				"-Dc_link_args=@_MESON_LINK_ARGS@"
+				"-Dcpp_link_args=@_MESON_LINK_ARGS@"
 				"-Dbuildtype=@MESON_BUILD_TYPE@"
 				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
 				"--prefix=@BUILDMASTER_INSTALL_DIR@"

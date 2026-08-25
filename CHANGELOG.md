@@ -24,6 +24,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `create_meson_headers_dependant_component`
 - Build stage is kept for a uniform graph (header-only projects are typically no-ops)
 
+#### Nested linker and binutils propagation
+- Nested **CMake** configures forward the parent toolchain so third-party builds match the top level:
+  - Linker: `CMAKE_LINKER_TYPE`, `CMAKE_LINKER`, `CMAKE_C_COMPILER_LINKER`, `CMAKE_CXX_COMPILER_LINKER`, `CMAKE_MT`
+  - Archiver / nm: `CMAKE_AR`, `CMAKE_C_COMPILER_AR`, `CMAKE_CXX_COMPILER_AR`, `CMAKE_RANLIB`, `CMAKE_C_COMPILER_RANLIB`, `CMAKE_CXX_COMPILER_RANLIB`, `CMAKE_NM`
+  - `CMAKE_MODULE_LINKER_FLAGS` (in addition to existing EXE/SHARED linker flags)
+- `tools/cmake/update_toolchain.cmake` writes non-empty linker and archiver cache entries into the generated BuildMaster toolchain file (paths normalized to forward slashes)
+- Nested **Meson** setups:
+  - Build `_MESON_LINK_ARGS` from `CMAKE_EXE_LINKER_FLAGS`
+  - `CMAKE_LINKER_TYPE=LLD` → `-fuse-ld=lld-link` (Windows) or `-fuse-ld=lld` (elsewhere)
+  - `CMAKE_LINKER_TYPE=MSVC` → `-fuse-ld=link`
+  - Else, if `CMAKE_LINKER` is set → `-fuse-ld=<path>`
+  - Pass `AR` / `RANLIB` into Meson setup via `cmake -E env` (from `CMAKE_AR` / `CMAKE_RANLIB` or the process environment)
+- **Env runners** (`runner_linux.sh.in` / `runner_windows.bat.in`) export `AR`, `RANLIB`, and `NM` so any command launched through `ENV_RUNNER` inherits the same binutils as nested CMake/Meson
+- `env/init_vars.cmake` and `update_env_runner()` resolve `AR` / `RANLIB` / `NM` from `CMAKE_AR` / `CMAKE_RANLIB` / `CMAKE_NM` or `ENV{…}` before regenerating the runner scripts
+
 ### Fixed
 
 - Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup

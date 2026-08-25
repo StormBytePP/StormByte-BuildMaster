@@ -13,6 +13,9 @@ update_cxxflags="@CXXFLAGS@"
 update_ldflags="@LDFLAGS@"
 update_path="@PATH@"
 update_nproc="@NPROC@"
+update_ar="@AR@"
+update_ranlib="@RANLIB@"
+update_nm="@NM@"
 bm_fail_marker="@BUILDMASTER_FAIL_MARKER@"
 
 if [ -n "$update_pkg_config" ]; then
@@ -79,6 +82,17 @@ fi
 
 if [ -n "$update_nproc" ]; then
 	export CMAKE_BUILD_PARALLEL_LEVEL="$update_nproc"
+fi
+
+# Archiver / ranlib / nm (clang-cl LTO static libs, nested Meson/make)
+if [ -n "$update_ar" ]; then
+	export AR="$update_ar"
+fi
+if [ -n "$update_ranlib" ]; then
+	export RANLIB="$update_ranlib"
+fi
+if [ -n "$update_nm" ]; then
+	export NM="$update_nm"
 fi
 
 # Fail-fast: stages write this marker; do not run further runner commands

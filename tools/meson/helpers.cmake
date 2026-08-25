@@ -69,6 +69,47 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		string(APPEND _MESON_CXX_ARGS " /Z7")
 	endif()
 
+	# ------------------------------------------------------------------
+	# Link args: parent flags + LLD (clang-cl / clang IPO) or MSVC link,
+	# or an explicit CMAKE_LINKER path.
+	# ------------------------------------------------------------------
+	if(NOT DEFINED CMAKE_EXE_LINKER_FLAGS)
+		set(CMAKE_EXE_LINKER_FLAGS "")
+	endif()
+	set(_MESON_LINK_ARGS "${CMAKE_EXE_LINKER_FLAGS}")
+
+	if(DEFINED CMAKE_LINKER_TYPE AND CMAKE_LINKER_TYPE STREQUAL "LLD")
+		# Windows clang-cl → lld-link; Linux clang → ld.lld via -fuse-ld=lld
+		if(WIN32)
+			string(APPEND _MESON_LINK_ARGS " -fuse-ld=lld-link")
+		else()
+			string(APPEND _MESON_LINK_ARGS " -fuse-ld=lld")
+		endif()
+	elseif(DEFINED CMAKE_LINKER_TYPE AND CMAKE_LINKER_TYPE STREQUAL "MSVC")
+		string(APPEND _MESON_LINK_ARGS " -fuse-ld=link")
+	elseif(DEFINED CMAKE_LINKER AND NOT CMAKE_LINKER STREQUAL "")
+		normalize_cmake_path(_bm_meson_linker "${CMAKE_LINKER}")
+		string(APPEND _MESON_LINK_ARGS " -fuse-ld=${_bm_meson_linker}")
+	endif()
+
+	string(STRIP "${_MESON_LINK_ARGS}" _MESON_LINK_ARGS)
+
+	# Archiver for Meson (static + LTO): prefer CMAKE_AR, else ENV{AR}
+	if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
+		normalize_cmake_path(_MESON_AR "${CMAKE_AR}")
+	elseif(DEFINED ENV{AR} AND NOT "$ENV{AR}" STREQUAL "")
+		normalize_cmake_path(_MESON_AR "$ENV{AR}")
+	else()
+		set(_MESON_AR "")
+	endif()
+	if(DEFINED CMAKE_RANLIB AND NOT CMAKE_RANLIB STREQUAL "")
+		normalize_cmake_path(_MESON_RANLIB "${CMAKE_RANLIB}")
+	elseif(DEFINED ENV{RANLIB} AND NOT "$ENV{RANLIB}" STREQUAL "")
+		normalize_cmake_path(_MESON_RANLIB "$ENV{RANLIB}")
+	else()
+		set(_MESON_RANLIB "")
+	endif()
+
 	if(NOT CMAKE_C_COMPILER_LAUNCHER AND DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER}
 			AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		set(CMAKE_C_COMPILER_LAUNCHER "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
