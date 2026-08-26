@@ -13,26 +13,33 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	set(_bm_sccache_dir [[@SCCACHE_DIR@]])
 	set(_bm_ar [[@_MESON_AR@]])
 	set(_bm_ranlib [[@_MESON_RANLIB@]])
+	set(_bm_native [[@_MESON_NATIVE_FILE@]])
 
 	set(_MESON_SETUP_ENV_ARGS "")
-	if(NOT _bm_c_launcher STREQUAL "")
-		if(NOT _bm_c_compiler STREQUAL "")
-			list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_launcher} ${_bm_c_compiler}")
-		else()
-			list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_launcher}")
+
+	# Prefer Meson native file for compilers + ccache/sccache (documented
+	# [binaries] form). Fall back to CC/CXX env only when no native file exists.
+	if(_bm_native STREQUAL "")
+		if(NOT _bm_c_launcher STREQUAL "")
+			if(NOT _bm_c_compiler STREQUAL "")
+				list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_launcher} ${_bm_c_compiler}")
+			else()
+				list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_launcher}")
+			endif()
+		elseif(NOT _bm_c_compiler STREQUAL "")
+			list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_compiler}")
 		endif()
-	elseif(NOT _bm_c_compiler STREQUAL "")
-		list(APPEND _MESON_SETUP_ENV_ARGS "CC=${_bm_c_compiler}")
-	endif()
-	if(NOT _bm_cxx_launcher STREQUAL "")
-		if(NOT _bm_cxx_compiler STREQUAL "")
-			list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_launcher} ${_bm_cxx_compiler}")
-		else()
-			list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_launcher}")
+		if(NOT _bm_cxx_launcher STREQUAL "")
+			if(NOT _bm_cxx_compiler STREQUAL "")
+				list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_launcher} ${_bm_cxx_compiler}")
+			else()
+				list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_launcher}")
+			endif()
+		elseif(NOT _bm_cxx_compiler STREQUAL "")
+			list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_compiler}")
 		endif()
-	elseif(NOT _bm_cxx_compiler STREQUAL "")
-		list(APPEND _MESON_SETUP_ENV_ARGS "CXX=${_bm_cxx_compiler}")
 	endif()
+
 	if(NOT _bm_ccache_dir STREQUAL "")
 		list(APPEND _MESON_SETUP_ENV_ARGS "CCACHE_DIR=${_bm_ccache_dir}")
 	endif()
@@ -46,11 +53,17 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 		list(APPEND _MESON_SETUP_ENV_ARGS "RANLIB=${_bm_ranlib}")
 	endif()
 
+	set(_MESON_NATIVE_ARGS "")
+	if(NOT _bm_native STREQUAL "")
+		list(APPEND _MESON_NATIVE_ARGS "--native-file=${_bm_native}")
+	endif()
+
 	# @_MESON_CMD_PREFIX@ is pre-quoted (paths with spaces safe on Windows).
 	if(_MESON_SETUP_ENV_ARGS)
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} -E env ${_MESON_SETUP_ENV_ARGS}
 				@_MESON_CMD_PREFIX@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
+				${_MESON_NATIVE_ARGS}
 				"-Dc_args=@_MESON_C_ARGS@"
 				"-Dcpp_args=@_MESON_CXX_ARGS@"
 				"-Dc_link_args=@_MESON_LINK_ARGS@"
@@ -68,6 +81,7 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	else()
 		execute_process(
 			COMMAND @_MESON_CMD_PREFIX@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
+				${_MESON_NATIVE_ARGS}
 				"-Dc_args=@_MESON_C_ARGS@"
 				"-Dcpp_args=@_MESON_CXX_ARGS@"
 				"-Dc_link_args=@_MESON_LINK_ARGS@"
