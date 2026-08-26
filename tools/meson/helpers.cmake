@@ -270,19 +270,13 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
 
-	set(_bm_msvc_like FALSE)
-	if(MSVC OR _toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl")
-		set(_bm_msvc_like TRUE)
-	elseif(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-		set(_bm_msvc_like TRUE)
-	endif()
-	if(_bm_msvc_like)
+	# MSVC-like drivers: request CodeView (/Z7) for nested Meson objects.
+	# Do not force /std:c*; upstream projects (e.g. PostgreSQL) set the C
+	# standard themselves. Unconditional /std:c11 broke real MSVC builds.
+	if(MSVC OR _toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl"
+			OR CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
 		string(APPEND _MESON_C_ARGS " /Z7")
 		string(APPEND _MESON_CXX_ARGS " /Z7")
-		# clang-cl ignores -std=c99; MSVC-style /std:c11 satisfies Postgres C99 probes
-		if(NOT _MESON_C_ARGS MATCHES "/std:c")
-			string(APPEND _MESON_C_ARGS " /std:c11")
-		endif()
 	endif()
 
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)

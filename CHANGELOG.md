@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop injecting `/std:c11` into nested Meson `c_args` on MSVC-like toolchains (partial undo of 1.0.1). The flag did not fix clang-cl PostgreSQL C99 probes (UCRT `complex`/`tgmath` vs Clang `_Complex`) and could break real `cl` builds (e.g. Postgres `VA_ARGS_NARGS_` / non-constant initializers). Prefer `TOOLCHAIN msvc` for PostgreSQL on Windows. clang-cl `/GL` and `/LTCG*` stripping from 1.0.1 is unchanged.
+
 ## [1.0.1] - 2026-08-26
 
 ### Added
