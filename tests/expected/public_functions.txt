@@ -25,3 +25,4 @@ create_git_fetch
 create_git_switch_branch
 buildmaster_validate_toolchain
 buildmaster_load_toolchain_profile
+buildmaster_parse_subcomponent

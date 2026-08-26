@@ -1,5 +1,5 @@
 # =============================================================================
-# component/helpers.cmake  (fragmento actualizado)
+# component/helpers.cmake
 # =============================================================================
 
 ## @brief Parse the optional KEY=VALUE;KEY=VALUE options string used by
@@ -67,6 +67,44 @@ function(buildmaster_parse_component_options out_indent out_toolchain options_st
 endfunction()
 
 
+## @brief Split a subcomponent spec into CMake target, library basename and libdir subdir.
+## @param[in]  spec        Either `<name>` or `<subdir>/<name>`
+##                         (example: `recursive/cmake/nestlib`).
+## @param[out] out_target  Imported CMake target name (`/` replaced by `_`).
+## @param[out] out_libname Library basename without prefix/suffix (`nestlib`).
+## @param[out] out_subdir  Directory relative to BUILDMASTER_INSTALL_LIBDIR
+##                         (`recursive/cmake`), or empty for the legacy layout.
+## @note CMake target names cannot contain `/`. The imported target is
+##       therefore `recursive_cmake_nestlib` while the file is
+##       `${BUILDMASTER_INSTALL_LIBDIR}/recursive/cmake/libnestlib.a`.
+function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
+	if("${spec}" STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] buildmaster_parse_subcomponent: empty subcomponent spec")
+	endif()
+
+	string(FIND "${spec}" "/" _slash)
+	if(_slash EQUAL -1)
+		set(_tgt "${spec}")
+		set(_name "${spec}")
+		set(_dir "")
+	else()
+		get_filename_component(_name "${spec}" NAME)
+		get_filename_component(_dir "${spec}" DIRECTORY)
+		string(REPLACE "/" "_" _tgt "${spec}")
+	endif()
+
+	if("${_name}" STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] buildmaster_parse_subcomponent: missing library name in '${spec}'")
+	endif()
+
+	set(${out_target} "${_tgt}" PARENT_SCOPE)
+	set(${out_libname} "${_name}" PARENT_SCOPE)
+	set(${out_subdir} "${_dir}" PARENT_SCOPE)
+endfunction()
+
+
 ## @brief Generate a per-component generator fragment and IMPORTED target wiring.
 ## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
 ## @param[in] _component Short component identifier.
@@ -76,7 +114,10 @@ endfunction()
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake` or `meson`.
-## @param[in] _subcomponents List of subcomponent names (ignored for headers).
+## @param[in] _subcomponents List of subcomponent specs (ignored for headers).
+##            Each entry is `<name>` (file under BUILDMASTER_INSTALL_LIBDIR)
+##            or `<subdir>/<name>` (file under BUILDMASTER_INSTALL_LIBDIR/<subdir>).
+##            The imported CMake target replaces `/` with `_`.
 ## @param[in] _dependency Optional install-target dependency for dependant templates.
 ## @param[in] options_string Optional (last argument) string of the form
 ##            "KEY=value;KEY2=value with spaces". Supported keys:
@@ -134,16 +175,19 @@ function(create_component _library_create_file _component _component_title _srcd
 			if(_sub STREQUAL "")
 				continue()
 			endif()
-			list(APPEND _LIBRARY_COMPONENT_NAMES "${_sub}")
+			buildmaster_parse_subcomponent("${_sub}" _tgt _lib_name _lib_subdir)
+			list(APPEND _LIBRARY_COMPONENT_NAMES "${_tgt}")
 			if(_library_mode STREQUAL "static")
-				library_import_static_hint(_lib_path "${_sub}" "${BUILDMASTER_INSTALL_LIBDIR}")
+				library_import_static_hint(_lib_path "${_lib_name}"
+					"${BUILDMASTER_INSTALL_LIBDIR}" "${_lib_subdir}")
 				list(APPEND _LIBRARY_COMPONENT_FILES "${_lib_path}")
 			else()
-				library_import_hint(_lib_path "${_sub}" "${BUILDMASTER_INSTALL_LIBDIR}")
+				library_import_hint(_lib_path "${_lib_name}"
+					"${BUILDMASTER_INSTALL_LIBDIR}" "${_lib_subdir}")
 				list(APPEND _LIBRARY_COMPONENT_FILES "${_lib_path}")
 				if(MSVC)
 					set(_dll
-						"${BUILDMASTER_INSTALL_BINDIR}/${_sub}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+						"${BUILDMASTER_INSTALL_BINDIR}/${_lib_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 					list(APPEND _LIBRARY_COMPONENT_DLL_FILES "${_dll}")
 				endif()
 			endif()
@@ -261,7 +305,7 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent names.
+## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
 function(create_cmake_component _library_create_file _component _component_title
@@ -302,7 +346,7 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent names.
+## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
 function(create_meson_component _library_create_file _component _component_title
@@ -343,7 +387,7 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent names.
+## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
 ## @param[in] _dependency Install-target dependency.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
@@ -386,7 +430,7 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent names.
+## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
 ## @param[in] _dependency Install-target dependency.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.

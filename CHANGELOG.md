@@ -7,12 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Subcomponent libdir paths:** `create_*_component` / `create_*_dependant_component` subcomponent list entries may be `<name>` (legacy, under `BUILDMASTER_INSTALL_LIBDIR`) or `<subdir>/<name>` (artifact under `BUILDMASTER_INSTALL_LIBDIR/<subdir>`).
+  - Imported CMake target name replaces `/` with `_` (e.g. `recursive/cmake/nestlib` → target `recursive_cmake_nestlib`, file `…/lib/recursive/cmake/libnestlib.a`).
+  - New helper `buildmaster_parse_subcomponent()` performs the split.
+- **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir` (relative to the prefix path; empty = previous layout).
+- **Harness self-tests:** recursive cmake and meson chains under `tests/harness/fixtures/recursive/` (nested `create_*`, install under `lib/recursive/{cmake,meson}/`, link tests that depend only on the outer component INTERFACE).
+
 ### Changed
 - **Breaking:** `create_*_component` / `create_*_dependant_component` family now accepts a single optional trailing options string of the form `KEY=value;KEY2=value with spaces` instead of positional `indent_level` / `toolchain` arguments.
   - Supported keys (case-insensitive, stored uppercase): `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`.
   - Unknown keys produce a warning and are ignored.
   - Only the first `=` in each pair separates key from value; values may contain `=` and spaces but must not contain `;`.
   - Extra positional arguments beyond the options string cause a fatal error.
+- Static components that install several archives (e.g. nested dependency chain) should list **all** required subcomponent specs on the outermost `create_*` so consumers can `target_link_libraries(… PRIVATE <component>)` without missing transitive static symbols.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 
