@@ -5,16 +5,22 @@
 # Flat libraries
 <lib>/baselib.lib|windows
 <lib>/deplib.lib|windows
+<lib>/firstlib.lib|windows
 <lib>/libbaselib.a|unix
 <lib>/libdeplib.a|unix
+<lib>/libfirstlib.a|unix
 <lib>/libloaderlib.a|unix
+<lib>/libsecondlib.a|unix
 <lib>/loaderlib.lib|windows
+<lib>/secondlib.lib|windows
 
 # Headers
 <include>/base.h|all
 <include>/dep.h|all
+<include>/first.h|all
 <include>/loader.h|all
 <include>/sdk.h|all
+<include>/second.h|all
 
 # Recursive cmake
 <include>/recursive/cmake/leaf.h|all

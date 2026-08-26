@@ -4,6 +4,10 @@
 dep -> dep_install
 dep_configure -> base_install
 
+# order-independent (second declared before first)
+second -> second_install
+second_configure -> first_install
+
 # sdkloader (depends on sdk-headers)
 sdkloader -> sdkloader_install
 sdkloader_configure -> sdk-headers_install

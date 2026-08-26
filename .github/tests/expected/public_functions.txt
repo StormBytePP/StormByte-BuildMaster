@@ -1,15 +1,13 @@
 # One public command per line (sections and names alphabetical)
 
 # Component API
+component_dependency
+component_link
 create_cmake_component
-create_cmake_dependant_component
 create_cmake_headers_component
-create_cmake_headers_dependant_component
 create_component
 create_meson_component
-create_meson_dependant_component
 create_meson_headers_component
-create_meson_headers_dependant_component
 
 # File helpers
 file_decompress
@@ -27,10 +25,6 @@ ensure_build_dir
 library_import_hint
 library_import_static_hint
 sanitize_for_filename
-
-# Stages
-create_cmake_stages
-create_meson_stages
 
 # Toolchain and options
 buildmaster_load_toolchain_profile

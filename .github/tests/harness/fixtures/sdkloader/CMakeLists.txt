@@ -1,6 +1,5 @@
 ensure_build_dir(LOADER_BUILD_DIR "sdkloader")
-create_cmake_dependant_component(
-	LOADER_FILE
+create_cmake_component(
 	sdkloader
 	"Harness SDK loader"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -8,6 +7,5 @@ create_cmake_dependant_component(
 	""
 	static
 	"loaderlib"
-	"sdk-headers_install"
 )
-include("${LOADER_FILE}")
+component_dependency(sdkloader sdk-headers)

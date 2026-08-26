@@ -7,6 +7,11 @@ dep_install
 sdk-headers_install
 sdkloader_install
 
+# Order-independent declaration
+first_install
+order_independent_link_test
+second_install
+
 # Recursive chains
 nest-cmake_install
 nest-meson_install

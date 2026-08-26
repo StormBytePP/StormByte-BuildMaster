@@ -7,7 +7,6 @@ endif()
 
 ensure_build_dir(NEST_CMAKE_BUILD_DIR "nest-cmake")
 create_cmake_component(
-	NEST_CMAKE_FILE
 	nest-cmake
 	"Recursive cmake nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"
@@ -15,9 +14,9 @@ create_cmake_component(
 	"-DBUILDMASTER_ROOT=${BM_TEST_REPO_ROOT}"
 	static
 	"recursive/cmake/nestlib"
-	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
 )
-include("${NEST_CMAKE_FILE}")
+component_link(nest-cmake "recursive/cmake/midlib")
+component_link(nest-cmake "recursive/cmake/leaflib")
 
 add_executable(recursion_cmake_link_test
 	"${CMAKE_CURRENT_SOURCE_DIR}/recursion_cmake_link_test.c"

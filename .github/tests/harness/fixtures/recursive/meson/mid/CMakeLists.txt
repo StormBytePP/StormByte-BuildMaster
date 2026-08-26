@@ -15,7 +15,6 @@ include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 ensure_build_dir(_leaf_build "mleaf")
 create_meson_component(
-	_leaf_file
 	mleaf
 	"Recursive meson leaf"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf"
@@ -24,7 +23,7 @@ create_meson_component(
 	static
 	"recursive/meson/leaflib"
 )
-include("${_leaf_file}")
+_buildmaster_finalize_components()
 
 add_library(midlib STATIC mid.c)
 target_include_directories(midlib PUBLIC

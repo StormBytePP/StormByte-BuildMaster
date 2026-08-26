@@ -7,7 +7,6 @@ endif()
 
 ensure_build_dir(NEST_MESON_BUILD_DIR "nest-meson")
 create_cmake_component(
-	NEST_MESON_FILE
 	nest-meson
 	"Recursive meson nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"
@@ -15,9 +14,9 @@ create_cmake_component(
 	"-DBUILDMASTER_ROOT=${BM_TEST_REPO_ROOT}"
 	static
 	"recursive/meson/nestlib"
-	"LINK_EXTRA=recursive/meson/midlib,recursive/meson/leaflib"
 )
-include("${NEST_MESON_FILE}")
+component_link(nest-meson "recursive/meson/midlib")
+component_link(nest-meson "recursive/meson/leaflib")
 
 add_executable(recursion_meson_link_test
 	"${CMAKE_CURRENT_SOURCE_DIR}/recursion_meson_link_test.c"

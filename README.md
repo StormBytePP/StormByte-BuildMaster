@@ -7,11 +7,12 @@
 ![Ninja](https://img.shields.io/badge/Ninja-supported-0f4c81)
 ![Status](https://img.shields.io/badge/status-active-success)
 
-A small **CMake DSL** that turns external **CMake** and **Meson** projects
-into first-class pieces of a parent tree: configure-time stages, explicit
-targets, one shared install prefix, portable static bundling, header-only
-components, optional per-component toolchains, and failure behaviour that
-does not leave the parent compiling against a half-empty prefix.
+A **fully declarative** CMake DSL that turns external **CMake** and **Meson**
+projects into first-class pieces of a parent tree: order-independent
+registration, deferred materialization, explicit stage targets, one shared
+install prefix, portable static bundling, header-only components, optional
+per-component toolchains, and failure behaviour that does not leave the parent
+compiling against a half-empty prefix.
 
 ## Table of contents
 
@@ -20,13 +21,14 @@ does not leave the parent compiling against a half-empty prefix.
 - [Comparison](#comparison)
 - [Design goals](#design-goals)
 - [Quick start](#quick-start)
+- [Declarative model](#declarative-model)
 - [How a component works](#how-a-component-works)
+- [component_dependency and component_link](#component_dependency-and-component_link)
 - [Component options string](#component-options-string)
-- [Produced libraries and LINK_EXTRA](#produced-libraries-and-link_extra)
+- [Produced libraries](#produced-libraries)
 - [Install archive normalize (RENAME)](#install-archive-normalize-rename)
 - [Subcomponent specs and library paths](#subcomponent-specs-and-library-paths)
 - [Header-only components](#header-only-components)
-- [Dependant components](#dependant-components)
 - [Per-component toolchains](#per-component-toolchains)
 - [Recursive usage](#recursive-usage)
 - [Verbosity and diagnostics](#verbosity-and-diagnostics)
@@ -36,7 +38,6 @@ does not leave the parent compiling against a half-empty prefix.
 - [Static library bundling](#static-library-bundling)
 - [Git helpers](#git-helpers)
 - [File download and decompress](#file-download-and-decompress)
-- [Advanced: raw stages](#advanced-raw-stages)
 - [API map](#api-map)
 - [Self-tests](#self-tests)
 - [Examples](#examples)
@@ -46,12 +47,14 @@ does not leave the parent compiling against a half-empty prefix.
 
 ## What it is
 
-BuildMaster generates **configure / build / install** stages while the
-parent project is still in the **CMake configure phase**. The parent can
-then:
+You **declare** components and edges. BuildMaster **materializes** them at the
+end of configure (automatic deferred finalize): stage scripts, `INTERFACE` /
+`IMPORTED` targets, and the install contract.
 
+The parent can then:
+
+- link against deterministic targets without managing fragment paths
 - inspect installed headers and libraries before the main build
-- create deterministic **IMPORTED** (or **INTERFACE**) targets
 - attach `POST_BUILD` / install hooks to real stage targets
 - share one install prefix and environment across a dependency tree
 - fail the parent when a required external stage fails
@@ -60,9 +63,9 @@ then:
 It is not only a source fetcher. Sources can come from the Git helpers, the
 file download helpers, a submodule, or anything else.
 
-Typical uses: bundled third-party libraries, multi-variant builds of the
-same tree, header-only SDK graphs, mixed CMake + Meson graphs on Linux,
-Windows, and macOS (including Apple Silicon).
+Typical uses: bundled third-party libraries, multi-variant builds of the same
+tree, header-only SDK graphs, mixed CMake + Meson graphs on Linux, Windows,
+and macOS (including Apple Silicon).
 
 ---
 
@@ -72,18 +75,18 @@ Windows, and macOS (including Apple Silicon).
 branch on results, generate import targets from real paths, or enforce one
 install layout.
 
-`FetchContent` brings sources in but does not orchestrate CMake **and**
-Meson with the same model.
+`FetchContent` brings sources in but does not orchestrate CMake **and** Meson
+with the same model.
 
-Meson does not inherit `PKG_CONFIG_PATH`, prefix, compilers, flags, or
-cache launchers the way nested CMake does. Without a control layer, nested
-Meson often misses previous `.pc` files or uses the wrong toolchain.
+Meson does not inherit `PKG_CONFIG_PATH`, prefix, compilers, flags, or cache
+launchers the way nested CMake does. Without a control layer, nested Meson
+often misses previous `.pc` files or uses the wrong toolchain.
 
-A failed compile can still leave other components installing while the
-parent compiles against missing headers.
+A failed compile can still leave other components installing while the parent
+compiles against missing headers.
 
-Some upstreams misbehave under one compiler. BuildMaster can pin **only
-that component** to another toolchain.
+Some upstreams misbehave under one compiler. BuildMaster can pin **only that
+component** to another toolchain.
 
 Generated stages look like this:
 
@@ -101,7 +104,7 @@ Generated stages look like this:
 |------------|:------------:|:-------------------:|:-----------:|
 | Fetch / manage sources | Yes | Yes | Yes (Git helpers) |
 | Cacheable downloads | Partial | Manual | **Built-in** |
-| Configure external project | N/A | Build time | **Configure stage** |
+| Configure external project | N/A | Build time | **Configure or build stage** |
 | Inspect artifacts before main build | No | No | **Yes** |
 | Explicit `_configure` / `_build` / `_install` | No | No | **Yes** |
 | Attach post-steps to those targets | No | Limited | **Yes** |
@@ -112,7 +115,8 @@ Generated stages look like this:
 | Portable static archive merge | No | Manual | **Yes** |
 | Header-only INTERFACE components | Manual | Manual | **Yes** |
 | Path-qualified library specs (`subdir/name`) | No | Manual | **Yes** |
-| Produced vs extra link archives (`LINK_EXTRA`) | No | Manual | **Yes** |
+| Declarative dependency / link graph | No | Manual | **Yes** |
+| Order-independent declaration | No | Manual | **Yes** |
 | Post-install archive name normalize (`RENAME`) | No | Manual | **Yes** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
 | Fail-fast after a stage failure | No | Manual | **Optional** |
@@ -124,6 +128,8 @@ Generated stages look like this:
 
 ## Design goals
 
+- **Declarative** registration: declare components and edges in any order
+- Automatic materialization at the end of the parent configure
 - Stage-based orchestration (configure / build / install)
 - One environment: `PATH`, `PKG_CONFIG_PATH`, `LIB`, `INCLUDE`, compilers,
   flags, optional ccache/sccache
@@ -134,10 +140,9 @@ Generated stages look like this:
 - One initialization, one install root, even in nested trees
 - Quiet logs by default, full dump on failure
 - Predictable failure: a broken required component fails the parent graph
-- Git ops bound to a component id (configure-time, then optional reset)
+- Git ops bound to a component id
 - Extensible options via one trailing `KEY=value;…` string
 - Library artifacts that can live in a **subdir** of the shared libdir
-- Clear split between **produced** archives and **extra** link archives
 - Canonical produced names even when upstream installs variant basenames
 
 ---
@@ -152,7 +157,6 @@ include(path/to/buildmaster/helpers.cmake)
 
 set(_opts "-DENABLE_FOO=ON")
 create_cmake_component(
-	OUT_FILE
 	mylib
 	"My Library"
 	${CMAKE_SOURCE_DIR}/thirdparty/mylib
@@ -161,20 +165,21 @@ create_cmake_component(
 	shared
 	"mylib"
 )
-include(${OUT_FILE})
+
+# Optional: order edges and extra link archives (any order relative to create_*)
+# component_dependency(mylib otherlib)
+# component_link(mylib "vendor/extra")
 
 target_link_libraries(MyApp PRIVATE mylib)
 ```
 
-After `include(${OUT_FILE})` the stage targets and IMPORTED libraries exist
-in the parent.
+No out-variable and no `include()` of a generated fragment. Targets appear
+after deferred finalize (end of `CMAKE_SOURCE_DIR` processing).
 
-The positional library list is **produced** (what this component installs).
-Optional behaviour goes in a **single** trailing options string:
+Optional trailing options string:
 
 ```cmake
 create_cmake_component(
-	OUT_FILE
 	mylib
 	"My Library"
 	${CMAKE_SOURCE_DIR}/thirdparty/mylib
@@ -188,10 +193,27 @@ create_cmake_component(
 
 ---
 
+## Declarative model
+
+| Phase | What happens |
+|-------|----------------|
+| **Declare** | `create_*`, `component_dependency`, `component_link` only register metadata and edges. Order does not matter. |
+| **Finalize** | At the end of configure of `CMAKE_SOURCE_DIR`, BuildMaster materializes every component (stage scripts + fragment `include`) and applies links. |
+
+- Components **without** a dependency on another install/target configure during
+  parent **configure** (eager).
+- Components **with** such a dependency configure at **build** time under
+  `<id>_configure` (deferred), after prerequisites.
+
+Custom user targets (download, unpack, codegen) can be prerequisites via
+`component_dependency(mycomp my_custom_target)`.
+
+---
+
 ## How a component works
 
-`create_cmake_component` / `create_meson_component` generate three stage
-scripts and a fragment that declares:
+`create_cmake_component` / `create_meson_component` register a component.
+After finalize, the graph contains:
 
 | Target | Role |
 |--------|------|
@@ -199,26 +221,64 @@ scripts and a fragment that declares:
 | `<component>_configure` | Nested CMake/Meson configure (and registered git ops) |
 | `<component>_build` | Compile |
 | `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
-| `<libspec>` | `STATIC`/`SHARED` **IMPORTED** archive(s) for each produced and `LINK_EXTRA` entry |
+| `<libspec>` | `STATIC`/`SHARED` **IMPORTED** archive(s) for each produced entry and library-spec `component_link` dest |
 
 Library-mode install lists archive paths as `OUTPUT` so Ninja tracks real
-files. Paths come from the **produced** list plus optional `LINK_EXTRA`
-(when those archives are materialised by the same install graph). By
-default, missing produced names may be filled by **renaming** upstream
-variant archives (`RENAME`). The stage then requires every listed path to
-exist; it does not write empty placeholder `.a` / `.lib` files.
+files. Paths come from **produced** plus library specs from
+`component_link`. By default, missing produced names may be filled by
+**renaming** upstream variant archives (`RENAME`). The stage then requires
+every listed path to exist; it does not write empty placeholder `.a` / `.lib`
+files.
 
-Component **ids** should be filesystem-friendly (they become target and
-script names). Display **titles** may contain spaces; they only appear in
-status lines.
+Component **ids** should be filesystem-friendly (they become target and script
+names). Display **titles** may contain spaces; they only appear in status lines.
+
+Stage generators (`create_*_stages`) are **internal**. Prefer the component API.
+
+---
+
+## component_dependency and component_link
+
+### `component_dependency(source, dest)`
+
+Order only (no link line).
+
+| Argument | Typical values |
+|----------|----------------|
+| `source` | Component id (edge attaches to deferred configure when applicable) |
+| `dest` | Component id → `<dest>_install`; existing CMake target; or `<id>_install` / `_configure` / `_build` |
+
+```cmake
+component_dependency(harfbuzz freetype)
+component_dependency(opus opus_dnn_data)   # user custom target
+```
+
+### `component_link(source, dest)`
+
+Link **and** order (records a dependency as well).
+
+| `dest` form | Effect |
+|-------------|--------|
+| Registered component | Link all of dest’s produced IMPORTED libs (+ INTERFACE) |
+| Library spec `name` or `subdir/name` | IMPORTED under install libdir; listed on source install `OUTPUT` when needed |
+| Existing CMake target | `target_link_libraries(… INTERFACE …)` |
+| Filesystem path to an archive | Linked as a file |
+
+```cmake
+create_cmake_component(nest … static "recursive/cmake/nestlib")
+component_link(nest "recursive/cmake/midlib")
+component_link(nest "recursive/cmake/leaflib")
+target_link_libraries(MyApp PRIVATE nest)
+```
+
+A static `.a` does not pull other static archives by itself; declare them with
+`component_link` (or list them in produced if this component installs them).
 
 ---
 
 ## Component options string
 
-Every `create_*_component` / `create_*_dependant_component` /
-`create_*_headers_*` function accepts **at most one** optional trailing
-argument:
+Every `create_*` accepts **at most one** optional trailing argument:
 
 ```text
 "KEY=value;KEY2=value with spaces"
@@ -230,7 +290,7 @@ argument:
 | Key / value | Only the **first** `=` in a pair |
 | Keys | Case-insensitive, stored **UPPERCASE** |
 | Values | May contain spaces and extra `=` |
-| `;` in a value | Not allowed (it would start another pair) |
+| `;` in a value | Not allowed |
 | Empty value | Legal (`TOOLCHAIN=` means inherit) |
 | Flag without `=` | Only for declared flag keys (today: `RENAME`). `RENAME` ≡ `RENAME=ON` |
 | Unknown key | **WARNING**, ignored |
@@ -240,56 +300,32 @@ argument:
 |-----|---------|
 | `INDENT` / `INDENT_LEVEL` | Tabs in hierarchical `STATUS` lines (non-negative integer) |
 | `TOOLCHAIN` | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`). Empty = inherit |
-| `LINK_EXTRA` | Comma-separated library specs also wired as IMPORTED on the INTERFACE |
 | `RENAME` | **Flag** (default **ON**). Normalize variant install names to produced paths |
+
+`LINK_EXTRA` is **removed**; use `component_link`.
 
 ```cmake
 create_cmake_component(... "mylib")
 create_cmake_component(... "mylib" "INDENT=2")
 create_cmake_component(... "mylib" "TOOLCHAIN=msvc")
 create_cmake_component(... "mylib" "INDENT=1;TOOLCHAIN=msvc")
-create_cmake_component(... "nestlib"
-	"LINK_EXTRA=midlib,leaflib")
 create_meson_component(... "z" "RENAME")
 create_meson_component(... "z" "RENAME=OFF")
 ```
 
 ---
 
-## Produced libraries and LINK_EXTRA
+## Produced libraries
 
 The positional argument after `static` / `shared` is the **produced** list:
-archives this component is responsible for as its primary install artefacts.
-At least one entry is required (library modes).
+archives this component installs as its primary contract. At least one entry is
+required (library modes).
 
-| List | Role |
-|------|------|
-| **Produced** (positional) | Primary archives. Always IMPORTED and on the install `OUTPUT` list. |
-| **`LINK_EXTRA=`** (options) | Additional specs for the INTERFACE link line (and IMPORTED targets). Also listed on install `OUTPUT` when the same install stage materialises them (typical for nested BuildMaster). |
+Specs from `component_link` that resolve to install-prefix library paths are
+also added to the install `OUTPUT` list so Ninja has a production rule.
 
-Omit `LINK_EXTRA` when consumers only need what this component installs.
-
-A static `.a` does not pull other static archives by itself. For a nested
-chain (`nest` → `mid` → `leaf`), put the outer archive in **produced** and
-the transitive ones in `LINK_EXTRA`:
-
-```cmake
-create_cmake_component(
-	OUT nest "Nested stack"
-	${NEST_SRC} ${NEST_BUILD} "${OPTS}"
-	static
-	"recursive/cmake/nestlib"
-	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
-)
-include(${OUT})
-target_link_libraries(MyApp PRIVATE nest)
-```
-
-If `LINK_EXTRA` points at archives installed only by a **sibling**
-component, also ensure the graph waits on that component’s `_install`.
-
-MSVC DLLs still live under `BUILDMASTER_INSTALL_BINDIR` using the
-**basename only**.
+MSVC DLLs still live under `BUILDMASTER_INSTALL_BINDIR` using the **basename
+only**.
 
 ---
 
@@ -309,19 +345,19 @@ When `RENAME` is enabled (default for library modes):
 4. The install stage then requires every produced path to exist.
 
 If the canonical file is already present, rename is skipped. Headers mode
-ignores `RENAME`. Variant tokens live in one internal list
-(`tools/rename/variants.cmake`); `install_exec` only decides whether to run
-the normalizer.
+ignores `RENAME`. Variant tokens live in `tools/rename/variants.cmake`.
 
 Declare produced as the **real** contract name (`z` on MSVC, not `libz`).
 
 ```cmake
 create_meson_component(
-	OUT zlib "zlib"
-	${ZLIB_SRC} ${ZLIB_BUILD} "${ZLIB_OPTS}"
+	zlib
+	"zlib"
+	${ZLIB_SRC}
+	${ZLIB_BUILD}
+	"${ZLIB_OPTS}"
 	static
 	"z"
-	# default; omit or use RENAME=OFF to disable
 	"RENAME"
 )
 ```
@@ -330,7 +366,8 @@ create_meson_component(
 
 ## Subcomponent specs and library paths
 
-Each entry in produced or `LINK_EXTRA` is a library **spec**:
+Each entry in produced (or a library-spec `component_link` dest) is a library
+**spec**:
 
 | Spec | File | IMPORTED target |
 |------|------|-----------------|
@@ -341,8 +378,6 @@ Each entry in produced or `LINK_EXTRA` is a library **spec**:
 - Everything before it = subdir under `BUILDMASTER_INSTALL_LIBDIR`.
 - `/` in the spec becomes `_` in the CMake target name.
 - Windows uses `.lib` / import-library suffixes via the same helpers.
-
-Implemented by `buildmaster_parse_subcomponent()`. Paths are built with:
 
 ```cmake
 library_import_static_hint(out name prefix [subdir])
@@ -356,9 +391,8 @@ library_import_hint(out name prefix [subdir])
 
 ## Header-only components
 
-Projects that install only headers (no `.a` / `.lib` / `.so`) use
-`headers` mode. There is no IMPORTED archive and no empty archive `OUTPUT`
-list (which breaks under CMP0175).
+Projects that install only headers use headers mode (no IMPORTED archive, no
+empty archive `OUTPUT` list).
 
 | Stage | Behaviour |
 |-------|-----------|
@@ -370,7 +404,6 @@ list (which breaks under CMP0175).
 
 ```cmake
 create_cmake_headers_component(
-	HEADERS_FILE
 	sdk-headers
 	"SDK Headers"
 	${HEADERS_SRC}
@@ -378,10 +411,8 @@ create_cmake_headers_component(
 	"-DENABLE_TESTS=OFF"
 	"INDENT=1"
 )
-include(${HEADERS_FILE})
 
-create_cmake_dependant_component(
-	LOADER_FILE
+create_cmake_component(
 	sdk-loader
 	"SDK Loader"
 	${LOADER_SRC}
@@ -389,51 +420,19 @@ create_cmake_dependant_component(
 	""
 	static
 	"sdkloader"
-	"sdk-headers_install"
 )
-include(${LOADER_FILE})
+component_dependency(sdk-loader sdk-headers)
 ```
 
-Meson twins: `create_meson_headers_component`,
-`create_meson_headers_dependant_component`.
-
-Signatures omit `_library_mode` and the produced list (always `headers`).
-
----
-
-## Dependant components
-
-Use `create_*_dependant_component` when configure of A must wait for B’s
-**install**:
-
-```cmake
-create_cmake_component(B_FILE libb "LibB" ${B_SRC} ${B_BUILD} "" shared "libb")
-include(${B_FILE})
-
-create_cmake_dependant_component(
-	A_FILE
-	liba
-	"LibA"
-	${A_SRC}
-	${A_BUILD}
-	"${options}"
-	shared
-	"liba"
-	"libb_install"
-)
-include(${A_FILE})
-```
-
-The dependant configure runs under a custom target so hierarchical
-`STATUS` lines stay quiet (the target `COMMENT` is enough).
+Meson twin: `create_meson_headers_component`.
 
 ---
 
 ## Per-component toolchains
 
-By default every component inherits the **job** compilers, linker and
-archiver. `TOOLCHAIN=` in the options string selects a profile for **that
-component only**.
+By default every component inherits the **job** compilers, linker and archiver.
+`TOOLCHAIN=` in the options string selects a profile for **that component
+only**.
 
 | Name | Drivers | Linker |
 |------|---------|--------|
@@ -449,16 +448,19 @@ component only**.
 - `msvc` / `clang-cl` only on Windows; `gcc` / `clang` are not accepted as
   component toolchains on Windows.
 
-Profiles: `toolchain/profiles/`. Validation: `toolchain/helpers.cmake`.
+Profiles: `toolchain/profiles/`.
 
 ```cmake
 create_cmake_component(
-	SPECIAL_FILE speciallib "Special Library"
-	${SPECIAL_SRC} ${SPECIAL_BUILD} "${SPECIAL_OPTIONS}"
-	static "speciallib"
+	speciallib
+	"Special Library"
+	${SPECIAL_SRC}
+	${SPECIAL_BUILD}
+	"${SPECIAL_OPTIONS}"
+	static
+	"speciallib"
 	"TOOLCHAIN=msvc"
 )
-include(${SPECIAL_FILE})
 ```
 
 ---
@@ -471,18 +473,21 @@ BuildMaster initializes **once** (`BUILDMASTER_CONFIGURED`) and reuses
 
 Pass the repo root into nested projects if they need to find BuildMaster.
 Install nested archives under a **subdir** of the shared libdir. Use
-**produced** for the outer archive and `LINK_EXTRA` for transitive static
+**produced** for the outer archive and `component_link` for transitive static
 archives installed in the same nested graph:
 
 ```cmake
 create_cmake_component(
-	NEST_FILE nest "Nested"
-	${NEST_SRC} ${NEST_BUILD}
+	nest
+	"Nested"
+	${NEST_SRC}
+	${NEST_BUILD}
 	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
 	static
 	"vendor/nest/nestlib"
-	"LINK_EXTRA=vendor/nest/midlib,vendor/nest/leaflib"
 )
+component_link(nest "vendor/nest/midlib")
+component_link(nest "vendor/nest/leaflib")
 ```
 
 Per-component `TOOLCHAIN` stays local to the component that requested it.
@@ -606,173 +611,117 @@ Git ops are bound to the same **component id** used in `create_*`.
 ```cmake
 create_git_reset_file(LIB_RESET mylib "MyLib reset" ${MYLIB_SRC_DIR})
 create_git_patch_file(LIB_PATCH mylib "MyLib patch" ${MYLIB_SRC_DIR} "${MYLIB_PATCH}")
-create_meson_component(OUT mylib "My Library"
-	${MYLIB_SRC_DIR} ${MYLIB_BUILD_DIR} "${MYLIB_OPTIONS}"
-	shared "mylib")
-include(${OUT})
+include(${LIB_RESET})
+include(${LIB_PATCH})
+
+create_cmake_component(
+	mylib
+	"My Library"
+	${MYLIB_SRC_DIR}
+	${MYLIB_BUILD}
+	"${MYLIB_OPTS}"
+	static
+	"mylib"
+)
 ```
 
-| Function | Action |
-|----------|--------|
-| `create_git_reset_file` | `reset --hard` + `clean -fd` |
-| `create_git_patch_file` | `git apply` |
-| `create_git_fetch` | `git fetch` |
-| `create_git_switch_branch` | switch / track branch |
-
-Call `create_git_*` **before** `create_*_component` so registration is
-visible when stages are generated. Scripts run at the start of
-`<component>_configure`. After a successful install, that repo is reset
-again (toplevel of that tree only).
-
-### `buildmaster_clean`
-
-Default `BUILDMASTER_CLEAN_RESET_REPOS=ON`:
-
-```bash
-cmake --build build --target buildmaster_clean
-```
-
-Not wired to the generator’s `clean` (unreliable with Ninja).
+Git steps run as part of that component’s configure path.
 
 ---
 
 ## File download and decompress
 
-| Function | Role |
-|----------|------|
-| `file_download_cached` | Reuse file when hash matches |
-| `file_download` | Always download, retry, verify hash |
-| `file_decompress` | `file(ARCHIVE_EXTRACT)` |
+```cmake
+file_download_cached(DL_SCRIPT
+	"https://example.com/data.tar.gz"
+	TITLE "Example data"
+	EXPECTED_HASH "SHA256=…"
+)
+include(${DL_SCRIPT})
 
-Destination is always `${BUILDMASTER_DOWNLOADSDIR}/<url-basename>`. Hash form:
-`ALGO=hex` (e.g. `SHA256=…`).
+file_decompress(UNPACK_SCRIPT
+	"${BUILDMASTER_DOWNLOADSDIR}/data.tar.gz"
+	${UNPACK_DIR}
+	TITLE "Example data"
+)
+include(${UNPACK_SCRIPT})
+```
 
----
-
-## Advanced: raw stages
-
-`create_cmake_stages` / `create_meson_stages` if you need to insert commands
-between stages. Pass **full** artifact paths in `_output_libraries`. Optional
-args (`indent`, `toolchain`, `configure_via_target`) remain on the stage API.
-`_BM_RENAME_ENABLED` defaults to ON when unset.
+Downloads are cache-aware under `BUILDMASTER_DOWNLOADSDIR`. For build-time
+ordering relative to a component, wrap the work in a custom target and
+`component_dependency(mycomp that_target)`.
 
 ---
 
 ## API map
 
-| Area | Where |
-|------|--------|
-| Component factory | `component/helpers.cmake` (`create_component`, options parser) |
-| CMake component wrappers | `component/cmake/helpers.cmake` (`create_cmake_*`) |
-| Meson component wrappers | `component/meson/helpers.cmake` (`create_meson_*`) |
-| Subcomponent parse | `buildmaster_parse_subcomponent` |
-| Header wrappers | `create_*_headers_*` (same backend helper files) |
-| Static bundler | `create_bundle_static_libraries` |
-| Path hints | `helpers.cmake` → `library_import_hint`, `library_import_static_hint` |
-| CMake stages | `tools/cmake/helpers.cmake` |
-| Meson stages | `tools/meson/helpers.cmake` |
-| Toolchain profiles | `toolchain/helpers.cmake`, `toolchain/profiles/` |
-| Git | `tools/git/helpers.cmake` |
-| File helpers | `tools/file/helpers.cmake` |
-| Env runners | `env/helpers.cmake` |
-| Sanitize / paths / lists | `helpers.cmake` |
-| Fail-fast / init | `init_vars.cmake` |
+| Area | Public entry points |
+|------|---------------------|
+| Components | `create_component`, `create_cmake_component`, `create_meson_component`, `create_cmake_headers_component`, `create_meson_headers_component` |
+| Graph | `component_dependency`, `component_link` |
+| Options / specs | `buildmaster_parse_component_options`, `buildmaster_parse_subcomponent` |
+| Paths | `ensure_build_dir`, `library_import_hint`, `library_import_static_hint`, `sanitize_for_filename` |
+| Git | `create_git_fetch`, `create_git_patch_file`, `create_git_reset_file`, `create_git_switch_branch` |
+| Files | `file_download`, `file_download_cached`, `file_decompress` |
+| Toolchain | `buildmaster_load_toolchain_profile`, `buildmaster_validate_toolchain` |
 
-Component module paths (exported / toolchain):
-
-| Variable | Points to |
-|----------|-----------|
-| `BUILDMASTER_COMPONENT_SRCDIR` | `component/` (module root) |
-| `BUILDMASTER_COMPONENT_TEMPLATEDIR` | `component/templates/` (`.in` fragments and bundler templates) |
-| `BUILDMASTER_SCRIPTS_COMPONENTDIR` | Generated per-component fragments under the scripts tree |
-
-Templates for stage wiring live under `component/templates/`
-(`component_{static,shared,headers}{,_dependant}.cmake.in`, `bundler*.in`).
-Other modules keep their `*.cmake.in` / `runner_*.in` next to themselves.
+Stage generators and finalize helpers are **internal**.
 
 ---
 
 ## Self-tests
 
+Synthetic harness under `.github/tests/` (no real third-party projects).
+
 ```bash
-cmake -S tests/harness -B build/harness -G Ninja
+cmake -S .github/tests/harness -B build/harness -G Ninja
 cmake --build build/harness --target run_buildmaster_checks
 cmake --build build/harness --target run_buildmaster_smoke
 ```
 
-Edit lists under `tests/expected/` when extending coverage. The harness
-includes a Meson **rename** fixture (`zs.*` → produced `z.*`). Details:
-`tests/README.md`.
+| Path | Role |
+|------|------|
+| `.github/tests/expected/` | Expected public functions, vars, edges, smoke targets/artifacts |
+| `.github/tests/harness/fixtures/` | Tiny projects (including order-independent and recursive chains) |
+
+See `.github/tests/README.md` for how to extend expectations when adding API.
 
 ---
 
 ## Examples
 
-### CMake library
+### Order does not matter
 
 ```cmake
-create_cmake_component(
-	LIB_CREATE_FILE
-	mylib "My Library"
-	${CMAKE_SOURCE_DIR}/thirdparty/mylib
-	${CMAKE_BINARY_DIR}/thirdparty/mylib_build
-	"-DENABLE_FEATURE=ON"
-	shared
-	"mylib"
-)
-include(${LIB_CREATE_FILE})
+component_dependency(second first)
+component_link(second first)
+
+create_cmake_component(second "Second" ${SECOND_SRC} ${SECOND_BUILD} "" static "secondlib")
+create_cmake_component(first  "First"  ${FIRST_SRC}  ${FIRST_BUILD}  "" static "firstlib")
+
+target_link_libraries(app PRIVATE second)
+```
+
+### Eager vs deferred configure
+
+```cmake
+create_cmake_component(ogg … static "ogg")           # configures at configure-time
+create_cmake_component(vorbis … static "vorbis")
+component_dependency(vorbis ogg)                     # vorbis configures at build-time
 ```
 
 ### Nested static chain
 
 ```cmake
 create_cmake_component(
-	NEST_FILE nest "Nested stack"
-	${NEST_SRC} ${NEST_BUILD}
-	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
+	nest "Nested" ${NEST_SRC} ${NEST_BUILD}
+	"-DBUILDMASTER_ROOT=${ROOT}"
 	static
 	"recursive/cmake/nestlib"
-	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
 )
-include(${NEST_FILE})
-target_link_libraries(MyApp PRIVATE nest)
-```
-
-### Meson with variant install name
-
-```cmake
-create_meson_component(
-	OUT zlib "zlib"
-	${ZLIB_SRC} ${ZLIB_BUILD} "${ZLIB_OPTS}"
-	static
-	"z"
-	"RENAME"
-)
-include(${OUT})
-```
-
-### Header-only
-
-```cmake
-create_cmake_headers_component(
-	HEADERS_FILE sdk-headers "SDK Headers"
-	${CMAKE_SOURCE_DIR}/thirdparty/sdk-headers
-	${CMAKE_BINARY_DIR}/thirdparty/sdk-headers_build
-	"-DENABLE_TESTS=OFF"
-)
-include(${HEADERS_FILE})
-```
-
-### Indent + toolchain
-
-```cmake
-create_cmake_component(
-	OUT mylib "My Library"
-	${SRC} ${BUILD} "${OPTS}"
-	static "mylib"
-	"INDENT=2;TOOLCHAIN=clang-cl"
-)
-include(${OUT})
+component_link(nest "recursive/cmake/midlib")
+component_link(nest "recursive/cmake/leaflib")
+target_link_libraries(app PRIVATE nest)
 ```
 
 ---

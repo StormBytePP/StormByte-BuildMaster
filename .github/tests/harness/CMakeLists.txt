@@ -21,6 +21,17 @@ get_filename_component(BM_TEST_REPO_ROOT
 # All synthetic components + recursive chains (+ rename if present)
 add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 
+# Materialize before contract checks.
+#
+# Consumers rely on cmake_language(DEFER) at the end of CMAKE_SOURCE_DIR and
+# never call finalize. This harness is different: check_api.cmake,
+# check_dependant_edges.cmake, and friends run during *this* configure, after
+# fixtures are declared but before this CMakeLists finishes. Without an
+# explicit materialize, those checks would see no targets or dependency edges.
+# _buildmaster_finalize_components is internal and idempotent; the deferred
+# callback later is a no-op.
+_buildmaster_finalize_components()
+
 # ---------------------------------------------------------------------------
 # Contract checks
 # ---------------------------------------------------------------------------
@@ -41,6 +52,7 @@ add_custom_target(run_buildmaster_checks
 add_custom_target(run_buildmaster_smoke
 	DEPENDS
 		base_install dep_install sdk-headers_install sdkloader_install
+		first_install second_install order_independent_link_test
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test
 		rename-variant_install rename_variant_link_test

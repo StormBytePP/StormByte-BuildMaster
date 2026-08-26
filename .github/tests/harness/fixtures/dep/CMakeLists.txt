@@ -1,6 +1,5 @@
 ensure_build_dir(DEP_BUILD_DIR "dep")
-create_cmake_dependant_component(
-	DEP_FILE
+create_cmake_component(
 	dep
 	"Harness dependant library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -8,6 +7,5 @@ create_cmake_dependant_component(
 	""
 	static
 	"deplib"
-	"base_install"
 )
-include("${DEP_FILE}")
+component_dependency(dep base)

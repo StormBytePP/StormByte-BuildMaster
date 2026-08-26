@@ -15,7 +15,6 @@ include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 ensure_build_dir(_leaf_build "leaf")
 create_cmake_component(
-	_leaf_file
 	leaf
 	"Recursive cmake leaf"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf"
@@ -24,7 +23,8 @@ create_cmake_component(
 	static
 	"recursive/cmake/leaflib"
 )
-include("${_leaf_file}")
+# Nested project needs targets before target_link_libraries below.
+_buildmaster_finalize_components()
 
 add_library(midlib STATIC mid.c)
 target_include_directories(midlib PUBLIC
