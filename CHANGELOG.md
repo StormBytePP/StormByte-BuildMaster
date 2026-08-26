@@ -12,19 +12,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Imported CMake target name replaces `/` with `_` (e.g. `recursive/cmake/nestlib` → target `recursive_cmake_nestlib`, file `…/lib/recursive/cmake/libnestlib.a`).
   - New helper `buildmaster_parse_subcomponent()` performs the split.
 - **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir` (relative to the prefix path; empty = previous layout).
-- **`LINK_EXTRA` component option:** comma-separated library specs wired as additional IMPORTED archives on the component INTERFACE (and listed on the install stage `OUTPUT` so Ninja tracks nested installs). Specs use the same `<name>` / `<subdir>/<name>` form as the produced list. The key may be repeated; values are concatenated.
-- **Harness self-tests:** recursive cmake and meson chains under `tests/harness/fixtures/recursive/` (nested `create_*`, install under `lib/recursive/{cmake,meson}/`, link tests that depend only on the outer component INTERFACE).
+- **`LINK_EXTRA` component option:** comma-separated library specs wired as additional IMPORTED archives on the component INTERFACE (and listed on the install stage `OUTPUT` so Ninja tracks nested installs). Specs use the same `<name>` / `<subdir>/<name>` form as produced. The key may be repeated; values are concatenated.
+- **`RENAME` component option (flag, default ON):** after a successful nested install and before the OUTPUT contract check, missing **produced** archive paths may be filled by renaming a same-stem upstream variant in the same directory (`zs.lib` → `z.lib`, `libzs.a` → `libz.a`, …). Shared Windows installs also try to pair the matching `.dll`.
+  - Forms: `RENAME`, `RENAME=ON`, `RENAME=OFF` (and usual truthy/falsy spellings).
+  - Flag keys without `=` are only accepted for declared flags (`RENAME`); other keys still require `KEY=value`.
+  - Implementation: `tools/rename/normalize_install_outputs.cmake` + ordered variants in `tools/rename/variants.cmake` (extend variants in one place only). `install_exec` (CMake and Meson) decides whether to run the script; the script itself does not read `RENAME`.
+  - Headers mode ignores `RENAME`. No empty placeholder archives are written for missing produced outputs (missing path after normalize → **FATAL**).
+- **Harness self-tests:**
+  - Recursive cmake and meson chains under `tests/harness/fixtures/recursive/` (nested `create_*`, install under `lib/recursive/{cmake,meson}/`, link tests that depend only on the outer component INTERFACE).
+  - Meson rename fixture under `tests/harness/fixtures/rename/` (installs `zs.*`, produced `z.*`, link test + smoke artifacts for canonical `z`).
 
 ### Changed
 - **Breaking:** `create_*_component` / `create_*_dependant_component` family now accepts a single optional trailing options string of the form `KEY=value;KEY2=value with spaces` instead of positional `indent_level` / `toolchain` arguments.
-  - Supported keys (case-insensitive, stored uppercase): `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `LINK_EXTRA`.
+  - Supported keys (case-insensitive, stored uppercase): `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `LINK_EXTRA`, `RENAME`.
   - Unknown keys produce a warning and are ignored.
   - Only the first `=` in each pair separates key from value; values may contain `=` and spaces but must not contain `;`.
   - `LINK_EXTRA` values use **commas** to separate library specs (`;` would start another option pair).
   - Extra positional arguments beyond the options string cause a fatal error.
-- **Breaking (semantics):** the positional library list is **produced** archives (what this component installs as primary artefacts). Transitive static archives that consumers must also link belong in `LINK_EXTRA=…`, not in a single mixed list of “everything”.
+- **Breaking (semantics):** the positional library list is **produced** archives (what this component installs as primary artefacts). Transitive static archives that consumers must also link belong in `LINK_EXTRA=…`, not in a single mixed “everything” list.
   - Example nested chain: produced `recursive/cmake/nestlib` with `LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib`.
-- Install stages no longer write empty placeholder `.a` / `.lib` files when an expected archive is missing after a successful install (that previously caused MSVC `LNK1136`). Missing produced/OUTPUT archives are a hard error. Header-only stamp files (`.bm_*_headers.stamp`) are still created when needed.
+- Install stages no longer write empty placeholder `.a` / `.lib` files when an expected archive is missing after a successful install. Missing produced/OUTPUT archives are a hard error after optional `RENAME`. Header-only stamp files (`.bm_*_headers.stamp`) are still created when needed.
+- Removed the old `component/rename_static_library.cmake.in` approach; contract fulfillment for variant basenames is handled by install-time `RENAME`.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 

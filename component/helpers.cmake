@@ -2,27 +2,91 @@
 # component/helpers.cmake
 # =============================================================================
 
-## @brief Parse the optional KEY=VALUE;KEY=VALUE options string used by
-##        create_*_component family.
-## @param[out] out_indent     Parent-scope variable receiving the indent level
-##                            (integer, default 0).
-## @param[out] out_toolchain  Parent-scope variable receiving the toolchain name
-##                            (empty string means inherit parent).
-## @param[out] out_link_extra Parent-scope variable receiving the raw LINK_EXTRA
-##                            value (comma-separated specs), or empty.
-## @param[in]  options_string Optional string of the form
-##                            "KEY=value;KEY2=value with spaces".
-##                            Only the first '=' in each pair separates key from
-##                            value. Keys are matched case-insensitively but
-##                            stored uppercase. Values may contain '=' and
-##                            spaces but must not contain ';'.
-## @note Unknown keys produce a WARNING and are ignored. Empty values are
-##       legal (e.g. TOOLCHAIN= means inherit). LINK_EXTRA values use ','
-##       to separate library specs (';' would start another option pair).
-function(buildmaster_parse_component_options out_indent out_toolchain out_link_extra options_string)
+## @brief Keys that may appear without '=' (flag form → enabled).
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME")
+
+## @brief Split one options token into key and value.
+## @param[in]  pair     Raw token (KEY=value, KEY=, or KEY for flags).
+## @param[out] out_key  Uppercase stripped key (parent scope).
+## @param[out] out_val  Value (may be empty).
+## @param[out] out_ok   TRUE if the token is usable.
+## @note Tokens without '=' are only accepted when the key is listed in
+##       BUILDMASTER_COMPONENT_OPTION_FLAGS (e.g. RENAME ≡ RENAME=ON).
+function(buildmaster_option_pair_split pair out_key out_val out_ok)
+	set(_ok TRUE)
+	set(_key "")
+	set(_val "")
+
+	if("${pair}" STREQUAL "")
+		set(_ok FALSE)
+	else()
+		string(FIND "${pair}" "=" _eq_pos)
+		if(_eq_pos EQUAL -1)
+			string(STRIP "${pair}" _key)
+			string(TOUPPER "${_key}" _key)
+			set(_is_flag FALSE)
+			foreach(_f IN LISTS BUILDMASTER_COMPONENT_OPTION_FLAGS)
+				if(_key STREQUAL "${_f}")
+					set(_is_flag TRUE)
+					break()
+				endif()
+			endforeach()
+			if(_is_flag)
+				set(_val "")
+			else()
+				message(WARNING
+					"[BuildMaster] Option '${pair}' requires KEY=value form (ignored)")
+				set(_ok FALSE)
+			endif()
+		else()
+			string(SUBSTRING "${pair}" 0 ${_eq_pos} _key)
+			math(EXPR _val_start "${_eq_pos} + 1")
+			string(SUBSTRING "${pair}" ${_val_start} -1 _val)
+			string(STRIP "${_key}" _key)
+			string(TOUPPER "${_key}" _key)
+			string(STRIP "${_val}" _val)
+		endif()
+	endif()
+
+	set(${out_key} "${_key}" PARENT_SCOPE)
+	set(${out_val} "${_val}" PARENT_SCOPE)
+	set(${out_ok} "${_ok}" PARENT_SCOPE)
+endfunction()
+
+## @brief Interpret a flag option value.
+## @param[in]  val      Empty (flag form), or ON/OFF-style string.
+## @param[out] out_bool Parent-scope TRUE/FALSE.
+## @note Empty value means enabled (RENAME ≡ RENAME=ON ≡ RENAME=).
+function(buildmaster_option_flag_enabled val out_bool)
+	if("${val}" STREQUAL "")
+		set(${out_bool} TRUE PARENT_SCOPE)
+		return()
+	endif()
+	string(TOUPPER "${val}" _v)
+	if(_v STREQUAL "1" OR _v STREQUAL "ON" OR _v STREQUAL "TRUE" OR _v STREQUAL "YES")
+		set(${out_bool} TRUE PARENT_SCOPE)
+	elseif(_v STREQUAL "0" OR _v STREQUAL "OFF" OR _v STREQUAL "FALSE" OR _v STREQUAL "NO")
+		set(${out_bool} FALSE PARENT_SCOPE)
+	else()
+		message(WARNING
+			"[BuildMaster] Unrecognized flag value '${val}' (treated as OFF)")
+		set(${out_bool} FALSE PARENT_SCOPE)
+	endif()
+endfunction()
+
+## @brief Parse the optional KEY=VALUE;… options string used by create_*_component.
+## @param[out] out_indent     Indent level (integer, default 0).
+## @param[out] out_toolchain  Toolchain name (empty = inherit).
+## @param[out] out_link_extra Raw LINK_EXTRA value (comma-separated), or empty.
+## @param[out] out_rename     TRUE/FALSE — normalize variant installs (default TRUE).
+## @param[in]  options_string Optional "KEY=value;KEY2=…" string.
+## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit '='.
+##       LINK_EXTRA uses commas inside the value. Unknown keys → WARNING.
+function(buildmaster_parse_component_options out_indent out_toolchain out_link_extra out_rename options_string)
 	set(_indent 0)
 	set(_toolchain "")
 	set(_link_extra "")
+	set(_rename TRUE)
 
 	if(NOT "${options_string}" STREQUAL "")
 		string(REPLACE ";" "\n" _tmp "${options_string}")
@@ -33,21 +97,10 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_link_e
 				continue()
 			endif()
 
-			# Only the first '=' is the separator
-			string(FIND "${_pair}" "=" _eq_pos)
-			if(_eq_pos EQUAL -1)
-				message(WARNING
-					"[BuildMaster] Ignoring malformed option (no '='): '${_pair}'")
+			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			if(NOT _ok)
 				continue()
 			endif()
-
-			string(SUBSTRING "${_pair}" 0 ${_eq_pos} _key)
-			math(EXPR _val_start "${_eq_pos} + 1")
-			string(SUBSTRING "${_pair}" ${_val_start} -1 _val)
-
-			string(STRIP "${_key}" _key)
-			string(TOUPPER "${_key}" _key)
-			string(STRIP "${_val}" _val)
 
 			if(_key STREQUAL "INDENT" OR _key STREQUAL "INDENT_LEVEL")
 				if(_val MATCHES "^[0-9]+$")
@@ -64,6 +117,8 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_link_e
 				else()
 					set(_link_extra "${_link_extra},${_val}")
 				endif()
+			elseif(_key STREQUAL "RENAME")
+				buildmaster_option_flag_enabled("${_val}" _rename)
 			else()
 				message(WARNING
 					"[BuildMaster] Unknown component option '${_key}' (ignored)")
@@ -74,19 +129,15 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_link_e
 	set(${out_indent} "${_indent}" PARENT_SCOPE)
 	set(${out_toolchain} "${_toolchain}" PARENT_SCOPE)
 	set(${out_link_extra} "${_link_extra}" PARENT_SCOPE)
+	set(${out_rename} "${_rename}" PARENT_SCOPE)
 endfunction()
 
 
 ## @brief Split a subcomponent spec into CMake target, library basename and libdir subdir.
-## @param[in]  spec        Either `<name>` or `<subdir>/<name>`
-##                         (example: `recursive/cmake/nestlib`).
-## @param[out] out_target  Imported CMake target name (`/` replaced by `_`).
-## @param[out] out_libname Library basename without prefix/suffix (`nestlib`).
-## @param[out] out_subdir  Directory relative to BUILDMASTER_INSTALL_LIBDIR
-##                         (`recursive/cmake`), or empty for the legacy layout.
-## @note CMake target names cannot contain `/`. The imported target is
-##       therefore `recursive_cmake_nestlib` while the file is
-##       `${BUILDMASTER_INSTALL_LIBDIR}/recursive/cmake/libnestlib.a`.
+## @param[in]  spec        Either `<name>` or `<subdir>/<name>`.
+## @param[out] out_target  Imported CMake target name (`/` → `_`).
+## @param[out] out_libname Library basename without prefix/suffix.
+## @param[out] out_subdir  Directory relative to BUILDMASTER_INSTALL_LIBDIR, or empty.
 function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
 	if("${spec}" STREQUAL "")
 		message(FATAL_ERROR
@@ -116,12 +167,6 @@ endfunction()
 
 
 ## @brief Resolve one library spec into IMPORTED name + file path (+ MSVC DLL).
-## @param[in]  library_mode `static` or `shared`.
-## @param[in]  spec         `<name>` or `<subdir>/<name>`.
-## @param[in]  names_var    List variable (caller scope) receiving target names.
-## @param[in]  files_var    List variable receiving archive / import-lib paths.
-## @param[in]  dlls_var     List variable receiving MSVC DLL paths (shared only).
-## @note Appends to the three list variables in the caller scope (macro).
 macro(buildmaster_append_library_spec library_mode spec names_var files_var dlls_var)
 	buildmaster_parse_subcomponent("${spec}" _bm_as_tgt _bm_as_name _bm_as_subdir)
 	list(APPEND ${names_var} "${_bm_as_tgt}")
@@ -150,25 +195,14 @@ endmacro()
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake` or `meson`.
-## @param[in] _produced List of library specs this component **owns** as primary
-##            install artefacts (ignored for headers). Each entry is `<name>`
-##            or `<subdir>/<name>`. At least one is required for static/shared.
+## @param[in] _produced Primary library specs this component installs.
 ## @param[in] _dependency Optional install-target dependency for dependant templates.
-## @param[in] options_string Optional (last argument) string of the form
-##            "KEY=value;KEY2=value with spaces". Supported keys:
-##              INDENT / INDENT_LEVEL – indentation level for STATUS messages
-##              TOOLCHAIN             – BuildMaster toolchain name (empty = inherit)
-##              LINK_EXTRA            – extra library specs (comma-separated) also
-##                                      wired as IMPORTED and listed on the install
-##                                      stage OUTPUT so Ninja tracks nested installs;
-##                                      not a substitute for add_dependencies on a
-##                                      sibling component install
-##            Unknown keys produce a WARNING. Values may contain '=' and spaces
-##            but must not contain ';'. Only the first '=' separates key from value.
-## @note Extra positional arguments beyond the options string cause FATAL_ERROR.
+## @param[in] options_string Optional trailing "KEY=value;…" string.
+##            Keys: INDENT/INDENT_LEVEL, TOOLCHAIN, LINK_EXTRA, RENAME (flag).
+## @note RENAME defaults to ON: post-install normalize of variant archive names
+##       before the OUTPUT contract check. RENAME=OFF disables it.
 function(create_component _library_create_file _component _component_title _srcdir _builddir
 						_options _library_mode _build_system _produced _dependency)
-	# Fixed: 10 arguments (indices 0-9). Optional options_string is ARGV10.
 	if(ARGC GREATER 11)
 		message(FATAL_ERROR
 			"[BuildMaster] create_component: too many arguments "
@@ -180,7 +214,17 @@ function(create_component _library_create_file _component _component_title _srcd
 		set(_options_string "${ARGV10}")
 	endif()
 
-	buildmaster_parse_component_options(_indent_level _toolchain _link_extra "${_options_string}")
+	buildmaster_parse_component_options(
+		_indent_level _toolchain _link_extra _rename_on "${_options_string}")
+
+	# Visible to create_*_stages configure_file for install_exec.cmake.in
+	if(_library_mode STREQUAL "headers")
+		set(_BM_RENAME_ENABLED "0")
+	elseif(_rename_on)
+		set(_BM_RENAME_ENABLED "1")
+	else()
+		set(_BM_RENAME_ENABLED "0")
+	endif()
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -199,10 +243,6 @@ function(create_component _library_create_file _component _component_title _srcd
 			"(expected cmake or meson)")
 	endif()
 
-	# ---- IMPORTED (produced + LINK_EXTRA) and install OUTPUT (same file list) ----
-	# LINK_EXTRA paths stay on OUTPUT so Ninja has a producer when nested
-	# BuildMaster installs them during this component's install stage.
-	# install_exec never writes empty .a/.lib stamps.
 	set(_LIBRARY_COMPONENT_NAMES "")
 	set(_LIBRARY_COMPONENT_FILES "")
 	set(_LIBRARY_COMPONENT_DLL_FILES "")
@@ -247,14 +287,12 @@ function(create_component _library_create_file _component _component_title _srcd
 		endif()
 	endif()
 
-	# Dependants: configure runs under a custom target → suppress hierarchical STATUS
 	if(NOT _dependency STREQUAL "")
 		set(_via_target "1")
 	else()
 		set(_via_target "0")
 	endif()
 
-	# ---- generate configure / build / install stage scripts ----
 	if(_build_system STREQUAL "cmake")
 		create_cmake_stages(
 			_LIBRARY_CONFIGURE_FILE
@@ -289,7 +327,6 @@ function(create_component _library_create_file _component _component_title _srcd
 		)
 	endif()
 
-	# Prefer BM_COMPONENT_ENV_* from stages when set (per-component toolchain)
 	if(DEFINED BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND)
 		set(ENV_CMAKE_SILENT_COMMAND ${BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND})
 	endif()
@@ -306,7 +343,6 @@ function(create_component _library_create_file _component _component_title _srcd
 		set(_LIBRARY_TOOLCHAIN_SUFFIX "")
 	endif()
 
-	# ---- pick fragment template ----
 	if(NOT _dependency STREQUAL "")
 		if(_library_mode STREQUAL "headers")
 			set(_tpl "component_headers_dependant.cmake.in")
@@ -340,17 +376,6 @@ endfunction()
 
 
 ## @brief CMake component wrapper.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _produced Primary library specs this component installs
-##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys (including LINK_EXTRA).
 function(create_cmake_component _library_create_file _component _component_title
 								_srcdir _builddir _options _library_mode _produced)
 	if(ARGC GREATER 9)
@@ -358,23 +383,14 @@ function(create_cmake_component _library_create_file _component _component_title
 			"[BuildMaster] create_cmake_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 8)
 		set(_options_string "${ARGV8}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"${_library_mode}"
-		"cmake"
-		"${_produced}"
-		""
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "${_library_mode}" "cmake" "${_produced}" ""
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -382,17 +398,6 @@ endfunction()
 
 
 ## @brief Meson component wrapper.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _produced Primary library specs this component installs
-##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys (including LINK_EXTRA).
 function(create_meson_component _library_create_file _component _component_title
 								_srcdir _builddir _options _library_mode _produced)
 	if(ARGC GREATER 9)
@@ -400,23 +405,14 @@ function(create_meson_component _library_create_file _component _component_title
 			"[BuildMaster] create_meson_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 8)
 		set(_options_string "${ARGV8}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"${_library_mode}"
-		"meson"
-		"${_produced}"
-		""
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "${_library_mode}" "meson" "${_produced}" ""
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -424,18 +420,6 @@ endfunction()
 
 
 ## @brief Dependant CMake component wrapper.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _produced Primary library specs this component installs
-##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
-## @param[in] _dependency Install-target dependency.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys (including LINK_EXTRA).
 function(create_cmake_dependant_component _library_create_file _component _component_title
 										_srcdir _builddir _options _library_mode
 										_produced _dependency)
@@ -444,23 +428,14 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 			"[BuildMaster] create_cmake_dependant_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 9)
 		set(_options_string "${ARGV9}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"${_library_mode}"
-		"cmake"
-		"${_produced}"
-		"${_dependency}"
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "${_library_mode}" "cmake" "${_produced}" "${_dependency}"
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -468,18 +443,6 @@ endfunction()
 
 
 ## @brief Dependant Meson component wrapper.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _produced Primary library specs this component installs
-##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
-## @param[in] _dependency Install-target dependency.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys (including LINK_EXTRA).
 function(create_meson_dependant_component _library_create_file _component _component_title
 										_srcdir _builddir _options _library_mode
 										_produced _dependency)
@@ -488,23 +451,14 @@ function(create_meson_dependant_component _library_create_file _component _compo
 			"[BuildMaster] create_meson_dependant_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 9)
 		set(_options_string "${ARGV9}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"${_library_mode}"
-		"meson"
-		"${_produced}"
-		"${_dependency}"
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "${_library_mode}" "meson" "${_produced}" "${_dependency}"
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -512,14 +466,6 @@ endfunction()
 
 
 ## @brief Header-only CMake component.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
 function(create_cmake_headers_component _library_create_file _component _component_title
 										_srcdir _builddir _options)
 	if(ARGC GREATER 7)
@@ -527,23 +473,14 @@ function(create_cmake_headers_component _library_create_file _component _compone
 			"[BuildMaster] create_cmake_headers_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 6)
 		set(_options_string "${ARGV6}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"headers"
-		"cmake"
-		""
-		""
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "headers" "cmake" "" ""
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -551,15 +488,6 @@ endfunction()
 
 
 ## @brief Dependant header-only CMake component.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _dependency Install-target dependency.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
 function(create_cmake_headers_dependant_component _library_create_file _component
 												_component_title _srcdir _builddir
 												_options _dependency)
@@ -568,23 +496,14 @@ function(create_cmake_headers_dependant_component _library_create_file _componen
 			"[BuildMaster] create_cmake_headers_dependant_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 7)
 		set(_options_string "${ARGV7}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"headers"
-		"cmake"
-		""
-		"${_dependency}"
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "headers" "cmake" "" "${_dependency}"
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -592,14 +511,6 @@ endfunction()
 
 
 ## @brief Header-only Meson component.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
 function(create_meson_headers_component _library_create_file _component _component_title
 										_srcdir _builddir _options)
 	if(ARGC GREATER 7)
@@ -607,23 +518,14 @@ function(create_meson_headers_component _library_create_file _component _compone
 			"[BuildMaster] create_meson_headers_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 6)
 		set(_options_string "${ARGV6}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"headers"
-		"meson"
-		""
-		""
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "headers" "meson" "" ""
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -631,15 +533,6 @@ endfunction()
 
 
 ## @brief Dependant header-only Meson component.
-## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
-## @param[in] _component Short component identifier.
-## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
-## @param[in] _options Options forwarded to stage generators.
-## @param[in] _dependency Install-target dependency.
-## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
 function(create_meson_headers_dependant_component _library_create_file _component
 												_component_title _srcdir _builddir
 												_options _dependency)
@@ -648,23 +541,14 @@ function(create_meson_headers_dependant_component _library_create_file _componen
 			"[BuildMaster] create_meson_headers_dependant_component: too many arguments "
 			"(expected at most one options string).")
 	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 7)
 		set(_options_string "${ARGV7}")
 	endif()
-
 	create_component(
 		${_library_create_file}
-		"${_component}"
-		"${_component_title}"
-		"${_srcdir}"
-		"${_builddir}"
-		"${_options}"
-		"headers"
-		"meson"
-		""
-		"${_dependency}"
+		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_options}" "headers" "meson" "" "${_dependency}"
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)

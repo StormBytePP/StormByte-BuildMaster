@@ -1,4 +1,4 @@
-# Basic synthetic components + recursive chains.
+# Basic synthetic components + recursive chains + rename normalize.
 # Included from the harness after BuildMaster helpers are available.
 
 if(NOT BM_TEST_REPO_ROOT)
@@ -63,6 +63,12 @@ create_cmake_dependant_component(
 	"sdk-headers_install"
 )
 include("${LOADER_FILE}")
+
+# ---------------------------------------------------------------------------
+# Archive name normalize (Meson installs zs.* → produced z.*)
+# ---------------------------------------------------------------------------
+
+add_subdirectory(rename)
 
 # ---------------------------------------------------------------------------
 # Recursive chains (cmake nest→mid→leaf, meson nest→mid→meson leaf)

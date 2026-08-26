@@ -19,9 +19,23 @@ if(NOT _BM_STAGE_RC EQUAL 0)
 	message(FATAL_ERROR "Installing @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 endif()
 
-# OUTPUT contract: produced archives must exist after a successful install.
-# Headers-mode stamp (.bm_*_headers.stamp) is written here if the tree did not
-# create it. Never invent empty .a/.lib files (breaks MSVC with LNK1136).
+# Optional normalize: variant archives → canonical produced names
+if("@_BM_RENAME_ENABLED@" STREQUAL "1")
+	execute_process(
+		COMMAND "${CMAKE_COMMAND}"
+			"-DOUTPUTS=@_CMAKE_OUTPUT_LIBRARIES@"
+			"-DBINDIR=@BUILDMASTER_INSTALL_BINDIR@"
+			"-DBUILDMASTER_SRCDIR=@BUILDMASTER_SRCDIR@"
+			-P "@BUILDMASTER_SRCDIR@/tools/rename/normalize_install_outputs.cmake"
+		RESULT_VARIABLE _BM_RENAME_RC
+	)
+	if(NOT _BM_RENAME_RC EQUAL 0)
+		message(FATAL_ERROR
+			"[BuildMaster] Install rename/normalize failed for @_CMAKE_COMPONENT_TITLE@ (exit ${_BM_RENAME_RC})")
+	endif()
+endif()
+
+# OUTPUT contract: archives must exist; headers stamp may be created here.
 set(_BM_OUTPUTS "@_CMAKE_OUTPUT_LIBRARIES@")
 foreach(_bm_out IN LISTS _BM_OUTPUTS)
 	if(_bm_out STREQUAL "")

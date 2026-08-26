@@ -1,0 +1,178 @@
+# cmake -DOUTPUTS="path1;path2" -DBINDIR=... -DBUILDMASTER_SRCDIR=... -P normalize_install_outputs.cmake
+# Rename upstream variant archives to the canonical produced paths.
+# Does not read RENAME=; the caller (install_exec) decides whether to run this.
+
+if(NOT DEFINED OUTPUTS OR OUTPUTS STREQUAL "")
+	return()
+endif()
+
+if(NOT DEFINED BUILDMASTER_SRCDIR OR BUILDMASTER_SRCDIR STREQUAL "")
+	message(FATAL_ERROR
+		"[BuildMaster] normalize_install_outputs: BUILDMASTER_SRCDIR is required")
+endif()
+
+include("${BUILDMASTER_SRCDIR}/tools/rename/variants.cmake")
+
+if(NOT DEFINED BINDIR)
+	set(BINDIR "")
+endif()
+
+# ---- helpers ----
+
+function(_bm_rename_split_name _filename _out_stem _out_suffix)
+	get_filename_component(_bn "${_filename}" NAME)
+	string(TOLOWER "${_bn}" _bn_l)
+
+	# dll / so / dylib / a / lib
+	if(_bn_l MATCHES "^(.*)\\.(dll)$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+		set(_suf ".dll")
+	elseif(_bn_l MATCHES "^(.*)\\.(dylib)$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+		set(_suf ".dylib")
+	elseif(_bn_l MATCHES "^(.*)\\.(so)(\\..*)?$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+		set(_suf ".so")
+	elseif(_bn_l MATCHES "^(.*)\\.(lib)$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+		set(_suf ".lib")
+	elseif(_bn_l MATCHES "^(.*)\\.(a)$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+		set(_suf ".a")
+	else()
+		set(${_out_stem} "" PARENT_SCOPE)
+		set(${_out_suffix} "" PARENT_SCOPE)
+		return()
+	endif()
+
+	# Drop optional lib prefix for matching (libz.a / z.lib → stem z)
+	if(_stem_part MATCHES "^[Ll][Ii][Bb](.+)$")
+		set(_stem_part "${CMAKE_MATCH_1}")
+	endif()
+
+	set(${_out_stem} "${_stem_part}" PARENT_SCOPE)
+	set(${_out_suffix} "${_suf}" PARENT_SCOPE)
+endfunction()
+
+function(_bm_rename_candidate_names stem suffix out_list)
+	set(_names "")
+	foreach(_v IN LISTS BUILDMASTER_RENAME_VARIANTS)
+		list(APPEND _names "${stem}${_v}${suffix}")
+		list(APPEND _names "lib${stem}${_v}${suffix}")
+	endforeach()
+	# Broad fallback (still filtered to same suffix / non-pdb)
+	list(APPEND _names "${stem}*${suffix}")
+	list(APPEND _names "lib${stem}*${suffix}")
+	set(${out_list} "${_names}" PARENT_SCOPE)
+endfunction()
+
+function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
+	set(_found "")
+	set(_token "")
+	_bm_rename_candidate_names("${stem}" "${suffix}" _patterns)
+
+	foreach(_pat IN LISTS _patterns)
+		file(GLOB _hits "${dir}/${_pat}")
+		foreach(_f IN LISTS _hits)
+			if(IS_DIRECTORY "${_f}")
+				continue()
+			endif()
+			get_filename_component(_bn "${_f}" NAME)
+			string(TOLOWER "${_bn}" _bn_l)
+			if(_bn_l MATCHES "\\.pdb$")
+				continue()
+			endif()
+			# Skip if already the canonical name we want (caller checks EXISTS first)
+			_bm_rename_split_name("${_bn}" _hs _hx)
+			if(_hs STREQUAL "${stem}" AND _bn MATCHES "${stem}${suffix}$")
+				# exact canonical in glob — ignore
+				get_filename_component(_want "${dir}/${stem}${suffix}" ABSOLUTE)
+				get_filename_component(_have "${_f}" ABSOLUTE)
+				if(_want STREQUAL _have)
+					continue()
+				endif()
+				# lib${stem}${suffix} is a valid source toward ${stem}${suffix}
+			endif()
+			set(_found "${_f}")
+			# variant token = filename without lib prefix and without suffix
+			string(REGEX REPLACE "\\${suffix}$" "" _tok "${_bn}")
+			if(_tok MATCHES "^[Ll][Ii][Bb](.+)$")
+				set(_tok "${CMAKE_MATCH_1}")
+			endif()
+			# strip base stem prefix to leave variant piece (s, d, sd, …)
+			string(LENGTH "${stem}" _slen)
+			string(SUBSTRING "${_tok}" 0 ${_slen} _pref)
+			if(_pref STREQUAL "${stem}")
+				string(SUBSTRING "${_tok}" ${_slen} -1 _token)
+			else()
+				set(_token "")
+			endif()
+			break()
+		endforeach()
+		if(NOT _found STREQUAL "")
+			break()
+		endif()
+	endforeach()
+
+	set(${out_src} "${_found}" PARENT_SCOPE)
+	set(${out_variant_token} "${_token}" PARENT_SCOPE)
+endfunction()
+
+# ---- main ----
+
+foreach(_out IN LISTS OUTPUTS)
+	if(_out STREQUAL "")
+		continue()
+	endif()
+	if(EXISTS "${_out}")
+		message(STATUS "[BuildMaster] rename: ${_out} already present (skip)")
+		continue()
+	endif()
+
+	get_filename_component(_dir "${_out}" DIRECTORY)
+	get_filename_component(_fn "${_out}" NAME)
+	_bm_rename_split_name("${_fn}" _stem _suffix)
+	if(_stem STREQUAL "" OR _suffix STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] rename: cannot parse stem/suffix from '${_fn}'")
+	endif()
+
+	if(NOT IS_DIRECTORY "${_dir}")
+		message(FATAL_ERROR
+			"[BuildMaster] rename: directory missing for '${_out}': ${_dir}")
+	endif()
+
+	_bm_rename_find_source("${_dir}" "${_stem}" "${_suffix}" _src _vtok)
+	if(_src STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] rename: no candidate for '${_out}' (stem='${_stem}' suffix='${_suffix}') in ${_dir}")
+	endif()
+
+	file(RENAME "${_src}" "${_out}")
+	message(STATUS "[BuildMaster] rename: ${_src} → ${_out}")
+
+	# Windows shared: pair DLL with same variant token
+	if(_suffix STREQUAL ".lib" AND NOT BINDIR STREQUAL "")
+		set(_dll_dst "${BINDIR}/${_stem}.dll")
+		if(NOT EXISTS "${_dll_dst}")
+			set(_dll_src "")
+			if(NOT _vtok STREQUAL "")
+				if(EXISTS "${BINDIR}/${_stem}${_vtok}.dll")
+					set(_dll_src "${BINDIR}/${_stem}${_vtok}.dll")
+				elseif(EXISTS "${_dir}/${_stem}${_vtok}.dll")
+					set(_dll_src "${_dir}/${_stem}${_vtok}.dll")
+				endif()
+			endif()
+			if(_dll_src STREQUAL "")
+				_bm_rename_find_source("${BINDIR}" "${_stem}" ".dll" _dll_src _dll_tok)
+				if(_dll_src STREQUAL "" AND IS_DIRECTORY "${_dir}")
+					_bm_rename_find_source("${_dir}" "${_stem}" ".dll" _dll_src _dll_tok)
+				endif()
+			endif()
+			if(NOT _dll_src STREQUAL "" AND NOT EXISTS "${_dll_dst}")
+				file(RENAME "${_dll_src}" "${_dll_dst}")
+				message(STATUS "[BuildMaster] rename: ${_dll_src} → ${_dll_dst}")
+			endif()
+		endif()
+	endif()
+endforeach()

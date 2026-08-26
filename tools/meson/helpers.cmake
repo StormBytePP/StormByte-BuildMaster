@@ -25,12 +25,11 @@
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when setup runs
 ##            under a dependant custom target (suppress hierarchical STATUS).
 ##            `"0"` or empty otherwise.
+## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
+##       defaults to `"1"`. Substituted into `install_exec.cmake.in`.
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer dependant -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
-## @note Selects BUILDMASTER_MESON_NATIVE_FILE[_<profile>] for
-##       `meson setup --native-file=…` so ccache/sccache appears in Meson's
-##       compiler exelist (documented native-file form).
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -49,6 +48,11 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_BM_CONFIGURE_VIA_TARGET "${ARGV12}")
 	else()
 		set(_BM_CONFIGURE_VIA_TARGET "0")
+	endif()
+
+	# create_component sets this; raw create_meson_stages callers get default ON
+	if(NOT DEFINED _BM_RENAME_ENABLED)
+		set(_BM_RENAME_ENABLED "1")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")
@@ -213,15 +217,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		else()
 			set(ENV_CMAKE_COMPILE_COMMAND ${_bm_tc_runner_silent} "${_cmake_name}")
 		endif()
-
-		# Refresh profile native file with resolved absolute compilers
-		if(COMMAND buildmaster_write_meson_native_file)
-			buildmaster_write_meson_native_file(
-				"${_toolchain_name}"
-				"${_bm_c_compiler}"
-				"${_bm_cxx_compiler}"
-			)
-		endif()
 	else()
 		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
 		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
@@ -337,15 +332,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(CMAKE_CXX_COMPILER "${_bm_cxx_compiler}")
 	set(CMAKE_C_COMPILER_LAUNCHER "${_bm_c_launcher}")
 	set(CMAKE_CXX_COMPILER_LAUNCHER "${_bm_cxx_launcher}")
-
-	# Meson native file: profile-specific when TOOLCHAIN is set, else default
-	set(_MESON_NATIVE_FILE "")
-	if(COMMAND buildmaster_get_meson_native_file)
-		buildmaster_get_meson_native_file(_MESON_NATIVE_FILE TOOLCHAIN "${_toolchain_name}")
-	endif()
-	if(NOT _MESON_NATIVE_FILE STREQUAL "")
-		normalize_cmake_path(_MESON_NATIVE_FILE "${_MESON_NATIVE_FILE}")
-	endif()
 
 	set(BM_COMPONENT_ENV_CMAKE_COMMAND ${ENV_CMAKE_COMMAND} PARENT_SCOPE)
 	set(BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND ${ENV_CMAKE_SILENT_COMMAND} PARENT_SCOPE)

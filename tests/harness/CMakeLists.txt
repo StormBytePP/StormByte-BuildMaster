@@ -17,7 +17,6 @@ get_filename_component(BM_TEST_REPO_ROOT
 	ABSOLUTE
 )
 
-# All synthetic components + recursive chains
 add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 
 # ---------------------------------------------------------------------------
@@ -40,8 +39,10 @@ add_custom_target(run_buildmaster_checks
 add_custom_target(run_buildmaster_smoke
 	DEPENDS
 		base_install dep_install sdk-headers_install sdkloader_install
+		rename-variant_install
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test
+		rename_variant_link_test
 	COMMAND ${CMAKE_COMMAND}
 		-DBUILDMASTER_INSTALL_DIR=${BUILDMASTER_INSTALL_DIR}
 		-DBM_TEST_EXPECTED_DIR=${BM_TEST_EXPECTED_DIR}

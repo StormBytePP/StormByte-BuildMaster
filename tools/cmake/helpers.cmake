@@ -26,6 +26,9 @@
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when configure
 ##            runs under a dependant custom target (suppress hierarchical
 ##            STATUS; the target COMMENT is enough). `"0"` or empty otherwise.
+## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
+##       defaults to `"1"` (post-install variant → canonical rename). Used by
+##       `install_exec.cmake.in` as `@_BM_RENAME_ENABLED@`.
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_COMMAND,
 ##       BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND and
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
@@ -49,6 +52,11 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(_BM_CONFIGURE_VIA_TARGET "${ARGV12}")
 	else()
 		set(_BM_CONFIGURE_VIA_TARGET "0")
+	endif()
+
+	# create_component sets this; raw create_cmake_stages callers get default ON
+	if(NOT DEFINED _BM_RENAME_ENABLED)
+		set(_BM_RENAME_ENABLED "1")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")

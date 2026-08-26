@@ -8,6 +8,9 @@
 <lib>/deplib.lib|windows
 <lib>/libloaderlib.a|unix
 <lib>/loaderlib.lib|windows
+# Meson rename fixture: installs zs.*; RENAME → canonical z.*
+<lib>/libz.a|unix
+<lib>/z.lib|windows
 <lib>/recursive/cmake/libleaflib.a|unix
 <lib>/recursive/cmake/leaflib.lib|windows
 <lib>/recursive/cmake/libmidlib.a|unix
@@ -24,6 +27,7 @@
 <include>/dep.h|all
 <include>/loader.h|all
 <include>/sdk.h|all
+<include>/z.h|all
 <include>/recursive/cmake/leaf.h|all
 <include>/recursive/cmake/mid.h|all
 <include>/recursive/cmake/nest.h|all
