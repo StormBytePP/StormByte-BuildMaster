@@ -662,11 +662,11 @@ args (`indent`, `toolchain`, `configure_via_target`) remain on the stage API.
 
 | Area | Where |
 |------|--------|
-| Component factory | `component/helpers.cmake` |
-| Options parser | `buildmaster_parse_component_options` |
+| Component factory | `component/helpers.cmake` (`create_component`, options parser) |
+| CMake component wrappers | `component/cmake/helpers.cmake` (`create_cmake_*`) |
+| Meson component wrappers | `component/meson/helpers.cmake` (`create_meson_*`) |
 | Subcomponent parse | `buildmaster_parse_subcomponent` |
-| Install rename | `tools/rename/normalize_install_outputs.cmake`, `tools/rename/variants.cmake` |
-| Header wrappers | `create_*_headers_*` |
+| Header wrappers | `create_*_headers_*` (same backend helper files) |
 | Static bundler | `create_bundle_static_libraries` |
 | Path hints | `helpers.cmake` → `library_import_hint`, `library_import_static_hint` |
 | CMake stages | `tools/cmake/helpers.cmake` |
@@ -675,7 +675,20 @@ args (`indent`, `toolchain`, `configure_via_target`) remain on the stage API.
 | Git | `tools/git/helpers.cmake` |
 | File helpers | `tools/file/helpers.cmake` |
 | Env runners | `env/helpers.cmake` |
+| Sanitize / paths / lists | `helpers.cmake` |
 | Fail-fast / init | `init_vars.cmake` |
+
+Component module paths (exported / toolchain):
+
+| Variable | Points to |
+|----------|-----------|
+| `BUILDMASTER_COMPONENT_SRCDIR` | `component/` (module root) |
+| `BUILDMASTER_COMPONENT_TEMPLATEDIR` | `component/templates/` (`.in` fragments and bundler templates) |
+| `BUILDMASTER_SCRIPTS_COMPONENTDIR` | Generated per-component fragments under the scripts tree |
+
+Templates for stage wiring live under `component/templates/`
+(`component_{static,shared,headers}{,_dependant}.cmake.in`, `bundler*.in`).
+Other modules keep their `*.cmake.in` / `runner_*.in` next to themselves.
 
 ---
 

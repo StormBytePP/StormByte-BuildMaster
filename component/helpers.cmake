@@ -1,6 +1,9 @@
 # =============================================================================
-# component/helpers.cmake
+# component/helpers.cmake — shared component factory (backend-agnostic)
 # =============================================================================
+# Public create_cmake_* / create_meson_* wrappers are included at the bottom
+# from component/cmake and component/meson (also required for nested bootstrap
+# that only include()s this file without add_subdirectory(component)).
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
 set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME")
@@ -133,7 +136,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_link_e
 endfunction()
 
 
-## @brief Split a subcomponent spec into CMake target, library basename and libdir subdir.
+## @brief Split a library spec into CMake target, library basename and libdir subdir.
 ## @param[in]  spec        Either `<name>` or `<subdir>/<name>`.
 ## @param[out] out_target  Imported CMake target name (`/` → `_`).
 ## @param[out] out_libname Library basename without prefix/suffix.
@@ -141,7 +144,7 @@ endfunction()
 function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
 	if("${spec}" STREQUAL "")
 		message(FATAL_ERROR
-			"[BuildMaster] buildmaster_parse_subcomponent: empty subcomponent spec")
+			"[BuildMaster] buildmaster_parse_subcomponent: empty library spec")
 	endif()
 
 	string(FIND "${spec}" "/" _slash)
@@ -201,6 +204,8 @@ endmacro()
 ##            Keys: INDENT/INDENT_LEVEL, TOOLCHAIN, LINK_EXTRA, RENAME (flag).
 ## @note RENAME defaults to ON: post-install normalize of variant archive names
 ##       before the OUTPUT contract check. RENAME=OFF disables it.
+## @note Prefer create_cmake_* / create_meson_* wrappers; they call this.
+## @note Fragment templates are read from BUILDMASTER_COMPONENT_TEMPLATEDIR.
 function(create_component _library_create_file _component _component_title _srcdir _builddir
 						_options _library_mode _build_system _produced _dependency)
 	if(ARGC GREATER 11)
@@ -366,7 +371,7 @@ function(create_component _library_create_file _component _component_title _srcd
 		"${BUILDMASTER_SCRIPTS_COMPONENTDIR}/component_${_safe}.cmake")
 
 	configure_file(
-		"${BUILDMASTER_COMPONENT_SRCDIR}/${_tpl}"
+		"${BUILDMASTER_COMPONENT_TEMPLATEDIR}/${_tpl}"
 		"${_LIBRARY_CREATE_FILE}"
 		@ONLY
 	)
@@ -374,182 +379,10 @@ function(create_component _library_create_file _component _component_title _srcd
 	set(${_library_create_file} "${_LIBRARY_CREATE_FILE}" PARENT_SCOPE)
 endfunction()
 
-
-## @brief CMake component wrapper.
-function(create_cmake_component _library_create_file _component _component_title
-								_srcdir _builddir _options _library_mode _produced)
-	if(ARGC GREATER 9)
-		message(FATAL_ERROR
-			"[BuildMaster] create_cmake_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 8)
-		set(_options_string "${ARGV8}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "${_library_mode}" "cmake" "${_produced}" ""
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Meson component wrapper.
-function(create_meson_component _library_create_file _component _component_title
-								_srcdir _builddir _options _library_mode _produced)
-	if(ARGC GREATER 9)
-		message(FATAL_ERROR
-			"[BuildMaster] create_meson_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 8)
-		set(_options_string "${ARGV8}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "${_library_mode}" "meson" "${_produced}" ""
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Dependant CMake component wrapper.
-function(create_cmake_dependant_component _library_create_file _component _component_title
-										_srcdir _builddir _options _library_mode
-										_produced _dependency)
-	if(ARGC GREATER 10)
-		message(FATAL_ERROR
-			"[BuildMaster] create_cmake_dependant_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 9)
-		set(_options_string "${ARGV9}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "${_library_mode}" "cmake" "${_produced}" "${_dependency}"
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Dependant Meson component wrapper.
-function(create_meson_dependant_component _library_create_file _component _component_title
-										_srcdir _builddir _options _library_mode
-										_produced _dependency)
-	if(ARGC GREATER 10)
-		message(FATAL_ERROR
-			"[BuildMaster] create_meson_dependant_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 9)
-		set(_options_string "${ARGV9}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "${_library_mode}" "meson" "${_produced}" "${_dependency}"
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Header-only CMake component.
-function(create_cmake_headers_component _library_create_file _component _component_title
-										_srcdir _builddir _options)
-	if(ARGC GREATER 7)
-		message(FATAL_ERROR
-			"[BuildMaster] create_cmake_headers_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 6)
-		set(_options_string "${ARGV6}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "headers" "cmake" "" ""
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Dependant header-only CMake component.
-function(create_cmake_headers_dependant_component _library_create_file _component
-												_component_title _srcdir _builddir
-												_options _dependency)
-	if(ARGC GREATER 8)
-		message(FATAL_ERROR
-			"[BuildMaster] create_cmake_headers_dependant_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 7)
-		set(_options_string "${ARGV7}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "headers" "cmake" "" "${_dependency}"
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Header-only Meson component.
-function(create_meson_headers_component _library_create_file _component _component_title
-										_srcdir _builddir _options)
-	if(ARGC GREATER 7)
-		message(FATAL_ERROR
-			"[BuildMaster] create_meson_headers_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 6)
-		set(_options_string "${ARGV6}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "headers" "meson" "" ""
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
-
-
-## @brief Dependant header-only Meson component.
-function(create_meson_headers_dependant_component _library_create_file _component
-												_component_title _srcdir _builddir
-												_options _dependency)
-	if(ARGC GREATER 8)
-		message(FATAL_ERROR
-			"[BuildMaster] create_meson_headers_dependant_component: too many arguments "
-			"(expected at most one options string).")
-	endif()
-	set(_options_string "")
-	if(ARGC GREATER 7)
-		set(_options_string "${ARGV7}")
-	endif()
-	create_component(
-		${_library_create_file}
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "headers" "meson" "" "${_dependency}"
-		"${_options_string}"
-	)
-	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
-endfunction()
+# ---------------------------------------------------------------------------
+# Backend public wrappers
+# ---------------------------------------------------------------------------
+# Loaded here so nested BUILDMASTER_CONFIGURED bootstrap (include helpers only)
+# still defines create_cmake_* / create_meson_*.
+include("${CMAKE_CURRENT_LIST_DIR}/cmake/helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/meson/helpers.cmake")

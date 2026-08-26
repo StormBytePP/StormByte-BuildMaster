@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Meson rename fixture under `tests/harness/fixtures/rename/` (installs `zs.*`, produced `z.*`, link test + smoke artifacts for canonical `z`).
 
 ### Changed
+- **Internal layout (transparent):** component factory split under `component/cmake` and `component/meson` for public wrappers; shared factory stays in `component/helpers.cmake`. Fragment and bundler templates moved to `component/templates/`. New `BUILDMASTER_COMPONENT_TEMPLATEDIR` (module root remains `BUILDMASTER_COMPONENT_SRCDIR`). Public `create_*` API and harness usage unchanged.
 - **Breaking:** `create_*_component` / `create_*_dependant_component` family now accepts a single optional trailing options string of the form `KEY=value;KEY2=value with spaces` instead of positional `indent_level` / `toolchain` arguments.
   - Supported keys (case-insensitive, stored uppercase): `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `LINK_EXTRA`, `RENAME`.
   - Unknown keys produce a warning and are ignored.
