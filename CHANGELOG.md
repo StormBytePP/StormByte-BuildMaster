@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Breaking:** `create_*_component` / `create_*_dependant_component` family now accepts a single optional trailing options string of the form `KEY=value;KEY2=value with spaces` instead of positional `indent_level` / `toolchain` arguments.
+  - Supported keys (case-insensitive, stored uppercase): `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`.
+  - Unknown keys produce a warning and are ignored.
+  - Only the first `=` in each pair separates key from value; values may contain `=` and spaces but must not contain `;`.
+  - Extra positional arguments beyond the options string cause a fatal error.
+
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 
 ## [1.0.1] - 2026-08-26
