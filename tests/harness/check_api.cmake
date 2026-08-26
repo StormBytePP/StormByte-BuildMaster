@@ -1,0 +1,23 @@
+set(_bm_api_list "${BM_TEST_EXPECTED_DIR}/public_functions.txt")
+if(NOT EXISTS "${_bm_api_list}")
+	message(FATAL_ERROR "Missing ${_bm_api_list}")
+endif()
+
+file(STRINGS "${_bm_api_list}" _bm_lines)
+set(_bm_missing "")
+foreach(_line IN LISTS _bm_lines)
+	string(STRIP "${_line}" _line)
+	if(_line STREQUAL "" OR _line MATCHES "^#")
+		continue()
+	endif()
+	if(NOT COMMAND ${_line})
+		list(APPEND _bm_missing "${_line}")
+	endif()
+endforeach()
+
+if(_bm_missing)
+	list(JOIN _bm_missing ", " _msg)
+	message(FATAL_ERROR "BuildMaster API missing commands: ${_msg}")
+endif()
+
+message(STATUS "BuildMaster API: all public commands present")

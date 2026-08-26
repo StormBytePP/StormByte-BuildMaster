@@ -1,0 +1,40 @@
+name: CI
+
+permissions:
+  contents: read
+  actions: write
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  harness:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            toolchain: gcc
+          - os: windows-latest
+            toolchain: msvc
+          - os: macos-latest
+            toolchain: clang
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure + smoke
+        uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          source-dir: tests/harness
+          build-dir: build/harness
+          build-type: Release
+          target: run_buildmaster_smoke
+          run-tests: false
+          ccache-key: v1-harness
+          cache-scope: ${{ matrix.os }}-${{ matrix.toolchain }}

@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project(lib_base LANGUAGES C)
+
+include(GNUInstallDirs)
+
+add_library(baselib STATIC base.c)
+target_include_directories(baselib PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(TARGETS baselib
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(FILES base.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

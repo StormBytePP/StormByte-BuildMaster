@@ -1,0 +1,14 @@
+# <lib> and <include> are replaced by CMAKE_INSTALL_LIBDIR /
+# CMAKE_INSTALL_INCLUDEDIR (from the host that ran the harness configure).
+# path|platform
+
+<lib>/libbaselib.a|unix
+<lib>/baselib.lib|windows
+<lib>/libdeplib.a|unix
+<lib>/deplib.lib|windows
+<lib>/libloaderlib.a|unix
+<lib>/loaderlib.lib|windows
+<include>/base.h|all
+<include>/dep.h|all
+<include>/loader.h|all
+<include>/sdk.h|all
