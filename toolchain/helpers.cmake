@@ -153,6 +153,60 @@ function(buildmaster_clean_cflags out_flags flags toolchain_name)
 	set(${out_flags} "${_f}" PARENT_SCOPE)
 endfunction()
 
+## @brief Map linker type/path to a driver-safe -fuse-ld= flag for Meson/CMake.
+## @param[out] out_flag Parent-scope variable receiving e.g. "-fuse-ld=lld",
+##            or empty when the system default linker must be used.
+## @param[in] linker_type Optional CMAKE_LINKER_TYPE / BM_TC_LINKER_TYPE
+##            (`LLD`, `MSVC`, …). May be empty.
+## @param[in] linker Optional CMAKE_LINKER / BM_TC_LINKER path or short name.
+## @note GCC rejects absolute paths such as -fuse-ld=/usr/bin/ld. Only emit
+##       flavor names the compiler driver understands (lld, gold, mold, bfd,
+##       link). System `ld` and unknown paths yield an empty flag so Meson
+##       keeps the default linker.
+function(buildmaster_fuse_ld_flag out_flag linker_type linker)
+	set(_flag "")
+	string(STRIP "${linker_type}" _lt)
+	string(TOUPPER "${_lt}" _lt)
+	string(STRIP "${linker}" _lnk)
+
+	if(_lt STREQUAL "LLD")
+		if(WIN32)
+			set(_flag "-fuse-ld=lld-link")
+		else()
+			set(_flag "-fuse-ld=lld")
+		endif()
+	elseif(_lt STREQUAL "MSVC")
+		set(_flag "-fuse-ld=link")
+	elseif(NOT _lnk STREQUAL "")
+		get_filename_component(_base "${_lnk}" NAME)
+		string(TOLOWER "${_base}" _base)
+		string(REGEX REPLACE "\\.exe$" "" _base "${_base}")
+
+		if(_base STREQUAL "lld" OR _base STREQUAL "ld.lld")
+			if(WIN32)
+				set(_flag "-fuse-ld=lld-link")
+			else()
+				set(_flag "-fuse-ld=lld")
+			endif()
+		elseif(_base STREQUAL "lld-link")
+			set(_flag "-fuse-ld=lld-link")
+		elseif(_base STREQUAL "gold" OR _base STREQUAL "ld.gold")
+			set(_flag "-fuse-ld=gold")
+		elseif(_base STREQUAL "mold")
+			set(_flag "-fuse-ld=mold")
+		elseif(_base STREQUAL "bfd" OR _base STREQUAL "ld.bfd")
+			set(_flag "-fuse-ld=bfd")
+		elseif(_base STREQUAL "link")
+			if(WIN32)
+				set(_flag "-fuse-ld=link")
+			endif()
+		endif()
+		# basename "ld" or unknown absolute paths: leave empty
+	endif()
+
+	set(${out_flag} "${_flag}" PARENT_SCOPE)
+endfunction()
+
 ## @brief Resolve a short MSVC tool name to an absolute path when possible.
 ## @param[out] out_var Parent-scope variable receiving the path (or the short
 ##            name if resolution fails).

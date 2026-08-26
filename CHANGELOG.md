@@ -32,9 +32,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools/cmake/update_toolchain.cmake` registers non-empty linker and archiver cache entries for the BuildMaster toolchain dump (paths normalized to forward slashes)
 - Nested **Meson** setups:
   - Build `_MESON_LINK_ARGS` from `CMAKE_EXE_LINKER_FLAGS`
-  - `CMAKE_LINKER_TYPE=LLD` → `-fuse-ld=lld-link` (Windows) or `-fuse-ld=lld` (elsewhere)
-  - `CMAKE_LINKER_TYPE=MSVC` → `-fuse-ld=link`
-  - Else, if `CMAKE_LINKER` is set → `-fuse-ld=<path>`
+  - Linker selection via `buildmaster_fuse_ld_flag()` (driver-safe `-fuse-ld=` flavors only):
+    - `CMAKE_LINKER_TYPE=LLD` / forced LLD → `-fuse-ld=lld-link` (Windows) or `-fuse-ld=lld` (elsewhere)
+    - `CMAKE_LINKER_TYPE=MSVC` → `-fuse-ld=link`
+    - Else map `CMAKE_LINKER` / `BM_TC_LINKER` basename (`lld`, `ld.lld`, `gold`, `mold`, `bfd`, …); system `ld` and absolute paths such as `/usr/bin/ld` emit **no** `-fuse-ld` (GCC rejects path-form `-fuse-ld=/usr/bin/ld`)
   - Pass `AR` / `RANLIB` into Meson setup via `cmake -E env` (from `CMAKE_AR` / `CMAKE_RANLIB` or the process environment)
 - **Env runners** (`runner_linux.sh.in` / `runner_windows.bat.in`) export `AR`, `RANLIB`, and `NM` so any command launched through `ENV_RUNNER` inherits the same binutils as nested CMake/Meson
 - `env/init_vars.cmake` and `update_env_runner()` resolve `AR` / `RANLIB` / `NM` from `CMAKE_AR` / `CMAKE_RANLIB` / `CMAKE_NM` or `ENV{…}` before regenerating the runner scripts
@@ -62,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-component `TOOLCHAIN` and nested BuildMaster installs:** components with a toolchain override no longer bootstrap a second install tree under the component build dir (e.g. `…/buffer/build/thirdparty/buildmaster/install`). Nested configures load a component toolchain file built from the parent registry so `BUILDMASTER_INSTALL_*`, template dirs (`BUILDMASTER_TOOLS_CMAKE_SRCDIR`, …) and `ENV_*` stay unified with the parent; only compilers/binutils are overridden
 - Incomplete component toolchain snapshots (missing tool `*_SRCDIR` / `ENV_*`) that led to failures such as `File /configure.cmake.in does not exist` when nested projects created further components
 - **Nested `add_subdirectory(buildmaster)` no longer corrupts the shared `toolchain.cmake`:** when `BUILDMASTER_CONFIGURED` is already TRUE (host loaded the parent dump as `CMAKE_TOOLCHAIN_FILE`), the root `CMakeLists.txt` loads helpers, propagates vars, and returns—without `toolchain_reset` / module re-export / `toolchain_write`. Previously a nested bootstrap cleared the registry, re-wrote only root-level keys, and overwrote the parent dump, which then broke deeper components with empty template roots (`/configure.cmake.in`, `/component_shared.cmake.in`)
+- **Meson nested setups with system `ld`:** no longer pass `-fuse-ld=/usr/bin/ld` (or other absolute linker paths) into `c_link_args` / `cpp_link_args`. GCC rejects path-form `-fuse-ld=`; `buildmaster_fuse_ld_flag()` only emits driver flavor names, so PostgreSQL and other Meson components configure correctly under a default Linux linker
 - Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup
 - Dependant configure targets (`component_*_dependant.cmake.in`): under the **Ninja** generator, long configures (e.g. FFmpeg `meson setup`) looked hung — the silent env runner swallowed `message(STATUS)` from the configure `-P` script. Makefiles still printed progress. Now each dependant configure target sets `USES_TERMINAL` and a clear `COMMENT "Configuring <component>"` so Ninja shows the step as soon as it starts
 - Dependant configure progress on **Windows + Ninja**: `cmake -E echo "Configuring …"` plus the same `COMMENT` concatenated on one line (`Configuring x265Configuring x265`). Dropped the redundant `echo`; a single `COMMENT` is enough
