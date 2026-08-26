@@ -418,6 +418,16 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 		string(APPEND _bm_tc_overlay "set(CMAKE_RANLIB \"${BM_TC_RANLIB}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 
+	# Nested Meson under this component should use the profile native file
+	if(COMMAND buildmaster_get_meson_native_file)
+		buildmaster_get_meson_native_file(_bm_tc_nf TOOLCHAIN "${toolchain_name}")
+		if(NOT _bm_tc_nf STREQUAL "")
+			normalize_cmake_path(_bm_tc_nf "${_bm_tc_nf}")
+			string(APPEND _bm_tc_overlay
+				"set(BUILDMASTER_MESON_NATIVE_FILE \"${_bm_tc_nf}\")\n")
+		endif()
+	endif()
+
 	file(APPEND "${path}" "${_bm_tc_overlay}")
 	unset(_bm_tc_overlay)
 	unset(_bm_tc_self)
