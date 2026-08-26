@@ -91,5 +91,6 @@ if(NOT BUILDMASTER_CONFIGURED)
 		)
 	endif()
 
-	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
+	# Toolchain dump is registered via buildmaster_toolchain_export* and written
+	# once at the end of the root CMakeLists.txt (buildmaster_toolchain_write).
 endif()

@@ -1,8 +1,6 @@
-file(APPEND "${BUILDMASTER_TOOLCHAIN_FILE}"
-	"set(BUILDMASTER_ENV_SRCDIR \"${BUILDMASTER_ENV_SRCDIR}\")\n"
-	"set(BUILDMASTER_SCRIPTS_ENVDIR \"${BUILDMASTER_SCRIPTS_ENVDIR}\")\n"
-	"set(ENV_RUNNER ${ENV_RUNNER})\n"
-	"set(ENV_RUNNER_SILENT ${ENV_RUNNER_SILENT})\n"
-	"set(ENV_RUNNER_COMPILE ${ENV_RUNNER_COMPILE})\n"
-	"set(NPROC \"${NPROC}\")\n"
-)
+buildmaster_toolchain_export(BUILDMASTER_ENV_SRCDIR "${BUILDMASTER_ENV_SRCDIR}")
+buildmaster_toolchain_export(BUILDMASTER_SCRIPTS_ENVDIR "${BUILDMASTER_SCRIPTS_ENVDIR}")
+buildmaster_toolchain_export_raw("set(ENV_RUNNER ${ENV_RUNNER})")
+buildmaster_toolchain_export_raw("set(ENV_RUNNER_SILENT ${ENV_RUNNER_SILENT})")
+buildmaster_toolchain_export_raw("set(ENV_RUNNER_COMPILE ${ENV_RUNNER_COMPILE})")
+buildmaster_toolchain_export(NPROC "${NPROC}")

@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Linker: `CMAKE_LINKER_TYPE`, `CMAKE_LINKER`, `CMAKE_C_COMPILER_LINKER`, `CMAKE_CXX_COMPILER_LINKER`, `CMAKE_MT`
   - Archiver / nm: `CMAKE_AR`, `CMAKE_C_COMPILER_AR`, `CMAKE_CXX_COMPILER_AR`, `CMAKE_RANLIB`, `CMAKE_C_COMPILER_RANLIB`, `CMAKE_CXX_COMPILER_RANLIB`, `CMAKE_NM`
   - `CMAKE_MODULE_LINKER_FLAGS` (in addition to existing EXE/SHARED linker flags)
-- `tools/cmake/update_toolchain.cmake` writes non-empty linker and archiver cache entries into the generated BuildMaster toolchain file (paths normalized to forward slashes)
+- `tools/cmake/update_toolchain.cmake` registers non-empty linker and archiver cache entries for the BuildMaster toolchain dump (paths normalized to forward slashes)
 - Nested **Meson** setups:
   - Build `_MESON_LINK_ARGS` from `CMAKE_EXE_LINKER_FLAGS`
   - `CMAKE_LINKER_TYPE=LLD` → `-fuse-ld=lld-link` (Windows) or `-fuse-ld=lld` (elsewhere)
@@ -47,14 +47,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `msvc`: `cl` + `link.exe` + `lib.exe` (Windows only)
   - `gcc`: system linker/archiver (LLD not forced)
 - New module `toolchain/` (init, helpers, profiles): validation, platform guards, profile load
+- **Toolchain file registry** (single source of truth for parent and component dumps):
+  - `buildmaster_toolchain_reset` / `export` / `export_raw` / `write`
+  - Modules register state in `*/update_toolchain.cmake`; the parent `toolchain.cmake` is written once at the end of the BuildMaster root `CMakeLists.txt`
+  - `buildmaster_toolchain_write_component`: parent registry snapshot + profile compiler/binutils `CACHE FORCE` overlay (no hand-maintained variable list in stage generators)
 - `buildmaster_clean_ldflags()` / `buildmaster_clean_cflags()` strip known LLD / Clang-LTO tokens when targeting `msvc`; other flags are preserved (no blind wipe)
-- Component-local env runners (normal + silent) when `TOOLCHAIN` is set; parent global runners and toolchain file are not rewritten
+- Component-local env runners (normal + silent) when `TOOLCHAIN` is set; parent global runners are not rewritten
 - When `TOOLCHAIN` is set, configure and build status lines (and dependant configure `COMMENT`) include `(with toolchain <name>)`; omitted when inheriting the parent job
 - IPO/LTO is never enabled by a profile; if the parent already had IPO on, nested stages keep a coherent setting
 - Fully backward compatible: omitting `TOOLCHAIN` keeps previous behaviour
 
 ### Fixed
 
+- **Per-component `TOOLCHAIN` and nested BuildMaster installs:** components with a toolchain override no longer bootstrap a second install tree under the component build dir (e.g. `…/buffer/build/thirdparty/buildmaster/install`). Nested configures load a component toolchain file built from the parent registry so `BUILDMASTER_INSTALL_*`, template dirs (`BUILDMASTER_TOOLS_CMAKE_SRCDIR`, …) and `ENV_*` stay unified with the parent; only compilers/binutils are overridden
+- Incomplete component toolchain snapshots (missing tool `*_SRCDIR` / `ENV_*`) that led to failures such as `File /configure.cmake.in does not exist` when nested projects created further components
 - Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup
 - Dependant configure targets (`component_*_dependant.cmake.in`): under the **Ninja** generator, long configures (e.g. FFmpeg `meson setup`) looked hung — the silent env runner swallowed `message(STATUS)` from the configure `-P` script. Makefiles still printed progress. Now each dependant configure target sets `USES_TERMINAL` and a clear `COMMENT "Configuring <component>"` so Ninja shows the step as soon as it starts
 - Dependant configure progress on **Windows + Ninja**: `cmake -E echo "Configuring …"` plus the same `COMMENT` concatenated on one line (`Configuring x265Configuring x265`). Dropped the redundant `echo`; a single `COMMENT` is enough
