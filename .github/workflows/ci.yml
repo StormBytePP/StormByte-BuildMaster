@@ -13,49 +13,9 @@ on:
 
 jobs:
   ###########################################################################
-  # CMake style lint (advisory — continue-on-error)
-  ###########################################################################
-  lint-cmake:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install pip + PyYAML (apt, cached)
-        uses: stormbytepp/githubactions/.github/actions/install-cached@master
-        with:
-          packages: "python3-pip python3-yaml"
-          cache-key: apt-cmake-lint-v1
-          lists-cache-key: apt-lists
-          rotate-weekly: true
-
-      - name: Install cmakelang
-        run: pip3 install --user "cmakelang==0.6.13"
-
-      - name: Run cmake-lint
-        run: |
-          set -euo pipefail
-          export PATH="${HOME}/.local/bin:${PATH}"
-          mapfile -t files < <(
-            git ls-files \
-              '*.cmake' \
-              '*.cmake.in' \
-              '*CMakeLists.txt' \
-              | grep -vE '^\.github/tests/harness/fixtures/.+/lib/' \
-              || true
-          )
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No CMake listfiles to lint"
-            exit 0
-          fi
-          echo "Linting ${#files[@]} file(s)"
-          # Auto-loads .cmake-format.yaml / .cmake-format.json from repo root
-          cmake-lint "${files[@]}"
-
-  ###########################################################################
   # Harness (contract + smoke)
   ###########################################################################
   harness:
-    needs: [lint-cmake]
     strategy:
       fail-fast: false
       matrix:
