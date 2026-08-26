@@ -83,8 +83,7 @@ endfunction()
 ## @param[in] toolchain_name Normalized toolchain name (`gcc`, `clang`,
 ##            `clang-cl`, `msvc`).
 ## @note Does not clear the entire flag string. Only removes known-incoherent
-##       tokens for that profile (e.g. LLD / Clang LTO switches when the
-##       target toolchain is msvc). Unknown tokens are preserved.
+##       tokens for that profile. Unknown tokens are preserved.
 function(buildmaster_clean_ldflags out_flags flags toolchain_name)
 	set(_f "${flags}")
 
@@ -106,6 +105,19 @@ function(buildmaster_clean_ldflags out_flags flags toolchain_name)
 		endforeach()
 		string(REGEX REPLACE "[ \t]+" " " _f "${_f}")
 		string(STRIP "${_f}" _f)
+	elseif(toolchain_name STREQUAL "clang-cl")
+		# MSVC LTCG link flags are ignored / wrong with lld-link
+		foreach(_tok
+			"/LTCG"
+			"/LTCG:INCREMENTAL"
+			"/LTCG:STATUS"
+			"/LTCG:OFF"
+			"/GL"
+		)
+			string(REPLACE "${_tok}" "" _f "${_f}")
+		endforeach()
+		string(REGEX REPLACE "[ \t]+" " " _f "${_f}")
+		string(STRIP "${_f}" _f)
 	endif()
 
 	set(${out_flags} "${_f}" PARENT_SCOPE)
@@ -117,8 +129,9 @@ endfunction()
 ## @param[in] toolchain_name Normalized toolchain name (`gcc`, `clang`,
 ##            `clang-cl`, `msvc`).
 ## @note Does not clear the entire flag string. When targeting `msvc`, removes
-##       known Clang/LLVM-only switches that may have been inherited from a
-##       clang-cl parent job. MSVC-compatible and unknown tokens are preserved.
+##       known Clang/LLVM-only switches. When targeting `clang-cl`, removes
+##       MSVC whole-program LTCG compile switches (`/GL`) that clang-cl ignores
+##       with “unknown argument ignored”.
 function(buildmaster_clean_cflags out_flags flags toolchain_name)
 	set(_f "${flags}")
 
@@ -146,6 +159,18 @@ function(buildmaster_clean_cflags out_flags flags toolchain_name)
 		endforeach()
 		string(REGEX REPLACE "/clang:[^ \t]+" "" _f "${_f}")
 		string(REGEX REPLACE "-fthinlto-index=[^ \t]*" "" _f "${_f}")
+		string(REGEX REPLACE "[ \t]+" " " _f "${_f}")
+		string(STRIP "${_f}" _f)
+	elseif(toolchain_name STREQUAL "clang-cl")
+		foreach(_tok
+			"/GL"
+			"/LTCG"
+			"/LTCG:INCREMENTAL"
+			"/LTCG:STATUS"
+			"/LTCG:OFF"
+		)
+			string(REPLACE "${_tok}" "" _f "${_f}")
+		endforeach()
 		string(REGEX REPLACE "[ \t]+" " " _f "${_f}")
 		string(STRIP "${_f}" _f)
 	endif()

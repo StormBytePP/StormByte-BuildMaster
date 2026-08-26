@@ -211,7 +211,16 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 			set(ENV_CMAKE_COMPILE_COMMAND ${_bm_tc_runner_silent} "${_cmake_name}")
 		endif()
 	else()
-		# Inherit parent linker: map type/path to a safe -fuse-ld= flavor
+		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
+		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
+			buildmaster_clean_ldflags(_MESON_LINK_ARGS
+				"${_MESON_LINK_ARGS}" "clang-cl")
+			buildmaster_clean_cflags(CMAKE_C_FLAGS
+				"${CMAKE_C_FLAGS}" "clang-cl")
+			buildmaster_clean_cflags(CMAKE_CXX_FLAGS
+				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		endif()
+
 		set(_bm_lt "")
 		if(DEFINED CMAKE_LINKER_TYPE)
 			set(_bm_lt "${CMAKE_LINKER_TYPE}")
@@ -260,9 +269,20 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
+
+	set(_bm_msvc_like FALSE)
 	if(MSVC OR _toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl")
+		set(_bm_msvc_like TRUE)
+	elseif(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
+		set(_bm_msvc_like TRUE)
+	endif()
+	if(_bm_msvc_like)
 		string(APPEND _MESON_C_ARGS " /Z7")
 		string(APPEND _MESON_CXX_ARGS " /Z7")
+		# clang-cl ignores -std=c99; MSVC-style /std:c11 satisfies Postgres C99 probes
+		if(NOT _MESON_C_ARGS MATCHES "/std:c")
+			string(APPEND _MESON_C_ARGS " /std:c11")
+		endif()
 	endif()
 
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)

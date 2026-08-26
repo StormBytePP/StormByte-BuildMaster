@@ -52,10 +52,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `buildmaster_toolchain_reset` / `export` / `export_raw` / `write`
   - Modules register state in `*/update_toolchain.cmake`; the parent `toolchain.cmake` is written once at the end of the BuildMaster root `CMakeLists.txt`
   - `buildmaster_toolchain_write_component`: parent registry snapshot + profile compiler/binutils `CACHE FORCE` overlay (no hand-maintained variable list in stage generators)
-- `buildmaster_clean_ldflags()` / `buildmaster_clean_cflags()` strip known LLD / Clang-LTO tokens when targeting `msvc`; other flags are preserved (no blind wipe)
+- `buildmaster_clean_ldflags()` / `buildmaster_clean_cflags()` strip known-incoherent tokens by profile:
+  - `msvc`: remove LLD / Clang-LTO switches; other flags preserved
+  - `clang-cl`: remove MSVC LTCG tokens (`/GL`, `/LTCG` and variants) that clang-cl ignores or mishandles
 - Component-local env runners (normal + silent) when `TOOLCHAIN` is set; parent global runners are not rewritten
 - When `TOOLCHAIN` is set, configure and build status lines (and dependant configure `COMMENT`) include `(with toolchain <name>)`; omitted when inheriting the parent job
-- IPO/LTO is never enabled by a profile; if the parent already had IPO on, nested stages keep a coherent setting
+- IPO/LTO is never enabled by a profile; if the parent already had IPO on, nested stages keep a coherent setting (`CMAKE_INTERPROCEDURAL_OPTIMIZATION_*` / Meson `b_lto`) without re-injecting MSVC `/GL`
 - Fully backward compatible: omitting `TOOLCHAIN` keeps previous behaviour
 
 ### Fixed
@@ -64,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Incomplete component toolchain snapshots (missing tool `*_SRCDIR` / `ENV_*`) that led to failures such as `File /configure.cmake.in does not exist` when nested projects created further components
 - **Nested `add_subdirectory(buildmaster)` no longer corrupts the shared `toolchain.cmake`:** when `BUILDMASTER_CONFIGURED` is already TRUE (host loaded the parent dump as `CMAKE_TOOLCHAIN_FILE`), the root `CMakeLists.txt` loads helpers, propagates vars, and returns—without `toolchain_reset` / module re-export / `toolchain_write`. Previously a nested bootstrap cleared the registry, re-wrote only root-level keys, and overwrote the parent dump, which then broke deeper components with empty template roots (`/configure.cmake.in`, `/component_shared.cmake.in`)
 - **Meson nested setups with system `ld`:** no longer pass `-fuse-ld=/usr/bin/ld` (or other absolute linker paths) into `c_link_args` / `cpp_link_args`. GCC rejects path-form `-fuse-ld=`; `buildmaster_fuse_ld_flag()` only emits driver flavor names, so PostgreSQL and other Meson components configure correctly under a default Linux linker
+- **clang-cl + inherited MSVC LTCG flags:** when the parent job uses clang-cl (or a stage selects `TOOLCHAIN clang-cl`), `create_cmake_stages` / `create_meson_stages` strip `/GL` and `/LTCG*` from C/CXX and linker flags instead of forwarding them. clang-cl was warning `unknown argument ignored` for `/GL`; IPO remains driven by `CMAKE_INTERPROCEDURAL_OPTIMIZATION_*` and Meson `b_lto`, not by those MSVC-only switches
+- **Meson on Windows (clang-cl / MSVC-like drivers):** nested setups append `/std:c11` to `c_args` when no `/std:c*` is already present, so C99 feature probes (e.g. PostgreSQL) are not left in a broken state after clang-cl ignores GNU-style `-std=c99`
 - Meson stages: `SCCACHE_DIR` path normalization wrote into `CCACHE_DIR` instead of `SCCACHE_DIR`, so sccache cache directories could be lost or overwrite the ccache path during nested Meson setup
 - Dependant configure targets (`component_*_dependant.cmake.in`): under the **Ninja** generator, long configures (e.g. FFmpeg `meson setup`) looked hung — the silent env runner swallowed `message(STATUS)` from the configure `-P` script. Makefiles still printed progress. Now each dependant configure target sets `USES_TERMINAL` and a clear `COMMENT "Configuring <component>"` so Ninja shows the step as soon as it starts
 - Dependant configure progress on **Windows + Ninja**: `cmake -E echo "Configuring …"` plus the same `COMMENT` concatenated on one line (`Configuring x265Configuring x265`). Dropped the redundant `echo`; a single `COMMENT` is enough

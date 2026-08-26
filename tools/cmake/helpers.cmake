@@ -233,6 +233,19 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		endif()
 	else()
 		set(_CMAKE_USE_TOOLCHAIN_FILE "1")
+		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
+		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
+			buildmaster_clean_ldflags(CMAKE_EXE_LINKER_FLAGS
+				"${CMAKE_EXE_LINKER_FLAGS}" "clang-cl")
+			buildmaster_clean_ldflags(CMAKE_SHARED_LINKER_FLAGS
+				"${CMAKE_SHARED_LINKER_FLAGS}" "clang-cl")
+			buildmaster_clean_ldflags(CMAKE_MODULE_LINKER_FLAGS
+				"${CMAKE_MODULE_LINKER_FLAGS}" "clang-cl")
+			buildmaster_clean_cflags(CMAKE_C_FLAGS
+				"${CMAKE_C_FLAGS}" "clang-cl")
+			buildmaster_clean_cflags(CMAKE_CXX_FLAGS
+				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		endif()
 	endif()
 
 	# configure.cmake.in substitutes @BUILDMASTER_TOOLCHAIN_FILE@ for the nested
