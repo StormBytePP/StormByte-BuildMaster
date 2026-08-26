@@ -14,7 +14,8 @@ create_cmake_component(
 	"${NEST_CMAKE_BUILD_DIR}"
 	"-DBUILDMASTER_ROOT=${BM_TEST_REPO_ROOT}"
 	static
-	"recursive/cmake/nestlib;recursive/cmake/midlib;recursive/cmake/leaflib"
+	"recursive/cmake/nestlib"
+	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
 )
 include("${NEST_CMAKE_FILE}")
 

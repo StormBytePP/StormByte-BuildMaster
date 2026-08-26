@@ -22,6 +22,7 @@ does not leave the parent compiling against a half-empty prefix.
 - [Quick start](#quick-start)
 - [How a component works](#how-a-component-works)
 - [Component options string](#component-options-string)
+- [Produced libraries and LINK_EXTRA](#produced-libraries-and-link_extra)
 - [Subcomponent specs and library paths](#subcomponent-specs-and-library-paths)
 - [Header-only components](#header-only-components)
 - [Dependant components](#dependant-components)
@@ -109,7 +110,8 @@ Generated stages look like this:
 | Per-component toolchain | No | Manual | **Optional** |
 | Portable static archive merge | No | Manual | **Yes** |
 | Header-only INTERFACE components | Manual | Manual | **Yes** |
-| Path-qualified subcomponents (`subdir/name`) | No | Manual | **Yes** |
+| Path-qualified library specs (`subdir/name`) | No | Manual | **Yes** |
+| Produced vs extra link archives (`LINK_EXTRA`) | No | Manual | **Yes** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
 | Fail-fast after a stage failure | No | Manual | **Optional** |
 | INTERFACE depends on `_install` | No | Manual | **Yes** |
@@ -133,6 +135,7 @@ Generated stages look like this:
 - Git ops bound to a component id (configure-time, then optional reset)
 - Extensible options via one trailing `KEY=value;…` string
 - Library artifacts that can live in a **subdir** of the shared libdir
+- Clear split between **produced** archives and **extra** link archives
 
 ---
 
@@ -163,7 +166,9 @@ target_link_libraries(MyApp PRIVATE mylib)
 After `include(${OUT_FILE})` the stage targets and IMPORTED libraries exist
 in the parent.
 
-Options (indent, toolchain) go in a **single** trailing string:
+The positional library list is **produced** (what this component installs).
+Optional behaviour (indent, toolchain, extra link archives) goes in a
+**single** trailing options string:
 
 ```cmake
 create_cmake_component(
@@ -192,10 +197,13 @@ scripts and a fragment that declares:
 | `<component>_configure` | Nested CMake/Meson configure (and registered git ops) |
 | `<component>_build` | Compile |
 | `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
-| `<subcomponent>` | `STATIC`/`SHARED` **IMPORTED** archive(s) |
+| `<libspec>` | `STATIC`/`SHARED` **IMPORTED** archive(s) for each produced and `LINK_EXTRA` entry |
 
-Library-mode install lists the archive paths as `OUTPUT`, so other targets
-can depend on real files.
+Library-mode install lists archive paths as `OUTPUT` so Ninja tracks real
+files. Paths come from the **produced** list plus optional `LINK_EXTRA`
+(when those archives are materialised by the same install graph, e.g.
+nested BuildMaster). Install never invents empty `.a` / `.lib` stamps; if a
+listed archive is missing after a successful install, the stage fails.
 
 Component **ids** should be filesystem-friendly (they become target and
 script names). Display **titles** may contain spaces; they only appear in
@@ -228,22 +236,66 @@ argument:
 |-----|---------|
 | `INDENT` / `INDENT_LEVEL` | Tabs in hierarchical `STATUS` lines (non-negative integer) |
 | `TOOLCHAIN` | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`). Empty = inherit |
+| `LINK_EXTRA` | Comma-separated library specs also wired as IMPORTED and linked on the INTERFACE (see next section) |
 
-More keys can be added later without changing function signatures.
+`LINK_EXTRA` uses **commas** inside the value so it does not collide with
+the `;` pair separator. The key may be repeated; values are concatenated.
 
 ```cmake
 create_cmake_component(... "mylib")
 create_cmake_component(... "mylib" "INDENT=2")
 create_cmake_component(... "mylib" "TOOLCHAIN=msvc")
 create_cmake_component(... "mylib" "INDENT=1;TOOLCHAIN=msvc")
+create_cmake_component(... "nestlib"
+	"LINK_EXTRA=midlib,leaflib")
+create_cmake_component(... "nestlib"
+	"INDENT=1;LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib")
 ```
+
+---
+
+## Produced libraries and LINK_EXTRA
+
+The positional argument after `static` / `shared` is the **produced** list:
+archives this component is responsible for as its primary install artefacts.
+At least one entry is required (library modes).
+
+| List | Role |
+|------|------|
+| **Produced** (positional) | Primary archives. Always IMPORTED and on the install `OUTPUT` list. |
+| **`LINK_EXTRA=`** (options) | Additional specs for the INTERFACE link line (and IMPORTED targets). Also listed on install `OUTPUT` when the same install stage materialises them (typical for nested BuildMaster). |
+
+Omit `LINK_EXTRA` when consumers only need what this component installs.
+
+A static `.a` does not pull other static archives by itself. For a nested
+chain (`nest` → `mid` → `leaf`), put the outer archive in **produced** and
+the transitive ones in `LINK_EXTRA`:
+
+```cmake
+create_cmake_component(
+	OUT nest "Nested stack"
+	${NEST_SRC} ${NEST_BUILD} "${OPTS}"
+	static
+	"recursive/cmake/nestlib"
+	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
+)
+include(${OUT})
+target_link_libraries(MyApp PRIVATE nest)
+```
+
+If `LINK_EXTRA` points at archives installed only by a **sibling**
+component, also ensure the graph waits on that component’s `_install`
+(dependant API or explicit `add_dependencies`). Path alone is not a
+substitute for a missing producer target.
+
+MSVC DLLs still live under `BUILDMASTER_INSTALL_BINDIR` using the
+**basename only**.
 
 ---
 
 ## Subcomponent specs and library paths
 
-The subcomponent list is the artifact name(s) used for IMPORTED targets and
-for the install `OUTPUT` list.
+Each entry in produced or `LINK_EXTRA` is a library **spec**:
 
 | Spec | File | IMPORTED target |
 |------|------|-----------------|
@@ -266,33 +318,13 @@ library_import_hint(out name prefix [subdir])
 `subdir` is optional and relative to `prefix` (usually
 `BUILDMASTER_INSTALL_LIBDIR`). Omit it for the flat layout.
 
-### Several static archives on one component
-
-A static `.a` does not pull other static archives by itself. If consumers
-must link a whole chain (nested `nest` → `mid` → `leaf`), list **all**
-specs on the **outermost** `create_*`:
-
-```cmake
-create_cmake_component(
-	OUT nest "Nested stack"
-	${NEST_SRC} ${NEST_BUILD} "${OPTS}"
-	static
-	"recursive/cmake/nestlib;recursive/cmake/midlib;recursive/cmake/leaflib"
-)
-include(${OUT})
-target_link_libraries(MyApp PRIVATE nest)
-```
-
-MSVC DLLs still live under `BUILDMASTER_INSTALL_BINDIR` using the
-**basename only**.
-
 ---
 
 ## Header-only components
 
 Projects that install only headers (no `.a` / `.lib` / `.so`) use
-`headers` mode. There is no IMPORTED archive and no empty `OUTPUT` list
-(which breaks under CMP0175).
+`headers` mode. There is no IMPORTED archive and no empty archive `OUTPUT`
+list (which breaks under CMP0175).
 
 | Stage | Behaviour |
 |-------|-----------|
@@ -331,7 +363,7 @@ include(${LOADER_FILE})
 Meson twins: `create_meson_headers_component`,
 `create_meson_headers_dependant_component`.
 
-Signatures omit `_library_mode` and `_subcomponents` (always `headers`).
+Signatures omit `_library_mode` and the produced list (always `headers`).
 
 ---
 
@@ -410,7 +442,11 @@ BuildMaster initializes **once** (`BUILDMASTER_CONFIGURED`) and reuses
 not double-bootstrap tools or fight over prefixes.
 `buildmaster_build_init` stays a single global target.
 
-Pass the repo root into nested projects if they need to find BuildMaster:
+Pass the repo root into nested projects if they need to find BuildMaster.
+Install nested archives under a **subdir** of the shared libdir and match
+that layout with path-qualified specs. Use **produced** for the outer
+archive and `LINK_EXTRA` for transitive static archives installed in the
+same nested graph:
 
 ```cmake
 create_cmake_component(
@@ -418,13 +454,10 @@ create_cmake_component(
 	${NEST_SRC} ${NEST_BUILD}
 	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
 	static
-	"vendor/nest/nestlib;vendor/nest/midlib"
+	"vendor/nest/nestlib"
+	"LINK_EXTRA=vendor/nest/midlib,vendor/nest/leaflib"
 )
 ```
-
-Install those archives under a **subdir** of the shared libdir so parallel
-chains do not overwrite `libnestlib.a`. Match that layout with
-path-qualified subcomponent specs.
 
 Per-component `TOOLCHAIN` stays local to the component that requested it.
 
@@ -538,6 +571,10 @@ Leave `BUILDMASTER_FAIL_FAST` unset when warming caches.
 | `TOOLCHAIN=clang` | LLD required | use `clang-cl` | LLD not forced |
 | `TOOLCHAIN=msvc` / `clang-cl` | invalid | supported | invalid |
 | `subdir/name` archives | `lib` or `lib64` | `lib` + `.lib` | `lib` |
+
+On Windows, Meson may default to `libfoo.a` naming. Align `name_prefix` /
+`name_suffix` with `CMAKE_STATIC_LIBRARY_*` (or rename after install) so
+produced paths match `library_import_static_hint`.
 
 Apple `ar` has no MRI mode. `create_bundle_static_libraries()` picks the
 right tool.
@@ -766,7 +803,8 @@ create_cmake_component(
 	${NEST_SRC} ${NEST_BUILD}
 	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
 	static
-	"recursive/cmake/nestlib;recursive/cmake/midlib;recursive/cmake/leaflib"
+	"recursive/cmake/nestlib"
+	"LINK_EXTRA=recursive/cmake/midlib,recursive/cmake/leaflib"
 )
 include(${NEST_FILE})
 target_link_libraries(MyApp PRIVATE nest)

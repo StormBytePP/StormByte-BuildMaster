@@ -19,11 +19,25 @@ if(NOT _BM_STAGE_RC EQUAL 0)
 	message(FATAL_ERROR "Installing @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 endif()
 
+# OUTPUT contract: produced archives must exist after a successful install.
+# Headers-mode stamp (.bm_*_headers.stamp) is written here if the tree did not
+# create it. Never invent empty .a/.lib files (breaks MSVC with LNK1136).
 set(_BM_OUTPUTS "@_CMAKE_OUTPUT_LIBRARIES@")
 foreach(_bm_out IN LISTS _BM_OUTPUTS)
-	if(NOT _bm_out STREQUAL "" AND NOT EXISTS "${_bm_out}")
+	if(_bm_out STREQUAL "")
+		continue()
+	endif()
+	if(EXISTS "${_bm_out}")
+		continue()
+	endif()
+	get_filename_component(_bm_out_name "${_bm_out}" NAME)
+	if(_bm_out_name MATCHES "^\\.bm_.*_headers\\.stamp$")
 		get_filename_component(_bm_out_dir "${_bm_out}" DIRECTORY)
 		file(MAKE_DIRECTORY "${_bm_out_dir}")
 		file(WRITE "${_bm_out}" "")
+	else()
+		message(FATAL_ERROR
+			"[BuildMaster] Install of @_CMAKE_COMPONENT_TITLE@ succeeded but "
+			"expected output is missing: ${_bm_out}")
 	endif()
 endforeach()

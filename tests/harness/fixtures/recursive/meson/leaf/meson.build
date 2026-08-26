@@ -1,7 +1,7 @@
 project('bm_rec_meson_leaf', 'c', version: '0.1.0', meson_version: '>=0.60.0')
 
-# Match CMake/MSVC archive naming so BuildMaster IMPORTED paths exist
-# (Windows: leaflib.lib; Unix: libleaflib.a).
+# Align archive basename with library_import_static_hint / CMAKE_STATIC_*
+# (Windows MSVC: leaflib.lib; Unix: libleaflib.a).
 if host_machine.system() == 'windows'
 	_name_prefix = ''
 	_name_suffix = 'lib'

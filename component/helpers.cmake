@@ -4,25 +4,27 @@
 
 ## @brief Parse the optional KEY=VALUE;KEY=VALUE options string used by
 ##        create_*_component family.
-## @param[out] out_indent    Parent-scope variable receiving the indent level
-##                           (integer, default 0).
-## @param[out] out_toolchain Parent-scope variable receiving the toolchain name
-##                           (empty string means inherit parent).
+## @param[out] out_indent     Parent-scope variable receiving the indent level
+##                            (integer, default 0).
+## @param[out] out_toolchain  Parent-scope variable receiving the toolchain name
+##                            (empty string means inherit parent).
+## @param[out] out_link_extra Parent-scope variable receiving the raw LINK_EXTRA
+##                            value (comma-separated specs), or empty.
 ## @param[in]  options_string Optional string of the form
-##                           "KEY=value;KEY2=value with spaces".
-##                           Only the first '=' in each pair separates key from
-##                           value. Keys are matched case-insensitively but
-##                           stored uppercase. Values may contain '=' and
-##                           spaces but must not contain ';'.
+##                            "KEY=value;KEY2=value with spaces".
+##                            Only the first '=' in each pair separates key from
+##                            value. Keys are matched case-insensitively but
+##                            stored uppercase. Values may contain '=' and
+##                            spaces but must not contain ';'.
 ## @note Unknown keys produce a WARNING and are ignored. Empty values are
-##       legal (e.g. TOOLCHAIN= means inherit).
-function(buildmaster_parse_component_options out_indent out_toolchain options_string)
+##       legal (e.g. TOOLCHAIN= means inherit). LINK_EXTRA values use ','
+##       to separate library specs (';' would start another option pair).
+function(buildmaster_parse_component_options out_indent out_toolchain out_link_extra options_string)
 	set(_indent 0)
 	set(_toolchain "")
+	set(_link_extra "")
 
 	if(NOT "${options_string}" STREQUAL "")
-		string(REPLACE ";" ";" _pairs "${options_string}")
-		# Force split even if the caller passed a single string
 		string(REPLACE ";" "\n" _tmp "${options_string}")
 		string(REPLACE "\n" ";" _pairs "${_tmp}")
 
@@ -45,6 +47,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain options_st
 
 			string(STRIP "${_key}" _key)
 			string(TOUPPER "${_key}" _key)
+			string(STRIP "${_val}" _val)
 
 			if(_key STREQUAL "INDENT" OR _key STREQUAL "INDENT_LEVEL")
 				if(_val MATCHES "^[0-9]+$")
@@ -55,6 +58,12 @@ function(buildmaster_parse_component_options out_indent out_toolchain options_st
 				endif()
 			elseif(_key STREQUAL "TOOLCHAIN")
 				set(_toolchain "${_val}")
+			elseif(_key STREQUAL "LINK_EXTRA")
+				if(_link_extra STREQUAL "")
+					set(_link_extra "${_val}")
+				else()
+					set(_link_extra "${_link_extra},${_val}")
+				endif()
 			else()
 				message(WARNING
 					"[BuildMaster] Unknown component option '${_key}' (ignored)")
@@ -64,6 +73,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain options_st
 
 	set(${out_indent} "${_indent}" PARENT_SCOPE)
 	set(${out_toolchain} "${_toolchain}" PARENT_SCOPE)
+	set(${out_link_extra} "${_link_extra}" PARENT_SCOPE)
 endfunction()
 
 
@@ -105,6 +115,32 @@ function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
 endfunction()
 
 
+## @brief Resolve one library spec into IMPORTED name + file path (+ MSVC DLL).
+## @param[in]  library_mode `static` or `shared`.
+## @param[in]  spec         `<name>` or `<subdir>/<name>`.
+## @param[in]  names_var    List variable (caller scope) receiving target names.
+## @param[in]  files_var    List variable receiving archive / import-lib paths.
+## @param[in]  dlls_var     List variable receiving MSVC DLL paths (shared only).
+## @note Appends to the three list variables in the caller scope (macro).
+macro(buildmaster_append_library_spec library_mode spec names_var files_var dlls_var)
+	buildmaster_parse_subcomponent("${spec}" _bm_as_tgt _bm_as_name _bm_as_subdir)
+	list(APPEND ${names_var} "${_bm_as_tgt}")
+	if("${library_mode}" STREQUAL "static")
+		library_import_static_hint(_bm_as_path "${_bm_as_name}"
+			"${BUILDMASTER_INSTALL_LIBDIR}" "${_bm_as_subdir}")
+		list(APPEND ${files_var} "${_bm_as_path}")
+	else()
+		library_import_hint(_bm_as_path "${_bm_as_name}"
+			"${BUILDMASTER_INSTALL_LIBDIR}" "${_bm_as_subdir}")
+		list(APPEND ${files_var} "${_bm_as_path}")
+		if(MSVC)
+			list(APPEND ${dlls_var}
+				"${BUILDMASTER_INSTALL_BINDIR}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+		endif()
+	endif()
+endmacro()
+
+
 ## @brief Generate a per-component generator fragment and IMPORTED target wiring.
 ## @param[out] _library_create_file Parent-scope variable receiving the fragment path.
 ## @param[in] _component Short component identifier.
@@ -114,20 +150,24 @@ endfunction()
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake` or `meson`.
-## @param[in] _subcomponents List of subcomponent specs (ignored for headers).
-##            Each entry is `<name>` (file under BUILDMASTER_INSTALL_LIBDIR)
-##            or `<subdir>/<name>` (file under BUILDMASTER_INSTALL_LIBDIR/<subdir>).
-##            The imported CMake target replaces `/` with `_`.
+## @param[in] _produced List of library specs this component **owns** as primary
+##            install artefacts (ignored for headers). Each entry is `<name>`
+##            or `<subdir>/<name>`. At least one is required for static/shared.
 ## @param[in] _dependency Optional install-target dependency for dependant templates.
 ## @param[in] options_string Optional (last argument) string of the form
 ##            "KEY=value;KEY2=value with spaces". Supported keys:
 ##              INDENT / INDENT_LEVEL – indentation level for STATUS messages
 ##              TOOLCHAIN             – BuildMaster toolchain name (empty = inherit)
+##              LINK_EXTRA            – extra library specs (comma-separated) also
+##                                      wired as IMPORTED and listed on the install
+##                                      stage OUTPUT so Ninja tracks nested installs;
+##                                      not a substitute for add_dependencies on a
+##                                      sibling component install
 ##            Unknown keys produce a WARNING. Values may contain '=' and spaces
 ##            but must not contain ';'. Only the first '=' separates key from value.
 ## @note Extra positional arguments beyond the options string cause FATAL_ERROR.
 function(create_component _library_create_file _component _component_title _srcdir _builddir
-						_options _library_mode _build_system _subcomponents _dependency)
+						_options _library_mode _build_system _produced _dependency)
 	# Fixed: 10 arguments (indices 0-9). Optional options_string is ARGV10.
 	if(ARGC GREATER 11)
 		message(FATAL_ERROR
@@ -140,7 +180,7 @@ function(create_component _library_create_file _component _component_title _srcd
 		set(_options_string "${ARGV10}")
 	endif()
 
-	buildmaster_parse_component_options(_indent_level _toolchain "${_options_string}")
+	buildmaster_parse_component_options(_indent_level _toolchain _link_extra "${_options_string}")
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -159,49 +199,51 @@ function(create_component _library_create_file _component _component_title _srcd
 			"(expected cmake or meson)")
 	endif()
 
-	# ---- output library paths (IMPORTED + install OUTPUT stamps) ----
+	# ---- IMPORTED (produced + LINK_EXTRA) and install OUTPUT (same file list) ----
+	# LINK_EXTRA paths stay on OUTPUT so Ninja has a producer when nested
+	# BuildMaster installs them during this component's install stage.
+	# install_exec never writes empty .a/.lib stamps.
 	set(_LIBRARY_COMPONENT_NAMES "")
 	set(_LIBRARY_COMPONENT_FILES "")
 	set(_LIBRARY_COMPONENT_DLL_FILES "")
 	set(_output_libraries "")
 
 	if(_library_mode STREQUAL "headers")
-		# Stamp under install include dir (headers-only has no archive/DLL)
 		set(_headers_stamp
 			"${BUILDMASTER_INSTALL_INCLUDEDIR}/.bm_${_component}_headers.stamp")
 		set(_output_libraries "${_headers_stamp}")
 	else()
-		foreach(_sub IN LISTS _subcomponents)
-			if(_sub STREQUAL "")
+		foreach(_spec IN LISTS _produced)
+			if(_spec STREQUAL "")
 				continue()
 			endif()
-			buildmaster_parse_subcomponent("${_sub}" _tgt _lib_name _lib_subdir)
-			list(APPEND _LIBRARY_COMPONENT_NAMES "${_tgt}")
-			if(_library_mode STREQUAL "static")
-				library_import_static_hint(_lib_path "${_lib_name}"
-					"${BUILDMASTER_INSTALL_LIBDIR}" "${_lib_subdir}")
-				list(APPEND _LIBRARY_COMPONENT_FILES "${_lib_path}")
-			else()
-				library_import_hint(_lib_path "${_lib_name}"
-					"${BUILDMASTER_INSTALL_LIBDIR}" "${_lib_subdir}")
-				list(APPEND _LIBRARY_COMPONENT_FILES "${_lib_path}")
-				if(MSVC)
-					set(_dll
-						"${BUILDMASTER_INSTALL_BINDIR}/${_lib_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-					list(APPEND _LIBRARY_COMPONENT_DLL_FILES "${_dll}")
-				endif()
-			endif()
+			buildmaster_append_library_spec(
+				"${_library_mode}" "${_spec}"
+				_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES _LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
+
+		if(NOT _link_extra STREQUAL "")
+			string(REPLACE "," ";" _extra_specs "${_link_extra}")
+			foreach(_spec IN LISTS _extra_specs)
+				string(STRIP "${_spec}" _spec)
+				if(_spec STREQUAL "")
+					continue()
+				endif()
+				buildmaster_append_library_spec(
+					"${_library_mode}" "${_spec}"
+					_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES _LIBRARY_COMPONENT_DLL_FILES)
+			endforeach()
+		endif()
 
 		set(_output_libraries "${_LIBRARY_COMPONENT_FILES}")
 		if(MSVC AND _library_mode STREQUAL "shared")
 			list(APPEND _output_libraries ${_LIBRARY_COMPONENT_DLL_FILES})
 		endif()
 
-		if(_output_libraries STREQUAL "")
+		if(_LIBRARY_COMPONENT_FILES STREQUAL "")
 			message(FATAL_ERROR
 				"[BuildMaster] create_component '${_component}': "
-				"static/shared mode requires at least one subcomponent name")
+				"static/shared mode requires at least one produced library spec")
 		endif()
 	endif()
 
@@ -305,11 +347,12 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
+## @param[in] _produced Primary library specs this component installs
+##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
+##            See create_component for supported keys (including LINK_EXTRA).
 function(create_cmake_component _library_create_file _component _component_title
-								_srcdir _builddir _options _library_mode _subcomponents)
+								_srcdir _builddir _options _library_mode _produced)
 	if(ARGC GREATER 9)
 		message(FATAL_ERROR
 			"[BuildMaster] create_cmake_component: too many arguments "
@@ -330,8 +373,8 @@ function(create_cmake_component _library_create_file _component _component_title
 		"${_options}"
 		"${_library_mode}"
 		"cmake"
-		"${_subcomponents}"
-		""                          # no dependency
+		"${_produced}"
+		""
 		"${_options_string}"
 	)
 	set(${_library_create_file} "${${_library_create_file}}" PARENT_SCOPE)
@@ -346,11 +389,12 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
+## @param[in] _produced Primary library specs this component installs
+##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
+##            See create_component for supported keys (including LINK_EXTRA).
 function(create_meson_component _library_create_file _component _component_title
-								_srcdir _builddir _options _library_mode _subcomponents)
+								_srcdir _builddir _options _library_mode _produced)
 	if(ARGC GREATER 9)
 		message(FATAL_ERROR
 			"[BuildMaster] create_meson_component: too many arguments "
@@ -371,7 +415,7 @@ function(create_meson_component _library_create_file _component _component_title
 		"${_options}"
 		"${_library_mode}"
 		"meson"
-		"${_subcomponents}"
+		"${_produced}"
 		""
 		"${_options_string}"
 	)
@@ -387,13 +431,14 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
+## @param[in] _produced Primary library specs this component installs
+##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
 ## @param[in] _dependency Install-target dependency.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
+##            See create_component for supported keys (including LINK_EXTRA).
 function(create_cmake_dependant_component _library_create_file _component _component_title
 										_srcdir _builddir _options _library_mode
-										_subcomponents _dependency)
+										_produced _dependency)
 	if(ARGC GREATER 10)
 		message(FATAL_ERROR
 			"[BuildMaster] create_cmake_dependant_component: too many arguments "
@@ -414,7 +459,7 @@ function(create_cmake_dependant_component _library_create_file _component _compo
 		"${_options}"
 		"${_library_mode}"
 		"cmake"
-		"${_subcomponents}"
+		"${_produced}"
 		"${_dependency}"
 		"${_options_string}"
 	)
@@ -430,13 +475,14 @@ endfunction()
 ## @param[in] _builddir Component build directory.
 ## @param[in] _options Options forwarded to stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _subcomponents List of subcomponent specs (`<name>` or `<subdir>/<name>`).
+## @param[in] _produced Primary library specs this component installs
+##            (`<name>` or `<subdir>/<name>`). Extra link specs: LINK_EXTRA=.
 ## @param[in] _dependency Install-target dependency.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
+##            See create_component for supported keys (including LINK_EXTRA).
 function(create_meson_dependant_component _library_create_file _component _component_title
 										_srcdir _builddir _options _library_mode
-										_subcomponents _dependency)
+										_produced _dependency)
 	if(ARGC GREATER 10)
 		message(FATAL_ERROR
 			"[BuildMaster] create_meson_dependant_component: too many arguments "
@@ -457,7 +503,7 @@ function(create_meson_dependant_component _library_create_file _component _compo
 		"${_options}"
 		"${_library_mode}"
 		"meson"
-		"${_subcomponents}"
+		"${_produced}"
 		"${_dependency}"
 		"${_options_string}"
 	)

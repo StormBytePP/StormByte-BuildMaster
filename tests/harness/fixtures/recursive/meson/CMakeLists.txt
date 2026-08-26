@@ -14,7 +14,8 @@ create_cmake_component(
 	"${NEST_MESON_BUILD_DIR}"
 	"-DBUILDMASTER_ROOT=${BM_TEST_REPO_ROOT}"
 	static
-	"recursive/meson/nestlib;recursive/meson/midlib;recursive/meson/leaflib"
+	"recursive/meson/nestlib"
+	"LINK_EXTRA=recursive/meson/midlib,recursive/meson/leaflib"
 )
 include("${NEST_MESON_FILE}")
 
