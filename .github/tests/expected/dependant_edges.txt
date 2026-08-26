@@ -4,10 +4,22 @@
 dep -> dep_install
 dep_configure -> base_install
 
-# order-independent (second declared before first)
+# file-to-component
+payload-lib -> payload-lib_install
+payload-lib_configure -> payload_unpack
+
+# link-component
+link-b -> link-b_install
+link-b_configure -> link-a_install
+
+# order-independent
 second -> second_install
 second_configure -> first_install
 
-# sdkloader (depends on sdk-headers)
+# prerequisite
+prereq-lib -> prereq-lib_install
+prereq-lib_configure -> prereq_touch
+
+# sdkloader
 sdkloader -> sdkloader_install
 sdkloader_configure -> sdk-headers_install

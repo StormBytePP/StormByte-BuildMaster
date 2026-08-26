@@ -8,28 +8,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Declarative component graph:**
-  - `component_dependency(source, dest)` — order-only edges (component id, stage name, or existing CMake target).
-  - `component_link(source, dest)` — link plus order; `dest` may be a component (all produced libs), a library spec (`name` / `subdir/name`), a target, or an archive path.
-  - Library-spec link destinations are also listed on the source component’s install `OUTPUT` so Ninja has a production rule (replaces the old `LINK_EXTRA` role).
-- **Deferred materialization:** `create_*` only registers metadata; fragments and stage targets are created at the end of parent configure (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order does not matter.
-- **Eager vs deferred configure:** components without dependency edges still configure during parent configure; components with edges configure at build time under `<id>_configure` (same behaviour as the former dependant templates).
-- **Subcomponent libdir paths:** library specs may be `<name>` or `<subdir>/<name>` under `BUILDMASTER_INSTALL_LIBDIR`.
-  - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
-- **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
-- **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
-- **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
+- **Declarative component graph:** components are registered at call time and materialized once at the end of the parent `CMAKE_SOURCE_DIR` scope via internal `cmake_language(DEFER)` (no public finalize).
+  - `component_dependency(source, dest)` — order-only edge (configure deferred when needed).
+  - `component_link(source, dest)` — link edge; records `component_dependency` only when `dest` is a graph node (component id, `*_install`/`*_configure`/`*_build`, or existing target), not for bare library specs.
+  - `component_prerequisite(name …)` — first-class custom target (`COMMAND` / `SCRIPT` / `DEPENDS`) usable as a dependency dest.
+- **Eager vs deferred configure:** components with no dependency edges configure at parent configure time; those with edges configure at build time under `<id>_configure` (same behaviour as the old dependant templates).
+- **Options:** `RENAME` flag (`RENAME` ≡ `RENAME=ON`) normalizes variant install basenames to the produced name before the install contract check (default ON for library modes).
+- **File helpers (declarative):** `file_download` / `file_download_cached` / `file_decompress` take a **target name** as first argument, generate scripts, and create `add_custom_target`s (no out-var, no `include()`). Wire with `component_dependency`.
+- **Git helpers (declarative):** `create_git_*` no longer return an out-var; they generate the script and `include()` it immediately, then register post-install reset by component id.
+- **Resolve policy** documented in-code for dependency/link destinations (component → `_install`, stage names, existing targets, library specs / paths for link only).
+- **Harness:** order-independent declaration, prerequisite, file-decompress + checksum, file-to-component, git-sandbox (local clone: reset / patch / fetch / marker), link component-to-component, recursive cmake/meson, rename; expected lists under `.github/tests/expected/`.
 
 ### Changed
-- **Breaking — fully declarative `create_*` API:**
-  - No out-variable and no consumer `include()` of a generated fragment.
-  - Signature: `create_cmake_component(<id> <title> <srcdir> <builddir> <options> <mode> <produced> [options_string])` (and Meson / headers analogues).
-  - Removed public `create_*_dependant_component` / `create_*_headers_dependant_component`; use `create_*` + `component_dependency`.
-  - Removed `LINK_EXTRA` from the options string; use `component_link`.
-  - `create_*_stages` are **internal** (not part of the supported public API).
-- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`). Unknown keys warn; extra positionals are fatal.
-- **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
-- Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
+- **Breaking:** `create_*_component` / headers wrappers no longer return a fragment path and must not be `include()`d by the user. Prefer `create_cmake_*` / `create_meson_*`; stages are **internal**.
+- **Breaking:** removed public `create_*_dependant_component` and public `create_*_stages`. Use `component_dependency` / `component_link` instead of dependant factories and `LINK_EXTRA`.
+- **Breaking:** `create_*` positional `indent_level` / `toolchain` replaced by optional trailing options string `KEY=value;…` (`INDENT`/`INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`). Flag-form keys listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` may omit `=`.
+- **Breaking:** `file_download` / `file_download_cached` / `file_decompress` first argument is the target name, not an out-var.
+- **Breaking:** `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` drop the out-var argument.
+- Subcomponent specs `<name>` or `<subdir>/<name>` unchanged; consumers should prefer `component_link` for extra archives instead of listing every transitive static on the outer `create_*` when edges express the graph (listing all produced specs on one component remains valid).
+
+### Removed
+- Public dependant component API and public stage generators as supported surface.
+- `LINK_EXTRA` component option (use `component_link`).
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 

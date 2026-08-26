@@ -3,6 +3,7 @@
 # Component API
 component_dependency
 component_link
+component_prerequisite
 create_cmake_component
 create_cmake_headers_component
 create_component
@@ -10,11 +11,13 @@ create_meson_component
 create_meson_headers_component
 
 # File helpers
+file_checksum_correct
 file_decompress
 file_download
 file_download_cached
 
 # Git helpers
+buildmaster_git_post_install_marker_for_srcdir
 create_git_fetch
 create_git_patch_file
 create_git_reset_file

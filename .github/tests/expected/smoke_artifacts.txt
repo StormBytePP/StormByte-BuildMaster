@@ -3,22 +3,34 @@
 # (sections and paths alphabetical within each platform group)
 
 # Flat libraries
+<lib>/alinklib.lib|windows
 <lib>/baselib.lib|windows
+<lib>/blinklib.lib|windows
 <lib>/deplib.lib|windows
 <lib>/firstlib.lib|windows
+<lib>/libalinklib.a|unix
 <lib>/libbaselib.a|unix
+<lib>/libblinklib.a|unix
 <lib>/libdeplib.a|unix
 <lib>/libfirstlib.a|unix
 <lib>/libloaderlib.a|unix
+<lib>/libpayloadlib.a|unix
+<lib>/libprereqlib.a|unix
 <lib>/libsecondlib.a|unix
 <lib>/loaderlib.lib|windows
+<lib>/payloadlib.lib|windows
+<lib>/prereqlib.lib|windows
 <lib>/secondlib.lib|windows
 
 # Headers
+<include>/a.h|all
+<include>/b.h|all
 <include>/base.h|all
 <include>/dep.h|all
 <include>/first.h|all
 <include>/loader.h|all
+<include>/payload.h|all
+<include>/prereq.h|all
 <include>/sdk.h|all
 <include>/second.h|all
 

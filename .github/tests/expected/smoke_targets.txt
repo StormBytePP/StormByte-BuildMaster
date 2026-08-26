@@ -12,6 +12,18 @@ first_install
 order_independent_link_test
 second_install
 
+# Custom prerequisite
+prereq-lib_install
+
+# File helpers
+file_decompress_check
+payload-lib_install
+
+# Link component-to-component
+link-a_install
+link-b_install
+link_component_test
+
 # Recursive chains
 nest-cmake_install
 nest-meson_install

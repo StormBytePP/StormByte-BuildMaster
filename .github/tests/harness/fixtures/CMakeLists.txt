@@ -17,9 +17,18 @@ add_subdirectory(sdk-headers)
 add_subdirectory(sdkloader)
 
 # ---------------------------------------------------------------------------
-# Declaration order must not matter (dependency + dependent before prerequisite)
+# Declaration order must not matter
 # ---------------------------------------------------------------------------
 add_subdirectory(order-independent)
+
+# ---------------------------------------------------------------------------
+# Custom prerequisite / file / git / link
+# ---------------------------------------------------------------------------
+add_subdirectory(prerequisite)
+add_subdirectory(file-decompress)
+add_subdirectory(file-to-component)
+add_subdirectory(git-sandbox)
+add_subdirectory(link-component)
 
 # ---------------------------------------------------------------------------
 # Install archive rename (Meson zs.* → produced z.*)

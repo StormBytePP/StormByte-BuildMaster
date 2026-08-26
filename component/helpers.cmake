@@ -1,7 +1,8 @@
 # =============================================================================
 # component/helpers.cmake — registry, graph, shared fragment emit
 # =============================================================================
-# Public: create_component, component_dependency, component_link.
+# Public: create_component, component_dependency, component_link,
+#         component_prerequisite.
 # Backends (component/cmake, component/meson) own create_*_stages and
 # _buildmaster_materialize_{cmake,meson}.
 # Nested bootstrap that only include()s this file still loads the wrappers.
@@ -313,6 +314,7 @@ endfunction()
 ##            `<id>_install` / `<id>_configure` / `<id>_build`.
 ## @note May be called before either end is registered. Any dependency on
 ##       another install/target selects build-time configure (old dependant).
+## @note Resolution policy is applied in _buildmaster_component_dep_targets.
 function(component_dependency source dest)
 	if(ARGC GREATER 2)
 		message(FATAL_ERROR
@@ -334,12 +336,14 @@ function(component_dependency source dest)
 	_buildmaster_component_defer_arm()
 endfunction()
 
-## @brief Declare a link from a component plus an order edge.
+## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE after finalize).
 ## @param[in] dest   Registered component (all produced libs), library spec
 ##            `<name>` or `<subdir>/<name>`, existing target, or archive path.
-## @note Also records component_dependency(source, dest) so install or custom
-##       prerequisites run first.
+## @note Order edges (`component_dependency`) are recorded only when `dest` is a
+##       registered component id, a `*_install`/`*_configure`/`*_build` name, or
+##       an existing CMake target. Pure library specs are link-only (plus install
+##       OUTPUT on the source component); they must not go through dep resolution.
 function(component_link source dest)
 	if(ARGC GREATER 2)
 		message(FATAL_ERROR
@@ -358,7 +362,76 @@ function(component_link source dest)
 		"${source}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS
 		"${dest}")
-	component_dependency("${source}" "${dest}")
+
+	# Order only for real graph nodes (not bare library specs under libdir).
+	_buildmaster_component_is_registered("${dest}" _dest_comp)
+	if(_dest_comp
+			OR TARGET "${dest}"
+			OR dest MATCHES "^(.+)_(install|configure|build)$")
+		component_dependency("${source}" "${dest}")
+	endif()
+
+	_buildmaster_component_defer_arm()
+endfunction()
+
+## @brief Declare a custom prerequisite target (download, unpack, codegen, …).
+## @param[in] name Target name (must not already exist as a CMake target).
+## @param[in] COMMAND  One or more command argv tokens (same as add_custom_target).
+## @param[in] COMMENT  Optional progress text (default: "BuildMaster prerequisite: <name>").
+## @param[in] WORKING_DIRECTORY Optional working directory for the command.
+## @param[in] SCRIPT   Optional path to a CMake -P script. If set, COMMAND defaults to
+##            `${CMAKE_COMMAND} -P <SCRIPT>` unless COMMAND is also given.
+## @param[in] DEPENDS  Optional list of CMake targets this prerequisite waits on.
+## @note Creates an `add_custom_target` at **declaration** time (not deferred), so the
+##       name is a real target for `component_dependency` / `component_link` dest
+##       resolution. Prefer file_download* / file_decompress when applicable.
+function(component_prerequisite name)
+	if("${name}" STREQUAL "")
+		message(FATAL_ERROR
+			"[BuildMaster] component_prerequisite: empty name")
+	endif()
+	if(TARGET "${name}")
+		message(FATAL_ERROR
+			"[BuildMaster] component_prerequisite: target '${name}' already exists")
+	endif()
+
+	cmake_parse_arguments(ARG
+		""
+		"COMMENT;WORKING_DIRECTORY;SCRIPT"
+		"COMMAND;DEPENDS"
+		${ARGN}
+	)
+
+	if(ARG_SCRIPT AND NOT ARG_COMMAND)
+		set(ARG_COMMAND "${CMAKE_COMMAND}" -P "${ARG_SCRIPT}")
+	endif()
+	if(NOT ARG_COMMAND)
+		message(FATAL_ERROR
+			"[BuildMaster] component_prerequisite('${name}'): "
+			"need COMMAND and/or SCRIPT")
+	endif()
+	if(NOT ARG_COMMENT)
+		set(ARG_COMMENT "BuildMaster prerequisite: ${name}")
+	endif()
+
+	set(_wd_args "")
+	if(ARG_WORKING_DIRECTORY)
+		set(_wd_args WORKING_DIRECTORY "${ARG_WORKING_DIRECTORY}")
+	endif()
+
+	add_custom_target(${name}
+		COMMAND ${ARG_COMMAND}
+		COMMENT "${ARG_COMMENT}"
+		${_wd_args}
+		USES_TERMINAL
+		VERBATIM
+	)
+
+	if(ARG_DEPENDS)
+		add_dependencies(${name} ${ARG_DEPENDS})
+	endif()
+
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_PREREQUISITE_IDS "${name}")
 endfunction()
 
 # =============================================================================
@@ -386,24 +459,51 @@ endfunction()
 ##            as source (same behaviour as the old dependant templates).
 function(_buildmaster_component_has_deferred_configure id out_var)
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
-	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
-	set(_i 0)
-	foreach(_src IN LISTS _srcs)
-		list(GET _dsts ${_i} _dst)
-		math(EXPR _i "${_i} + 1")
-		if(_src STREQUAL "${id}")
+	if(_srcs)
+		list(FIND _srcs "${id}" _idx)
+		if(NOT _idx EQUAL -1)
 			set(${out_var} TRUE PARENT_SCOPE)
 			return()
 		endif()
-	endforeach()
+	endif()
 	set(${out_var} FALSE PARENT_SCOPE)
+endfunction()
+
+## @brief Resolve one dependency dest to a CMake target name.
+## @param[in]  dest    Declared dest (component id, stage name, or target).
+## @param[out] out_tgt Parent-scope target name, or empty if unresolved.
+## @param[out] out_ok  Parent-scope TRUE if resolved.
+## @note Policy (first match):
+##       1. Registered component id → `<id>_install`
+##       2. Name matching `*_install` / `*_configure` / `*_build` → as-is
+##       3. Existing CMake TARGET → as-is
+##       Otherwise out_ok is FALSE (caller decides FATAL).
+function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
+	_buildmaster_component_is_registered("${dest}" _is_comp)
+	if(_is_comp)
+		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		set(${out_ok} TRUE PARENT_SCOPE)
+		return()
+	endif()
+	if(dest MATCHES "^(.+)_(install|configure|build)$")
+		set(${out_tgt} "${dest}" PARENT_SCOPE)
+		set(${out_ok} TRUE PARENT_SCOPE)
+		return()
+	endif()
+	if(TARGET "${dest}")
+		set(${out_tgt} "${dest}" PARENT_SCOPE)
+		set(${out_ok} TRUE PARENT_SCOPE)
+		return()
+	endif()
+	set(${out_tgt} "" PARENT_SCOPE)
+	set(${out_ok} FALSE PARENT_SCOPE)
 endfunction()
 
 ## @brief Space-separated prerequisite targets for the dependant template.
 ## @param[in]  id      Component identifier (dependency source).
 ## @param[out] out_var Parent-scope string for @_LIBRARY_DEPENDENCIES@.
-## @note Registered dest → `<dest>_install`. Explicit stage names and existing
-##       CMake targets are kept as-is when already resolvable.
+## @note Every component_dependency(source=id, dest) must resolve; unresolved
+##       dest → FATAL_ERROR with the policy summary.
 function(_buildmaster_component_dep_targets id out_var)
 	set(_dep_targets "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
@@ -415,14 +515,17 @@ function(_buildmaster_component_dep_targets id out_var)
 		if(NOT _src STREQUAL "${id}")
 			continue()
 		endif()
-		_buildmaster_component_is_registered("${_dst}" _dst_comp)
-		if(_dst_comp)
-			list(APPEND _dep_targets "${_dst}_install")
-		elseif(_dst MATCHES "^(.+)_(install|configure|build)$")
-			list(APPEND _dep_targets "${_dst}")
-		elseif(TARGET "${_dst}")
-			list(APPEND _dep_targets "${_dst}")
+		_buildmaster_resolve_dep_dest("${_dst}" _tgt _ok)
+		if(NOT _ok)
+			message(FATAL_ERROR
+				"[BuildMaster] component_dependency('${id}', '${_dst}'): "
+				"cannot resolve dest.\n"
+				"  Accepted: registered component id → <id>_install;\n"
+				"            <id>_install / _configure / _build;\n"
+				"            existing CMake target "
+				"(e.g. component_prerequisite / file_* target).")
 		endif()
+		list(APPEND _dep_targets "${_tgt}")
 	endforeach()
 	if(_dep_targets)
 		list(REMOVE_DUPLICATES _dep_targets)
@@ -476,7 +579,6 @@ function(_buildmaster_component_collect_outputs _component)
 				_LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
 
-		# Library specs from component_link(source, spec) must be install OUTPUTs
 		get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 		get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 		if(_lsrcs)
@@ -583,9 +685,12 @@ function(_buildmaster_component_write_fragment _component _deferred)
 endfunction()
 
 ## @brief Apply recorded component_link edges after all fragments are included.
-## @note Resolves dest as: registered component (produced IMPORTED targets +
-##       INTERFACE), existing CMake target, existing archive path, or library
-##       spec under BUILDMASTER_INSTALL_LIBDIR.
+## @note Resolution policy for dest (first match):
+##       1. Registered component → link produced IMPORTED names + INTERFACE id
+##       2. Existing TARGET → INTERFACE link
+##       3. Existing non-directory path → INTERFACE link of that file
+##       4. Library spec (`name` or `subdir/name`) → IMPORTED under install libdir
+##       Otherwise FATAL_ERROR. Source must be a registered component target.
 function(_buildmaster_apply_links)
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 	get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
@@ -600,7 +705,7 @@ function(_buildmaster_apply_links)
 		if(NOT TARGET "${_src}")
 			message(FATAL_ERROR
 				"[BuildMaster] component_link: source '${_src}' is not a target "
-				"(missing create_component?)")
+				"(missing create_*_component?)")
 		endif()
 
 		_buildmaster_component_is_registered("${_dst}" _dst_comp)
@@ -634,6 +739,7 @@ function(_buildmaster_apply_links)
 		set(_n "")
 		set(_f "")
 		set(_d "")
+		buildmaster_parse_subcomponent("${_dst}" _t _n0 _s)
 		buildmaster_append_library_spec("${_mode}" "${_dst}" _n _f _d)
 		list(GET _n 0 _tn)
 		list(GET _f 0 _tf)
@@ -657,6 +763,7 @@ endfunction()
 
 ## @brief Deferred materialize: dispatch per backend, then apply links.
 ## @note Idempotent. Scheduled by _buildmaster_component_defer_arm; not public.
+##       Harness may call this before configure-time contract checks.
 function(_buildmaster_finalize_components)
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)

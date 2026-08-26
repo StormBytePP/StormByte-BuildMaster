@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project(lib_link_a LANGUAGES C)
+
+include(GNUInstallDirs)
+
+add_library(alinklib STATIC a.c)
+target_include_directories(alinklib PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(TARGETS alinklib
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(FILES a.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

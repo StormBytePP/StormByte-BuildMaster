@@ -1,21 +1,13 @@
 # =============================================================================
 # tools/git/helpers.cmake
 # =============================================================================
-# API:
-#   create_git_reset_file(<out> <component_id> <title> <repo_dir>)
-#   create_git_patch_file(<out> <component_id> <title> <repo_dir> <patches>)
-#   create_git_fetch(<out> <component_id> <title> <repo_dir>)
-#   create_git_switch_branch(<out> <component_id> <title> <repo_dir> <branch>)
-#
-# Git runs ONLY at parent configure time via:
-#   include(${out})
-#
-# component_id ties the repo to post-install reset and buildmaster_clean.
-# buildmaster_clean: reset --hard + clean -fd, then delete
-# BUILDMASTER_GIT_CONFIGURE_STAMP so the next cmake --build re-runs parent
-# configure (CMAKE_CONFIGURE_DEPENDS) and re-executes include(git) scripts.
+# Declarative git ops bound to a component id.
+# Each create_git_* generates a script and include()s it immediately at parent
+# configure (no out-var). component_id ties the repo to post-install reset and
+# buildmaster_clean.
 # =============================================================================
 
+## @brief Ensure the aggregate buildmaster_clean target exists.
 function(_buildmaster_ensure_clean_target)
 	if(NOT TARGET buildmaster_clean)
 		add_custom_target(buildmaster_clean
@@ -24,6 +16,9 @@ function(_buildmaster_ensure_clean_target)
 	endif()
 endfunction()
 
+## @brief Resolve the git toplevel for a path (or the path itself).
+## @param[out] _out  Parent-scope absolute toplevel or path.
+## @param[in]  _path Repository path or worktree path.
 function(_buildmaster_git_toplevel _out _path)
 	get_filename_component(_abs "${_path}" ABSOLUTE)
 	if(NOT GIT_EXECUTABLE)
@@ -44,11 +39,17 @@ function(_buildmaster_git_toplevel _out _path)
 	endif()
 endfunction()
 
+## @brief Path of the post-install reset script for a git root.
+## @param[out] _out       Parent-scope marker path.
+## @param[in]  _git_root  Absolute git toplevel.
 function(_buildmaster_git_marker_path _out _git_root)
 	string(SHA1 _hash "${_git_root}")
-	set(${_out} "${BUILDMASTER_SCRIPTS_GIT_DIR}/post_install_reset_${_hash}.cmake" PARENT_SCOPE)
+	set(${_out} "${BUILDMASTER_SCRIPTS_GIT_DIR}/post_install_reset_${_hash}.cmake"
+		PARENT_SCOPE)
 endfunction()
 
+## @brief Write the post-install reset -P script for one git root.
+## @param[in] _git_root Absolute git toplevel.
 function(_buildmaster_register_post_install_reset _git_root)
 	_buildmaster_git_marker_path(_marker "${_git_root}")
 	set(_git_cmd_line "")
@@ -74,6 +75,9 @@ endif()
 ")
 endfunction()
 
+## @brief Register a component id with a git root for clean / post-install.
+## @param[in] _component_id Component identifier (filesystem-sanitized key).
+## @param[in] _git_repo_dir Repository or worktree path.
 function(_buildmaster_git_register_op _component_id _git_repo_dir)
 	sanitize_for_filename(_cid "${_component_id}")
 	_buildmaster_git_toplevel(_git_root "${_git_repo_dir}")
@@ -84,16 +88,19 @@ function(_buildmaster_git_register_op _component_id _git_repo_dir)
 		_buildmaster_ensure_clean_target()
 		set(_clean_target "buildmaster_clean_git_${_cid}")
 		if(NOT TARGET ${_clean_target})
-			if(NOT DEFINED BUILDMASTER_GIT_CONFIGURE_STAMP OR BUILDMASTER_GIT_CONFIGURE_STAMP STREQUAL "")
+			if(NOT DEFINED BUILDMASTER_GIT_CONFIGURE_STAMP
+					OR BUILDMASTER_GIT_CONFIGURE_STAMP STREQUAL "")
 				set(_stamp "${BUILDMASTER_SCRIPTSDIR}/git_configure.stamp")
 			else()
 				set(_stamp "${BUILDMASTER_GIT_CONFIGURE_STAMP}")
 			endif()
 			add_custom_target(${_clean_target}
-				COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: resetting git repo ${_git_root} (${_cid})"
+				COMMAND ${CMAKE_COMMAND} -E echo
+					"BuildMaster: resetting git repo ${_git_root} (${_cid})"
 				COMMAND ${ENV_GIT_SILENT_COMMAND} -C "${_git_root}" reset --hard
 				COMMAND ${ENV_GIT_SILENT_COMMAND} -C "${_git_root}" clean -fd
-				COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster: invalidating parent configure (remove git stamp)"
+				COMMAND ${CMAKE_COMMAND} -E echo
+					"BuildMaster: invalidating parent configure (remove git stamp)"
 				COMMAND ${CMAKE_COMMAND} -E rm -f "${_stamp}"
 				COMMENT "Resetting git repo ${_cid} and invalidating parent configure"
 				VERBATIM
@@ -103,6 +110,9 @@ function(_buildmaster_git_register_op _component_id _git_repo_dir)
 	endif()
 endfunction()
 
+## @brief Resolve post-install reset script path for a source directory.
+## @param[out] _out     Parent-scope path, or empty if none registered.
+## @param[in]  _srcdir  Component source directory (any path inside the repo).
 function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
 	_buildmaster_git_toplevel(_git_root "${_srcdir}")
 	_buildmaster_git_marker_path(_marker "${_git_root}")
@@ -113,10 +123,15 @@ function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
 	endif()
 endfunction()
 
-
-function(create_git_patch_file _file _component_id _title _git_repo_dir _git_paches)
+## @brief Apply git patches at parent configure; register post-install reset.
+## @param[in] _component_id Component identifier (ties to install reset / clean).
+## @param[in] _title        Human-readable title (script filename).
+## @param[in] _git_repo_dir Repository working tree.
+## @param[in] _git_patches  List of patch files (joined for the apply command).
+## @note Generates the script and include()s it immediately. No out-variable.
+function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
 	set(GIT_REPO "${_git_repo_dir}")
-	list_join(GIT_PATCHES "${_git_paches}" " ")
+	list_join(GIT_PATCHES "${_git_patches}" " ")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_safe}.cmake")
 	configure_file(
@@ -124,12 +139,16 @@ function(create_git_patch_file _file _component_id _title _git_repo_dir _git_pac
 		"${_GIT_PATCH_FILE}"
 		@ONLY
 	)
-	set(${_file} "${_GIT_PATCH_FILE}" PARENT_SCOPE)
+	include("${_GIT_PATCH_FILE}")
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
-
-function(create_git_reset_file _file _component_id _title _git_repo_dir)
+## @brief git reset --hard + clean -fd at parent configure; register post-install.
+## @param[in] _component_id Component identifier.
+## @param[in] _title        Human-readable title (script filename).
+## @param[in] _git_repo_dir Repository working tree.
+## @note Generates the script and include()s it immediately. No out-variable.
+function(create_git_reset_file _component_id _title _git_repo_dir)
 	set(GIT_REPO "${_git_repo_dir}")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
 	set(_GIT_RESET_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_reset_${_safe}.cmake")
@@ -138,12 +157,17 @@ function(create_git_reset_file _file _component_id _title _git_repo_dir)
 		"${_GIT_RESET_FILE}"
 		@ONLY
 	)
-	set(${_file} "${_GIT_RESET_FILE}" PARENT_SCOPE)
+	include("${_GIT_RESET_FILE}")
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
-
-function(create_git_switch_branch _file _component_id _title _git_repo_dir _git_branch)
+## @brief Switch branch at parent configure; register post-install reset.
+## @param[in] _component_id Component identifier.
+## @param[in] _title        Human-readable title (script filename).
+## @param[in] _git_repo_dir Repository working tree.
+## @param[in] _git_branch   Branch name.
+## @note Generates the script and include()s it immediately. No out-variable.
+function(create_git_switch_branch _component_id _title _git_repo_dir _git_branch)
 	set(GIT_REPO "${_git_repo_dir}")
 	set(GIT_BRANCH "${_git_branch}")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
@@ -153,12 +177,16 @@ function(create_git_switch_branch _file _component_id _title _git_repo_dir _git_
 		"${_GIT_SWITCH_FILE}"
 		@ONLY
 	)
-	set(${_file} "${_GIT_SWITCH_FILE}" PARENT_SCOPE)
+	include("${_GIT_SWITCH_FILE}")
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()
 
-
-function(create_git_fetch _file _component_id _title _git_repo_dir)
+## @brief git fetch at parent configure; register post-install reset.
+## @param[in] _component_id Component identifier.
+## @param[in] _title        Human-readable title (script filename).
+## @param[in] _git_repo_dir Repository working tree.
+## @note Generates the script and include()s it immediately. No out-variable.
+function(create_git_fetch _component_id _title _git_repo_dir)
 	set(GIT_REPO "${_git_repo_dir}")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
 	set(_GIT_FETCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_fetch_${_safe}.cmake")
@@ -167,6 +195,6 @@ function(create_git_fetch _file _component_id _title _git_repo_dir)
 		"${_GIT_FETCH_FILE}"
 		@ONLY
 	)
-	set(${_file} "${_GIT_FETCH_FILE}" PARENT_SCOPE)
+	include("${_GIT_FETCH_FILE}")
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 endfunction()

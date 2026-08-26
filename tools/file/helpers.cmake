@@ -1,8 +1,10 @@
 # =============================================================================
 # tools/file/helpers.cmake
 # =============================================================================
-# Helpers for downloading and decompressing files in a portable, deterministic
-# and user-friendly way (configure-time or build-time via generated scripts).
+# Declarative download / decompress helpers.
+# Each public call creates a CMake custom target of the same name (no out-var,
+# no include()). Wire with:
+#   component_dependency(<component> <file_target>)
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -44,19 +46,16 @@ function(file_checksum_correct _result _file _hash)
 	set(_algo "")
 	set(_expected "")
 
-	# Form "ALGO=value" (underscore allowed in algorithm name)
 	if(_hash MATCHES "^([A-Za-z0-9_]+)=(.+)$")
 		set(_algo "${CMAKE_MATCH_1}")
 		set(_expected "${CMAKE_MATCH_2}")
 	else()
-		# Bare hex → default algorithm
 		set(_algo "SHA256")
 		set(_expected "${_hash}")
 	endif()
 
 	string(TOUPPER "${_algo}" _algo)
 
-	# Validate that CMake knows the algorithm
 	set(_known_algos
 		MD5 SHA1
 		SHA224 SHA256 SHA384 SHA512
@@ -80,84 +79,46 @@ function(file_checksum_correct _result _file _hash)
 	endif()
 endfunction()
 
-# -----------------------------------------------------------------------------
-# file_download – always forces a download (with retries)
-# -----------------------------------------------------------------------------
-
-## @brief Generate a CMake script that always downloads a file (with retries
-##        and optional hash verification).
-## @param[out] _out_var          Parent-scope variable that receives the full
-##                               path of the generated script.
-## @param[in]  _url              URL to download.
-## @param[in]  TITLE             Optional human-readable title used in messages
-##                               and for the script filename.
-## @param[in]  EXPECTED_HASH     Optional "ALGO=value" (e.g. "SHA256=...").
-## @param[in]  MAX_RETRIES       Maximum number of attempts (default 3).
-## @param[in]  CURRENT_TRY       Internal counter used for recursion (default 1).
-## @param[in]  indent_level      Optional indentation level (number of tabs)
-##                               for status messages (same style as create_component).
-## @note The file is always saved under ${BUILDMASTER_DOWNLOADSDIR}/ using the
-##       basename of the URL. No destination path is accepted from the caller.
-##       The generated script uses cmake -E echo_append so the user sees
-##       activity immediately. Downloads are silent (no SHOW_PROGRESS).
-function(file_download _out_var _url)
-	cmake_parse_arguments(PARSE_ARGV 2
-		ARG
-		""
-		"TITLE;EXPECTED_HASH;MAX_RETRIES;CURRENT_TRY"
-		""
-	)
-
-	# Optional indent level (last positional argument)
-	if(ARGC GREATER 2)
-		list(LENGTH ARGV _argc)
-		math(EXPR _last_idx "${_argc} - 1")
-		list(GET ARGV ${_last_idx} _maybe_indent)
-		if(_maybe_indent MATCHES "^[0-9]+$")
-			set(_indent_level "${_maybe_indent}")
-		else()
-			set(_indent_level 0)
-		endif()
-	else()
-		set(_indent_level 0)
+## @brief Generate the force-download script and return its path (internal).
+## @param[out] out_script Parent-scope path of the generated -P script.
+## @param[in]  url        URL to download.
+## @param[in]  title      Human-readable title (script filename + messages).
+## @param[in]  expected_hash Optional "ALGO=hex" or bare hex.
+## @param[in]  max_retries Maximum attempts (default 3).
+## @param[in]  current_try Internal try counter (default 1).
+## @param[in]  indent_level Status indentation tabs (default 0).
+function(_file_generate_download_script out_script url title expected_hash
+										max_retries current_try indent_level)
+	if("${title}" STREQUAL "")
+		get_filename_component(title "${url}" NAME)
+	endif()
+	if("${max_retries}" STREQUAL "")
+		set(max_retries 3)
+	endif()
+	if("${current_try}" STREQUAL "")
+		set(current_try 1)
+	endif()
+	if("${indent_level}" STREQUAL "")
+		set(indent_level 0)
 	endif()
 
-	string(REPEAT "\t" ${_indent_level} _FILE_INDENT)
+	string(REPEAT "\t" ${indent_level} _FILE_INDENT)
 
-	# Defaults
-	if(NOT ARG_TITLE)
-		get_filename_component(ARG_TITLE "${_url}" NAME)
-	endif()
-	if(NOT ARG_MAX_RETRIES)
-		set(ARG_MAX_RETRIES 3)
-	endif()
-	if(NOT ARG_CURRENT_TRY)
-		set(ARG_CURRENT_TRY 1)
-	endif()
-	if(NOT ARG_EXPECTED_HASH)
-		set(ARG_EXPECTED_HASH "")
-	endif()
-
-	# Destination is always under DOWNLOADSDIR + basename of the URL
-	get_filename_component(_basename "${_url}" NAME)
+	get_filename_component(_basename "${url}" NAME)
 	_file_validate_no_traversal("${_basename}")
 	set(_full_output "${BUILDMASTER_DOWNLOADSDIR}/${_basename}")
-
-	# Ensure parent directory exists
 	file(MAKE_DIRECTORY "${BUILDMASTER_DOWNLOADSDIR}")
 
-	# Script path
-	sanitize_for_filename(_safe "${ARG_TITLE}")
+	sanitize_for_filename(_safe "${title}")
 	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_download_${_safe}.cmake")
 
-	# Template variables
-	set(_FILE_URL            "${_url}")
-	set(_FILE_OUTPUT         "${_full_output}")
-	set(_FILE_TITLE          "${ARG_TITLE}")
-	set(_FILE_EXPECTED_HASH  "${ARG_EXPECTED_HASH}")
-	set(_FILE_MAX_RETRIES    "${ARG_MAX_RETRIES}")
-	set(_FILE_CURRENT_TRY    "${ARG_CURRENT_TRY}")
-	set(_FILE_INDENT         "${_FILE_INDENT}")
+	set(_FILE_URL           "${url}")
+	set(_FILE_OUTPUT        "${_full_output}")
+	set(_FILE_TITLE         "${title}")
+	set(_FILE_EXPECTED_HASH "${expected_hash}")
+	set(_FILE_MAX_RETRIES   "${max_retries}")
+	set(_FILE_CURRENT_TRY   "${current_try}")
+	set(_FILE_INDENT        "${_FILE_INDENT}")
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_download.cmake.in"
@@ -165,87 +126,145 @@ function(file_download _out_var _url)
 		@ONLY
 	)
 
-	set(${_out_var} "${_script}" PARENT_SCOPE)
+	set(${out_script} "${_script}" PARENT_SCOPE)
+endfunction()
+
+## @brief Create (or fatal) a BuildMaster file prerequisite target.
+## @param[in] name    Target name.
+## @param[in] script  Path to cmake -P script.
+## @param[in] comment Progress COMMENT.
+## @param[in] depends Optional list of target dependencies.
+function(_file_add_prerequisite_target name script comment depends)
+	if(TARGET "${name}")
+		message(FATAL_ERROR
+			"[BuildMaster] file helper: target '${name}' already exists")
+	endif()
+	if("${comment}" STREQUAL "")
+		set(comment "BuildMaster file: ${name}")
+	endif()
+	add_custom_target(${name}
+		COMMAND ${CMAKE_COMMAND} -P "${script}"
+		COMMENT "${comment}"
+		USES_TERMINAL
+		VERBATIM
+	)
+	if(depends)
+		add_dependencies(${name} ${depends})
+	endif()
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_FILE_TARGET_IDS "${name}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_FILE_${name}_SCRIPT "${script}")
 endfunction()
 
 # -----------------------------------------------------------------------------
-# file_download_cached – prefer cache, fall back to force download
+# Public API
 # -----------------------------------------------------------------------------
 
-## @brief Generate a CMake script that downloads a file only when necessary
-##        (cache-aware). Also generates the underlying force-download script.
-## @param[out] _out_var          Parent-scope variable that receives the full
-##                               path of the *cached* script.
-## @param[in]  _url              URL to download.
-## @param[in]  TITLE             Optional human-readable title.
-## @param[in]  EXPECTED_HASH     Optional "ALGO=value".
-## @param[in]  MAX_RETRIES       Maximum number of attempts (default 3).
-## @param[in]  indent_level      Optional indentation level.
-## @note The file is always saved under ${BUILDMASTER_DOWNLOADSDIR}/ using the
-##       basename of the URL. No destination path is accepted from the caller.
-##       This function generates *two* scripts:
-##       1. file_download_<safe>.cmake
-##       2. file_download_cached_<safe>.cmake (the one returned)
-function(file_download_cached _out_var _url)
-	cmake_parse_arguments(PARSE_ARGV 2
-		ARG
-		""
-		"TITLE;EXPECTED_HASH;MAX_RETRIES"
-		""
-	)
-
-	# Optional indent
-	if(ARGC GREATER 2)
-		list(LENGTH ARGV _argc)
-		math(EXPR _last_idx "${_argc} - 1")
-		list(GET ARGV ${_last_idx} _maybe_indent)
-		if(_maybe_indent MATCHES "^[0-9]+$")
-			set(_indent_level "${_maybe_indent}")
-		else()
-			set(_indent_level 0)
-		endif()
-	else()
-		set(_indent_level 0)
+## @brief Always download a file (retries + optional hash); creates a target.
+## @param[in] name Target name used with component_dependency / prerequisite.
+## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
+## @param[in] TITLE         Optional human-readable title (default: URL basename).
+## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
+## @param[in] MAX_RETRIES   Maximum attempts (default 3).
+## @param[in] COMMENT       Optional custom target COMMENT.
+## @param[in] DEPENDS       Optional list of CMake targets this waits on.
+## @param[in] INDENT        Optional status indent tabs for the generated script.
+## @note No out-variable and no include(). The download runs when `name` builds.
+function(file_download name url)
+	if("${name}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_download: empty name")
+	endif()
+	if("${url}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_download: empty url")
 	endif()
 
-	string(REPEAT "\t" ${_indent_level} _FILE_INDENT)
+	cmake_parse_arguments(ARG
+		""
+		"TITLE;EXPECTED_HASH;MAX_RETRIES;COMMENT;INDENT"
+		"DEPENDS"
+		${ARGN}
+	)
+
+	_file_generate_download_script(_script
+		"${url}"
+		"${ARG_TITLE}"
+		"${ARG_EXPECTED_HASH}"
+		"${ARG_MAX_RETRIES}"
+		"1"
+		"${ARG_INDENT}"
+	)
+
+	if(NOT ARG_COMMENT)
+		if(ARG_TITLE)
+			set(ARG_COMMENT "Download ${ARG_TITLE}")
+		else()
+			set(ARG_COMMENT "Download ${name}")
+		endif()
+	endif()
+
+	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+		"${ARG_DEPENDS}")
+endfunction()
+
+## @brief Cache-aware download; creates a target named `name`.
+## @param[in] name Target name used with component_dependency / prerequisite.
+## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
+## @param[in] TITLE         Optional human-readable title (default: URL basename).
+## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
+## @param[in] MAX_RETRIES   Maximum attempts (default 3).
+## @param[in] COMMENT       Optional custom target COMMENT.
+## @param[in] DEPENDS       Optional list of CMake targets this waits on.
+## @param[in] INDENT        Optional status indent tabs for the generated script.
+## @note Generates force-download + cached wrapper scripts. Builds `name` runs
+##       the cached wrapper via cmake -P. No out-variable / include().
+function(file_download_cached name url)
+	if("${name}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_download_cached: empty name")
+	endif()
+	if("${url}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_download_cached: empty url")
+	endif()
+
+	cmake_parse_arguments(ARG
+		""
+		"TITLE;EXPECTED_HASH;MAX_RETRIES;COMMENT;INDENT"
+		"DEPENDS"
+		${ARGN}
+	)
 
 	if(NOT ARG_TITLE)
-		get_filename_component(ARG_TITLE "${_url}" NAME)
+		get_filename_component(ARG_TITLE "${url}" NAME)
 	endif()
 	if(NOT ARG_MAX_RETRIES)
 		set(ARG_MAX_RETRIES 3)
 	endif()
-	if(NOT ARG_EXPECTED_HASH)
-		set(ARG_EXPECTED_HASH "")
+	if(NOT ARG_INDENT)
+		set(ARG_INDENT 0)
 	endif()
 
-	# Destination is always under DOWNLOADSDIR + basename of the URL
-	get_filename_component(_basename "${_url}" NAME)
+	_file_generate_download_script(_force_script
+		"${url}"
+		"${ARG_TITLE}"
+		"${ARG_EXPECTED_HASH}"
+		"${ARG_MAX_RETRIES}"
+		"1"
+		"${ARG_INDENT}"
+	)
+
+	get_filename_component(_basename "${url}" NAME)
 	_file_validate_no_traversal("${_basename}")
 	set(_full_output "${BUILDMASTER_DOWNLOADSDIR}/${_basename}")
 
-	# 1. Always generate the force-download script first
-	file_download(_force_script
-		"${_url}"
-		TITLE "${ARG_TITLE}"
-		EXPECTED_HASH "${ARG_EXPECTED_HASH}"
-		MAX_RETRIES "${ARG_MAX_RETRIES}"
-		CURRENT_TRY 1
-		${_indent_level}
-	)
-
-	# 2. Generate the cached wrapper
+	string(REPEAT "\t" ${ARG_INDENT} _FILE_INDENT)
 	sanitize_for_filename(_safe "${ARG_TITLE}")
 	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_download_cached_${_safe}.cmake")
 
-	set(_FILE_URL            "${_url}")
-	set(_FILE_OUTPUT         "${_full_output}")
-	set(_FILE_TITLE          "${ARG_TITLE}")
-	set(_FILE_EXPECTED_HASH  "${ARG_EXPECTED_HASH}")
-	set(_FILE_MAX_RETRIES    "${ARG_MAX_RETRIES}")
-	set(_FILE_FORCE_SCRIPT   "${_force_script}")
-	set(_FILE_INDENT         "${_FILE_INDENT}")
+	set(_FILE_URL           "${url}")
+	set(_FILE_OUTPUT        "${_full_output}")
+	set(_FILE_TITLE         "${ARG_TITLE}")
+	set(_FILE_EXPECTED_HASH "${ARG_EXPECTED_HASH}")
+	set(_FILE_MAX_RETRIES   "${ARG_MAX_RETRIES}")
+	set(_FILE_FORCE_SCRIPT  "${_force_script}")
+	set(_FILE_INDENT        "${_FILE_INDENT}")
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_download_cached.cmake.in"
@@ -253,65 +272,68 @@ function(file_download_cached _out_var _url)
 		@ONLY
 	)
 
-	set(${_out_var} "${_script}" PARENT_SCOPE)
+	if(NOT ARG_COMMENT)
+		set(ARG_COMMENT "Download (cached) ${ARG_TITLE}")
+	endif()
+
+	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+		"${ARG_DEPENDS}")
 endfunction()
 
-# -----------------------------------------------------------------------------
-# file_decompress
-# -----------------------------------------------------------------------------
+## @brief Decompress an archive into a directory; creates a target named `name`.
+## @param[in] name    Target name used with component_dependency / prerequisite.
+## @param[in] archive Archive path, or basename under BUILDMASTER_DOWNLOADSDIR.
+## @param[in] out_dir Destination directory (created if missing).
+## @param[in] TITLE   Optional human-readable title.
+## @param[in] COMMENT Optional custom target COMMENT.
+## @param[in] DEPENDS Optional list of CMake targets this waits on (e.g. the
+##            download target for the same archive).
+## @param[in] INDENT  Optional status indent tabs for the generated script.
+## @note Uses file(ARCHIVE_EXTRACT) inside the generated -P script.
+##       No out-variable / include().
+function(file_decompress name archive out_dir)
+	if("${name}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_decompress: empty name")
+	endif()
+	if("${archive}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_decompress: empty archive")
+	endif()
+	if("${out_dir}" STREQUAL "")
+		message(FATAL_ERROR "[BuildMaster] file_decompress: empty out_dir")
+	endif()
 
-## @brief Generate a CMake script that decompresses an archive into a directory.
-## @param[out] _out_var     Parent-scope variable that receives the script path.
-## @param[in]  _file        Full path to the archive file (or relative name under DOWNLOADSDIR).
-## @param[in]  _out_dir     Destination directory (created if missing).
-## @param[in]  TITLE        Optional human-readable title.
-## @param[in]  indent_level Optional indentation level.
-## @note Uses the native file(ARCHIVE_EXTRACT) command (CMake ≥ 3.18).
-function(file_decompress _out_var _file _out_dir)
-	cmake_parse_arguments(PARSE_ARGV 3
-		ARG
+	cmake_parse_arguments(ARG
 		""
-		"TITLE"
-		""
+		"TITLE;COMMENT;INDENT"
+		"DEPENDS"
+		${ARGN}
 	)
 
-	# Optional indent
-	if(ARGC GREATER 3)
-		list(LENGTH ARGV _argc)
-		math(EXPR _last_idx "${_argc} - 1")
-		list(GET ARGV ${_last_idx} _maybe_indent)
-		if(_maybe_indent MATCHES "^[0-9]+$")
-			set(_indent_level "${_maybe_indent}")
-		else()
-			set(_indent_level 0)
-		endif()
-	else()
-		set(_indent_level 0)
-	endif()
-
-	string(REPEAT "\t" ${_indent_level} _FILE_INDENT)
-
 	if(NOT ARG_TITLE)
-		get_filename_component(ARG_TITLE "${_file}" NAME)
+		get_filename_component(ARG_TITLE "${archive}" NAME)
+	endif()
+	if(NOT ARG_INDENT)
+		set(ARG_INDENT 0)
 	endif()
 
-	_file_validate_no_traversal("${_file}")
-	_file_validate_no_traversal("${_out_dir}")
+	string(REPEAT "\t" ${ARG_INDENT} _FILE_INDENT)
 
-	# If the given file is not absolute, assume it lives under DOWNLOADSDIR
-	if(IS_ABSOLUTE "${_file}")
-		set(_archive "${_file}")
+	_file_validate_no_traversal("${archive}")
+	_file_validate_no_traversal("${out_dir}")
+
+	if(IS_ABSOLUTE "${archive}")
+		set(_archive "${archive}")
 	else()
-		set(_archive "${BUILDMASTER_DOWNLOADSDIR}/${_file}")
+		set(_archive "${BUILDMASTER_DOWNLOADSDIR}/${archive}")
 	endif()
 
 	sanitize_for_filename(_safe "${ARG_TITLE}")
 	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_decompress_${_safe}.cmake")
 
-	set(_FILE_ARCHIVE   "${_archive}")
-	set(_FILE_OUT_DIR   "${_out_dir}")
-	set(_FILE_TITLE     "${ARG_TITLE}")
-	set(_FILE_INDENT    "${_FILE_INDENT}")
+	set(_FILE_ARCHIVE "${_archive}")
+	set(_FILE_OUT_DIR "${out_dir}")
+	set(_FILE_TITLE   "${ARG_TITLE}")
+	set(_FILE_INDENT  "${_FILE_INDENT}")
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_decompress.cmake.in"
@@ -319,5 +341,10 @@ function(file_decompress _out_var _file _out_dir)
 		@ONLY
 	)
 
-	set(${_out_var} "${_script}" PARENT_SCOPE)
+	if(NOT ARG_COMMENT)
+		set(ARG_COMMENT "Decompress ${ARG_TITLE}")
+	endif()
+
+	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+		"${ARG_DEPENDS}")
 endfunction()

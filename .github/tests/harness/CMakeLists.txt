@@ -53,6 +53,10 @@ add_custom_target(run_buildmaster_smoke
 	DEPENDS
 		base_install dep_install sdk-headers_install sdkloader_install
 		first_install second_install order_independent_link_test
+		prereq-lib_install
+		file_decompress_check
+		payload-lib_install
+		link-a_install link-b_install link_component_test
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test
 		rename-variant_install rename_variant_link_test
