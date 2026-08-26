@@ -1,0 +1,33 @@
+# cmakelang / cmake-lint — BuildMaster
+# Docs: https://cmake-format.readthedocs.io/
+
+format:
+  # Indent with tabs (project style); spaces would trigger C0306.
+  tab_size: 4
+  use_tabchars: true
+  # Soft width for cmake-format; we still disable C0301 for listfiles.
+  line_width: 120
+
+lint:
+  disabled_codes:
+    # --- Style / naming (clash with BuildMaster conventions) ---
+    - C0103   # Invalid name vs regex. We use _locals, CMAKE_*, _MESON_*, BUILDMASTER_*.
+    - C0111   # Missing docstring on function/macro. API is documented in ## @brief blocks / README.
+    - C0113   # Missing COMMENT on add_custom_target / similar. Optional noise.
+    - C0114   # Form discriminator hidden behind variable. False heuristic on if()/parse_arguments.
+    - C0301   # Line too long. Long configure_file / command lines are intentional.
+    - C0304   # Final newline missing. Cosmetic; not enforced.
+    - C0305   # Too many newlines between statements. Layout preference.
+
+    # --- Known false positives (valid CMake, weak linter grammar) ---
+    - E1120   # "Missing required positional argument" on foreach(... RANGE ${N})
+              # CMake allows foreach(<var> RANGE <stop>) with a single bound.
+    - E1126   # "Invalid form discriminator" on file(ARCHIVE_EXTRACT INPUT ... DESTINATION ...)
+              # Official CMake form; cmakelang 0.6.13 parser is incomplete.
+    - W0106   # "String looks like a variable reference missing an open tag"
+              # Fires on $ENV{CMAKE_C_COMPILER_LAUNCHER} etc. Valid ENV syntax.
+
+    # --- Complexity metrics (not security / correctness) ---
+    - R0912   # Too many branches. create_*_stages / env runners are inherently branched.
+    - R0913   # Too many named arguments. Public create_* APIs are positional by design.
+    - R0915   # Too many statements. Same: large helpers are intentional, not a defect.
