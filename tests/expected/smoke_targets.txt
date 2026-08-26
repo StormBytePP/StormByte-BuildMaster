@@ -1,9 +1,0 @@
-# cmake --build <harness-build> --target <name>
-
-base_install
-dep_install
-sdk-headers_install
-sdkloader_install
-rename-variant_install
-nest-cmake_install
-nest-meson_install

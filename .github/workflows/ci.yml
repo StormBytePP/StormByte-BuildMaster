@@ -31,7 +31,7 @@ jobs:
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-          source-dir: tests/harness
+          source-dir: .github/tests/harness
           build-dir: build/harness
           build-type: Release
           target: run_buildmaster_smoke

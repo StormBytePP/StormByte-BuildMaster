@@ -1,0 +1,9 @@
+# dependent -> prerequisite  (sections and edges alphabetical)
+
+# dep (depends on base)
+dep -> dep_install
+dep_configure -> base_install
+
+# sdkloader (depends on sdk-headers)
+sdkloader -> sdkloader_install
+sdkloader_configure -> sdk-headers_install

@@ -1,0 +1,18 @@
+# cmake --build <harness-build> --target <name>
+# All targets required by run_buildmaster_smoke
+
+# Flat components
+base_install
+dep_install
+sdk-headers_install
+sdkloader_install
+
+# Recursive chains
+nest-cmake_install
+nest-meson_install
+recursion_cmake_link_test
+recursion_meson_link_test
+
+# Rename normalize (Meson zs.* → produced z.*)
+rename-variant_install
+rename_variant_link_test

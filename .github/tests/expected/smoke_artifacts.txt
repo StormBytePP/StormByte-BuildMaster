@@ -1,0 +1,44 @@
+# path|platform
+# <lib> / <include> replaced by CMAKE_INSTALL_LIBDIR / CMAKE_INSTALL_INCLUDEDIR
+# (sections and paths alphabetical within each platform group)
+
+# Flat libraries
+<lib>/baselib.lib|windows
+<lib>/deplib.lib|windows
+<lib>/libbaselib.a|unix
+<lib>/libdeplib.a|unix
+<lib>/libloaderlib.a|unix
+<lib>/loaderlib.lib|windows
+
+# Headers
+<include>/base.h|all
+<include>/dep.h|all
+<include>/loader.h|all
+<include>/sdk.h|all
+
+# Recursive cmake
+<include>/recursive/cmake/leaf.h|all
+<include>/recursive/cmake/mid.h|all
+<include>/recursive/cmake/nest.h|all
+<lib>/recursive/cmake/leaflib.lib|windows
+<lib>/recursive/cmake/libleaflib.a|unix
+<lib>/recursive/cmake/libmidlib.a|unix
+<lib>/recursive/cmake/libnestlib.a|unix
+<lib>/recursive/cmake/midlib.lib|windows
+<lib>/recursive/cmake/nestlib.lib|windows
+
+# Recursive meson
+<include>/recursive/meson/leaf.h|all
+<include>/recursive/meson/mid.h|all
+<include>/recursive/meson/nest.h|all
+<lib>/recursive/meson/leaflib.lib|windows
+<lib>/recursive/meson/libleaflib.a|unix
+<lib>/recursive/meson/libmidlib.a|unix
+<lib>/recursive/meson/libnestlib.a|unix
+<lib>/recursive/meson/midlib.lib|windows
+<lib>/recursive/meson/nestlib.lib|windows
+
+# Rename normalize (Meson zs.* → produced z.*)
+<include>/z.h|all
+<lib>/libz.a|unix
+<lib>/z.lib|windows

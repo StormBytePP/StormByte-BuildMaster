@@ -1,6 +1,0 @@
-# dependent -> prerequisite
-
-dep_configure -> base_install
-dep -> dep_install
-sdkloader_configure -> sdk-headers_install
-sdkloader -> sdkloader_install
