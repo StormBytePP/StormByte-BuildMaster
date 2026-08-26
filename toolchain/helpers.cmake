@@ -285,53 +285,61 @@ function(buildmaster_toolchain_write path)
 	file(WRITE "${_bm_tc_out}" "${_bm_tc_body}")
 endfunction()
 
-## @brief Write parent registry to a component toolchain file, then append
-##        compiler / binutils CACHE FORCE overlay from the caller scope.
-## @param[in] path Output path for the component toolchain .cmake file.
-## @param[in] toolchain_name Normalized profile name (comment only).
-## @note Implemented as a macro so CMAKE_C_COMPILER, CMAKE_CXX_COMPILER,
-##       CMAKE_LINKER_TYPE, CMAKE_LINKER, CMAKE_C_COMPILER_LINKER,
-##       CMAKE_CXX_COMPILER_LINKER, CMAKE_AR, CMAKE_C_COMPILER_AR,
-##       CMAKE_CXX_COMPILER_AR, CMAKE_RANLIB and CMAKE_NM from the caller
-##       (create_*_stages after profile resolve) are visible. Empty values
-##       are skipped. Overlay lines win over parent FORCE of the same keys.
+# Write a component toolchain file: parent registry snapshot + profile overlay.
+#
+# The generated file is the active toolchain while that component (and any nested
+# create_* stages generated under it) runs. After the registry snapshot, append
+# CACHE FORCE lines for the loaded profile (BM_TC_*) and set
+# BUILDMASTER_TOOLCHAIN_FILE to this file's path so children without an explicit
+# TOOLCHAIN argument keep propagating the same modified toolchain downward
+# instead of falling back to the parent dump.
+#
+# path            - Absolute path of the component toolchain.cmake to write.
+# toolchain_name  - Profile name (for comments only; tools come from BM_TC_*).
 macro(buildmaster_toolchain_write_component path toolchain_name)
 	buildmaster_toolchain_write("${path}")
 
-	set(_bm_tc_ov
-		"\n# Component TOOLCHAIN=${toolchain_name} overlay (compilers / binutils)\n")
-	if(NOT "${CMAKE_C_COMPILER}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_C_COMPILER \"${CMAKE_C_COMPILER}\" CACHE FILEPATH \"\" FORCE)\n")
+	normalize_cmake_path(_bm_tc_self "${path}")
+
+	set(_bm_tc_overlay "")
+	string(APPEND _bm_tc_overlay
+		"\n"
+		"# Component TOOLCHAIN=${toolchain_name} overlay (compilers / binutils)\n"
+		"# Active toolchain for this component and nested create_* without TOOLCHAIN.\n"
+		"set(BUILDMASTER_TOOLCHAIN_FILE \"${_bm_tc_self}\")\n"
+	)
+
+	if(DEFINED BM_TC_C_COMPILER AND NOT BM_TC_C_COMPILER STREQUAL "")
+		normalize_cmake_path(_bm_tc_c "${BM_TC_C_COMPILER}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER \"${_bm_tc_c}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_CXX_COMPILER}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_CXX_COMPILER \"${CMAKE_CXX_COMPILER}\" CACHE FILEPATH \"\" FORCE)\n")
+	if(DEFINED BM_TC_CXX_COMPILER AND NOT BM_TC_CXX_COMPILER STREQUAL "")
+		normalize_cmake_path(_bm_tc_cxx "${BM_TC_CXX_COMPILER}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER \"${_bm_tc_cxx}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_LINKER_TYPE}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_LINKER_TYPE \"${CMAKE_LINKER_TYPE}\" CACHE STRING \"\" FORCE)\n")
+	if(DEFINED BM_TC_LINKER_TYPE AND NOT BM_TC_LINKER_TYPE STREQUAL "")
+		string(APPEND _bm_tc_overlay "set(CMAKE_LINKER_TYPE \"${BM_TC_LINKER_TYPE}\" CACHE STRING \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_LINKER}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_LINKER \"${CMAKE_LINKER}\" CACHE FILEPATH \"\" FORCE)\n"
-			"set(CMAKE_C_COMPILER_LINKER \"${CMAKE_C_COMPILER_LINKER}\" CACHE FILEPATH \"\" FORCE)\n"
-			"set(CMAKE_CXX_COMPILER_LINKER \"${CMAKE_CXX_COMPILER_LINKER}\" CACHE FILEPATH \"\" FORCE)\n")
+	if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "")
+		normalize_cmake_path(_bm_tc_link "${BM_TC_LINKER}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
+		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
+		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_AR}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_AR \"${CMAKE_AR}\" CACHE FILEPATH \"\" FORCE)\n"
-			"set(CMAKE_C_COMPILER_AR \"${CMAKE_C_COMPILER_AR}\" CACHE FILEPATH \"\" FORCE)\n"
-			"set(CMAKE_CXX_COMPILER_AR \"${CMAKE_CXX_COMPILER_AR}\" CACHE FILEPATH \"\" FORCE)\n")
+	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "")
+		normalize_cmake_path(_bm_tc_ar "${BM_TC_AR}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
+		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
+		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_RANLIB}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_RANLIB \"${CMAKE_RANLIB}\" CACHE FILEPATH \"\" FORCE)\n")
+	if(DEFINED BM_TC_NM AND NOT BM_TC_NM STREQUAL "")
+		string(APPEND _bm_tc_overlay "set(CMAKE_NM \"${BM_TC_NM}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	if(NOT "${CMAKE_NM}" STREQUAL "")
-		string(APPEND _bm_tc_ov
-			"set(CMAKE_NM \"${CMAKE_NM}\" CACHE FILEPATH \"\" FORCE)\n")
+	if(DEFINED BM_TC_RANLIB AND NOT BM_TC_RANLIB STREQUAL "")
+		string(APPEND _bm_tc_overlay "set(CMAKE_RANLIB \"${BM_TC_RANLIB}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
-	file(APPEND "${path}" "${_bm_tc_ov}")
-	unset(_bm_tc_ov)
+
+	file(APPEND "${path}" "${_bm_tc_overlay}")
+	unset(_bm_tc_overlay)
+	unset(_bm_tc_self)
 endmacro()
