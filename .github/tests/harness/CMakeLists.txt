@@ -76,6 +76,8 @@ add_custom_target(run_buildmaster_smoke
 		# Repack
 		repack-a_install repack-b_install repack-merged_install
 		repack_link_test
+		# Slow configure
+		slow-configure_install
 		# TOOLCHAIN
 		nest-tc_install
 		# WHOLE

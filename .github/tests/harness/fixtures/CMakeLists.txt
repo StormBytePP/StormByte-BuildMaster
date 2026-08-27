@@ -61,7 +61,12 @@ add_subdirectory(rename)
 add_subdirectory(repack)
 
 # ---------------------------------------------------------------------------
-# TOOLCHAIN swap (no-op if the alternate compiler is missing)
+# Slow configure (Ninja COMMENT timing)
+# ---------------------------------------------------------------------------
+add_subdirectory(slow-configure)
+
+# ---------------------------------------------------------------------------
+# TOOLCHAIN swap
 # ---------------------------------------------------------------------------
 add_subdirectory(toolchain)
 

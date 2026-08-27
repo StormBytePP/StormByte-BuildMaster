@@ -29,3 +29,7 @@ prereq-lib_configure -> prereq_touch
 # sdkloader
 sdkloader -> sdkloader_install
 sdkloader_configure -> sdk-headers_install
+
+# slow-configure
+slow-configure -> slow-configure_install
+slow-configure_configure -> base_install

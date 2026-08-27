@@ -28,6 +28,7 @@
 <lib>/libpayloadlib.a|unix
 <lib>/libprereqlib.a|unix
 <lib>/libsecondlib.a|unix
+<lib>/libslowlib.a|unix
 <lib>/libwlib.a|unix
 <lib>/libwlibplain.a|unix
 <lib>/loaderlib.lib|windows
@@ -39,6 +40,7 @@
 <lib>/payloadlib.lib|windows
 <lib>/prereqlib.lib|windows
 <lib>/secondlib.lib|windows
+<lib>/slowlib.lib|windows
 <lib>/wlib.lib|windows
 <lib>/wlibplain.lib|windows
 
@@ -57,6 +59,7 @@
 <include>/prereq.h|all
 <include>/sdk.h|all
 <include>/second.h|all
+<include>/slow.h|all
 <include>/wlib.h|all
 
 # Recursive cmake

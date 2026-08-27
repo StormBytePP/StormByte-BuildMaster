@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
 
 ### Changed
+- Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
 - **Breaking — fully declarative `create_*` API:**
   - No out-variable and no consumer `include()` of a generated fragment.
   - Signature: `create_cmake_component(<id> <title> <srcdir> <builddir> <options> <mode> <produced> [options_string])` (and Meson / headers analogues).
