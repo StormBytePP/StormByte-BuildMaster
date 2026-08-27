@@ -9,10 +9,10 @@
 
 A **declarative CMake DSL** that turns external **CMake** and **Meson**
 projects into first-class pieces of a parent tree: register components and
-edges in any order, one shared install prefix, header-only components,
-optional per-component toolchains, portable archive rename, and failure
-behaviour that does not leave the parent compiling against a half-empty
-prefix.
+edges in any order, one shared install prefix, header-only and **build-only**
+phases, static **repack** into a public archive, optional per-component
+toolchains, portable archive rename, and failure behaviour that does not leave
+the parent compiling against a half-empty prefix.
 
 ## Table of contents
 
@@ -23,12 +23,15 @@ prefix.
 - [Quick start](#quick-start)
 - [Declarative model](#declarative-model)
 - [How a component works](#how-a-component-works)
+- [BUILDONLY components](#buildonly-components)
+- [Repacking static archives](#repacking-static-archives)
 - [Dependencies and links](#dependencies-and-links)
 - [Prerequisites](#prerequisites)
 - [Component options string](#component-options-string)
 - [Subcomponent specs and library paths](#subcomponent-specs-and-library-paths)
 - [Header-only components](#header-only-components)
 - [Per-component toolchains](#per-component-toolchains)
+- [Archiver resolution](#archiver-resolution)
 - [Recursive usage](#recursive-usage)
 - [Verbosity and diagnostics](#verbosity-and-diagnostics)
 - [Fail-fast](#fail-fast)
@@ -44,16 +47,20 @@ prefix.
 
 ## What it is
 
-BuildMaster registers **components** and **graph edges** while the parent is
-still configuring. Materialization (stage scripts, IMPORTED targets, link
-lines) runs **once** at the end of the parent `CMAKE_SOURCE_DIR` scope
-(internal deferred finalize). You do not `include()` generated fragments.
+BuildMaster registers **components**, **graph edges**, and optional **repacks**
+while the parent is still configuring. Materialization (stage scripts, IMPORTED
+targets, link lines, merges) runs **once** at the end of the parent
+`CMAKE_SOURCE_DIR` scope (internal deferred finalize). You do not `include()`
+generated fragments.
 
 The parent can:
 
 - declare components and dependencies in **any order**
 - create deterministic **IMPORTED** (or **INTERFACE**) targets
 - share one install prefix and environment across a dependency tree
+- build intermediate phases that **never** publish to that prefix (`BUILDONLY`)
+- merge several static archives into **one** canonical library under the prefix
+  (`component_repack`)
 - fail the parent when a required external stage fails
 - optionally build **one** component with a different toolchain than the job
 - attach downloads, unpack steps, or custom work via **prerequisite** targets
@@ -61,9 +68,9 @@ The parent can:
 Sources can come from the Git helpers, file helpers, a submodule, or anything
 else that produces a source tree.
 
-Typical uses: bundled third-party libraries, multi-variant builds of the same
-tree, header-only SDK graphs, mixed CMake + Meson graphs on Linux, Windows,
-and macOS (including Apple Silicon).
+Typical uses: bundled third-party libraries, multi-bitdepth or multi-variant
+builds of the same upstream, header-only SDK graphs, mixed CMake + Meson graphs
+on Linux, Windows, and macOS (including Apple Silicon).
 
 ---
 
@@ -85,6 +92,10 @@ compiles against missing headers.
 
 Some upstreams misbehave under one compiler. BuildMaster can pin **only that
 component** to another toolchain.
+
+Some upstreams emit several static archives (or several bit-depths) that
+consumers expect as a **single** library name. BuildMaster can keep intermediate
+builds out of the shared prefix and **repack** them into that name.
 
 Generated stages look like this:
 
@@ -109,6 +120,8 @@ Generated stages look like this:
 | Attach post-steps to those targets | No | Limited | **Yes** |
 | Native Meson stages | No | Manual | **Yes** |
 | Shared install + env propagation | No | Manual | **Yes** |
+| Build without publishing to the prefix | Manual | Manual | **BUILDONLY** |
+| Merge static archives into one public lib | Manual | Manual | **component_repack** |
 | Compiler cache into child builds | Manual | Manual | **Yes** |
 | Per-component toolchain | No | Manual | **Optional** |
 | Header-only INTERFACE components | Manual | Manual | **Yes** |
@@ -130,6 +143,8 @@ Generated stages look like this:
 - Linux / Windows / macOS (x86_64 and arm64)
 - CMake and Meson behind the same component API
 - Header-only packages without fake archives or empty `OUTPUT` lists
+- Intermediate builds that stay in their own build tree (`BUILDONLY`)
+- Public static products assembled from several produced archives (`component_repack`)
 - Optional per-component toolchains that never rewrite the parent toolchain
 - One initialization, one install root, even in nested trees
 - Quiet logs by default, full dump on failure
@@ -138,6 +153,7 @@ Generated stages look like this:
 - File helpers as build targets wired through the same dependency graph
 - Extensible options via one trailing `KEY=value;…` string
 - Library artifacts that can live in a **subdir** of the shared libdir
+- Archiver selection that matches the job (`CMAKE_AR`, `llvm-ar`, `lib.exe`, …)
 
 ---
 
@@ -194,16 +210,21 @@ create_cmake_component(
    (or the headers variants / low-level `create_component`).
 2. **Connect** them with `component_dependency` and/or `component_link`
    (declaration order does not matter).
-3. **Optional** work before a component: `component_prerequisite`,
+3. **Optional** intermediate phases with `BUILDONLY`, then publish with
+   `component_repack`.
+4. **Optional** work before a component: `component_prerequisite`,
    `file_download` / `file_download_cached` / `file_decompress`, or
    configure-time `create_git_*`.
-4. At the end of `CMAKE_SOURCE_DIR`, BuildMaster **materializes** stages and
-   applies links. Consumers never call finalize (it is internal).
+5. At the end of `CMAKE_SOURCE_DIR`, BuildMaster **materializes** stages,
+   repacks, and applies links. Consumers never call finalize (it is internal).
 
 | Configure timing | When |
 |------------------|------|
 | **Eager** | Component is not the `source` of any `component_dependency` → nested configure during parent configure |
 | **Deferred** | Component is the `source` of at least one dependency → nested configure at build time under `<id>_configure` |
+
+`BUILDONLY` components follow the same eager/deferred rule: no dependency edges
+→ configure at parent configure time; otherwise configure at build time.
 
 ---
 
@@ -211,11 +232,11 @@ create_cmake_component(
 
 | Target | Role |
 |--------|------|
-| `<component>` | `INTERFACE`. Depends on `<component>_install`. This is what you link. |
+| `<component>` | `INTERFACE`. Depends on `<component>_install`. This is what you link (unless `BUILDONLY`). |
 | `<component>_configure` | Nested CMake/Meson configure |
 | `<component>_build` | Compile |
-| `<component>_install` | Install into `BUILDMASTER_INSTALL_DIR` |
-| produced libs | `STATIC` / `SHARED` **IMPORTED** archives under the install prefix |
+| `<component>_install` | Finalize artifacts (install into the shared prefix, or BUILDDIR-only for `BUILDONLY`) |
+| produced libs | `STATIC` / `SHARED` **IMPORTED** archives |
 
 Library-mode install lists archive paths as `OUTPUT` so other targets (and
 Ninja) can depend on real files. Library specs introduced via
@@ -225,6 +246,75 @@ graph nodes.
 Component **ids** should be filesystem-friendly (they become target and
 script names). Display **titles** may contain spaces; they only appear in
 status lines.
+
+---
+
+## BUILDONLY components
+
+Flag option `BUILDONLY` (same style as `RENAME`: `BUILDONLY` ≡ `BUILDONLY=ON`).
+
+| Behaviour | Detail |
+|-----------|--------|
+| Prefix install | **Skipped** — no `cmake --install` / `meson install` into `BUILDMASTER_INSTALL_*` |
+| Artifact location | Component **BUILDDIR** only (never the parent prefix or another component’s tree) |
+| `RENAME` | Allowed; runs on archives **in that BUILDDIR** after build |
+| `<id>_install` | Still exists as the graph anchor (build + RENAME + contract) |
+| Linkable | **No** — `component_link` to a BUILDONLY id is **FATAL**; a normal component must not `component_dependency` on a BUILDONLY id |
+| Git post-install reset | Not run for BUILDONLY |
+
+Use BUILDONLY for intermediate static phases (extra bit-depths, helper
+archives) that must not pollute the shared prefix. Publish a consumer-facing
+library with [`component_repack`](#repacking-static-archives).
+
+```cmake
+create_cmake_component(
+	phase8
+	"Codec 8-bit"
+	${SRC8} ${BUILD8}
+	"${OPTS8}"
+	static
+	"codec8"
+	"BUILDONLY"
+)
+```
+
+---
+
+## Repacking static archives
+
+`component_repack` merges **static** archives into one canonical file under
+`BUILDMASTER_INSTALL_LIBDIR` and exposes a public `INTERFACE` target.
+
+```cmake
+component_repack(codec
+	OUTPUT codec
+	INPUTS phase8;phase10;phase12
+)
+
+target_link_libraries(MyApp PRIVATE codec)
+# Graph consumers can also:
+# component_dependency(other codec)   # waits on codec_install
+```
+
+| Parameter | Meaning |
+|-----------|---------|
+| `id` | Pack id → `INTERFACE` target and `<id>_install` anchor |
+| `OUTPUT` | Library basename without prefix/suffix (e.g. `codec` → `libcodec.a` / `codec.lib`) |
+| `INPUTS` | Component ids, existing CMake targets (order only), and/or archive paths |
+
+**INPUT resolution**
+
+| Token | Files | Order |
+|-------|-------|--------|
+| Registered component | All **produced** canons under that component’s **BUILDDIR** (post-RENAME) | That component’s finalize stage (`_install` / produced files) |
+| Existing CMake target | None | That target |
+| Filesystem path | That archive | File-level `DEPENDS` |
+
+The pack does **not** require inputs to have been installed into the shared
+prefix. Merge uses `tools/bundle/merge_static_archives.cmake` and
+[`buildmaster_find_archiver`](#archiver-resolution).
+
+Static only in this surface: shared/DLL merges are out of scope here.
 
 ---
 
@@ -240,6 +330,9 @@ Order-only edge. At materialize time, `dest` resolves as (first match):
 
 Otherwise materialization fails with **FATAL_ERROR**.
 
+A **non-BUILDONLY** component must not depend on a **BUILDONLY** component
+(FATAL). BUILDONLY may depend on BUILDONLY or on normal components.
+
 ### `component_link(source, dest)`
 
 Records a link from the component `INTERFACE`. When `dest` is a **graph
@@ -249,7 +342,7 @@ automatic dependency edge.
 
 | `dest` | Effect |
 |--------|--------|
-| Registered component | Link produced IMPORTED libs + that component’s INTERFACE; order on its install |
+| Registered component | Link produced IMPORTED libs + that component’s INTERFACE; order on its install. **BUILDONLY dest → FATAL** |
 | Existing target | `target_link_libraries(… INTERFACE …)` |
 | Existing non-directory path | Link that file |
 | Spec `name` or `subdir/name` | IMPORTED under install libdir; may extend install `OUTPUT` on **source** |
@@ -307,16 +400,18 @@ trailing argument:
 |-----|---------|
 | `INDENT` / `INDENT_LEVEL` | Tabs in hierarchical `STATUS` lines (non-negative integer) |
 | `TOOLCHAIN` | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`). Empty = inherit |
-| `RENAME` | Normalize variant install basenames to the produced name (default **ON** for library modes). Flag form: `RENAME` ≡ `RENAME=ON` |
+| `RENAME` | Normalize variant basenames to the produced name (default **ON** for library modes). Flag form: `RENAME` ≡ `RENAME=ON`. Runs under the install libdir, or under the component BUILDDIR when `BUILDONLY` |
+| `BUILDONLY` | Build without installing into the shared prefix (default **OFF**). Flag form: `BUILDONLY` ≡ `BUILDONLY=ON` |
 
-Flag-style keys are listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` (currently
-`RENAME`). `LINK_EXTRA` is removed; use `component_link`.
+Flag-style keys are listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` (`RENAME`,
+`BUILDONLY`). Prefer `component_link` for extra link lines rather than options.
 
 ```cmake
 create_cmake_component(... "mylib")
 create_cmake_component(... "mylib" "INDENT=2")
 create_cmake_component(... "mylib" "TOOLCHAIN=msvc;RENAME")
 create_cmake_component(... "mylib" "RENAME=OFF")
+create_cmake_component(... "phase" "BUILDONLY")
 ```
 
 ---
@@ -324,7 +419,7 @@ create_cmake_component(... "mylib" "RENAME=OFF")
 ## Subcomponent specs and library paths
 
 The produced list is the artifact name(s) used for IMPORTED targets and for
-the install `OUTPUT` list.
+the install / BUILDDIR `OUTPUT` list.
 
 | Spec | File (Unix static example) | IMPORTED target |
 |------|----------------------------|-----------------|
@@ -332,8 +427,11 @@ the install `OUTPUT` list.
 | `vendor/foo/foolib` | `${BUILDMASTER_INSTALL_LIBDIR}/vendor/foo/libfoolib.a` | `vendor_foo_foolib` |
 
 - Last path component = library basename (`foolib`).
-- Everything before it = subdir under `BUILDMASTER_INSTALL_LIBDIR`.
+- Everything before it = subdir under the library base dir.
 - `/` in the spec becomes `_` in the CMake target name.
+
+With `BUILDONLY`, the base dir is the **component BUILDDIR**, not the shared
+libdir.
 
 Implemented by `buildmaster_parse_subcomponent()`. Paths are built with:
 
@@ -342,15 +440,15 @@ library_import_static_hint(out name prefix [subdir])
 library_import_hint(out name prefix [subdir])
 ```
 
-`subdir` is optional and relative to `prefix` (usually
-`BUILDMASTER_INSTALL_LIBDIR`).
+`subdir` is optional and relative to `prefix`.
 
 A static archive does not pull other static archives by itself. Prefer
-`component_link` for extra archives, or list every required produced spec on
-the component that installs them.
+`component_link` for extra archives, list every required produced spec on the
+component that owns them, or `component_repack` when several BUILDONLY phases
+must become one public library.
 
 MSVC DLLs still live under `BUILDMASTER_INSTALL_BINDIR` using the
-**basename only**.
+**basename only** (non-BUILDONLY shared installs).
 
 ---
 
@@ -408,6 +506,28 @@ Profiles live under `toolchain/profiles/`.
 
 ---
 
+## Archiver resolution
+
+`buildmaster_find_archiver(out_path out_style [hint])` selects the tool used
+to merge static archives (and any other feature that needs a consistent
+archiver):
+
+1. `CMAKE_AR`
+2. `ENV{AR}`
+3. optional `hint`
+4. Windows: `llvm-lib`, `lib` / `lib.exe`
+5. else: `llvm-ar`, `gcc-ar`, `ar`
+
+| Style | Tool family | Merge interface |
+|-------|-------------|-----------------|
+| `msvc_lib` | `lib.exe`, `llvm-lib` | `/OUT:` |
+| `gnu_ar` | `ar`, `llvm-ar`, `gcc-ar` | MRI (`ar -M`) |
+
+`component_repack` passes the job’s `CMAKE_AR` into the merge script so the
+chosen archiver matches the toolchain.
+
+---
+
 ## Recursive usage
 
 Nested `add_subdirectory(buildmaster)` is safe when the parent already
@@ -454,9 +574,9 @@ graph.
 
 - **Windows:** MSVC and clang-cl profiles; with `RENAME` on, variant basenames
   (`*-static`, debug suffixes, …) can be normalized to the produced name
-  before the install contract check.
+  before the artifact contract check (prefix or BUILDDIR).
 - **Unix:** archives under `lib` or `lib64` follow `GNUInstallDirs` /
-  `CMAKE_INSTALL_LIBDIR`.
+  `CMAKE_INSTALL_LIBDIR` when installing to the shared prefix.
 - **Apple Silicon:** Meson and CMake nests use the same shared prefix and env
   propagation as other Unix hosts.
 
@@ -512,10 +632,11 @@ basename. `file_checksum_correct` remains available for explicit hash checks.
 | Area | Commands |
 |------|----------|
 | Components | `create_component`, `create_cmake_component`, `create_meson_component`, `create_cmake_headers_component`, `create_meson_headers_component` |
-| Graph | `component_dependency`, `component_link`, `component_prerequisite` |
+| Graph | `component_dependency`, `component_link`, `component_prerequisite`, `component_repack` |
 | File | `file_download`, `file_download_cached`, `file_decompress`, `file_checksum_correct` |
 | Git | `create_git_reset_file`, `create_git_patch_file`, `create_git_fetch`, `create_git_switch_branch`, `buildmaster_git_post_install_marker_for_srcdir` |
 | Paths / options | `library_import_hint`, `library_import_static_hint`, `buildmaster_parse_subcomponent`, `buildmaster_parse_component_options`, `ensure_build_dir`, `sanitize_for_filename` |
+| Archive | `buildmaster_find_archiver` |
 | Toolchain | `buildmaster_load_toolchain_profile`, `buildmaster_validate_toolchain` |
 
 Stage generators (`create_*_stages`) are **internal**. They are not part of
@@ -538,7 +659,11 @@ cmake --build build/harness --target run_buildmaster_smoke
 Coverage includes flat graphs, order-independent declaration, prerequisites,
 file decompress and checksums, file-to-component wiring, a non-destructive
 git sandbox (local clone), component-to-component link, recursive CMake and
-Meson nests, and install rename normalization.
+Meson nests, install rename normalization, **BUILDONLY** (absent prefix
+artifacts), and **component_repack** (multi-phase static merge + link test).
+
+Smoke artifact lines may use a leading `!` so a path must **not** exist under
+the install prefix.
 
 ---
 

@@ -27,6 +27,9 @@
 ##            `"0"` or empty otherwise.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. Substituted into `install_exec.cmake.in`.
+## @note Reads `_BM_BUILDONLY` from the caller (`"1"` / `"0"`). If unset,
+##       defaults to `"0"`. When `"1"`, install_exec skips `meson install`
+##       and only renames/checks outputs under the component BUILDDIR.
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer dependant -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
@@ -50,9 +53,12 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# create_component sets this; raw create_meson_stages callers get default ON
+	# create_component / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
+	endif()
+	if(NOT DEFINED _BM_BUILDONLY)
+		set(_BM_BUILDONLY "0")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")

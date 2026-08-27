@@ -1,6 +1,7 @@
 # path|platform
-# <lib> / <include> replaced by CMAKE_INSTALL_LIBDIR / CMAKE_INSTALL_INCLUDEDIR
-# (sections and paths alphabetical within each platform group)
+# Tokens: <lib> and <include> become CMAKE_INSTALL_LIBDIR / INCLUDEDIR.
+# A leading ! means the path must NOT exist under the install prefix.
+# Sections and paths alphabetical within each platform group.
 
 # Flat libraries
 <lib>/alinklib.lib|windows
@@ -14,10 +15,12 @@
 <lib>/libdeplib.a|unix
 <lib>/libfirstlib.a|unix
 <lib>/libloaderlib.a|unix
+<lib>/libmergedlib.a|unix
 <lib>/libpayloadlib.a|unix
 <lib>/libprereqlib.a|unix
 <lib>/libsecondlib.a|unix
 <lib>/loaderlib.lib|windows
+<lib>/mergedlib.lib|windows
 <lib>/payloadlib.lib|windows
 <lib>/prereqlib.lib|windows
 <lib>/secondlib.lib|windows
@@ -56,7 +59,20 @@
 <lib>/recursive/meson/midlib.lib|windows
 <lib>/recursive/meson/nestlib.lib|windows
 
-# Rename normalize (Meson zs.* → produced z.*)
+# Rename normalize (Meson zs to produced z)
 <include>/z.h|all
 <lib>/libz.a|unix
 <lib>/z.lib|windows
+
+# BUILDONLY must not publish to the shared prefix
+!<include>/bolib.h|all
+!<lib>/bolib.lib|windows
+!<lib>/libbolib.a|unix
+
+# Repack phases must not publish; merge does
+!<lib>/aextra.lib|windows
+!<lib>/alib.lib|windows
+!<lib>/blib.lib|windows
+!<lib>/libaextra.a|unix
+!<lib>/libalib.a|unix
+!<lib>/libblib.a|unix

@@ -24,12 +24,21 @@ link-a_install
 link-b_install
 link_component_test
 
+# BUILDONLY
+buildonly-lib_install
+
+# Repack
+repack-a_install
+repack-b_install
+repack-merged_install
+repack_link_test
+
 # Recursive chains
 nest-cmake_install
 nest-meson_install
 recursion_cmake_link_test
 recursion_meson_link_test
 
-# Rename normalize (Meson zs.* → produced z.*)
+# Rename normalize (Meson zs to produced z)
 rename-variant_install
 rename_variant_link_test

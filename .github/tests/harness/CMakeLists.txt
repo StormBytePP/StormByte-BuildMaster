@@ -57,6 +57,9 @@ add_custom_target(run_buildmaster_smoke
 		file_decompress_check
 		payload-lib_install
 		link-a_install link-b_install link_component_test
+		buildonly-lib_install
+		repack-a_install repack-b_install repack-merged_install
+		repack_link_test
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test
 		rename-variant_install rename_variant_link_test

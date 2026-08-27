@@ -4,6 +4,7 @@
 component_dependency
 component_link
 component_prerequisite
+component_repack
 create_cmake_component
 create_cmake_headers_component
 create_component
@@ -24,6 +25,7 @@ create_git_reset_file
 create_git_switch_branch
 
 # Path and utility helpers
+buildmaster_find_archiver
 ensure_build_dir
 library_import_hint
 library_import_static_hint

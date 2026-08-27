@@ -36,6 +36,16 @@ add_subdirectory(link-component)
 add_subdirectory(rename)
 
 # ---------------------------------------------------------------------------
+# BUILDONLY (build + RENAME in BUILDDIR; nothing in install prefix)
+# ---------------------------------------------------------------------------
+add_subdirectory(buildonly)
+
+# ---------------------------------------------------------------------------
+# BUILDONLY phases + component_repack → prefix merge
+# ---------------------------------------------------------------------------
+add_subdirectory(repack)
+
+# ---------------------------------------------------------------------------
 # Recursive nested BuildMaster
 # ---------------------------------------------------------------------------
 add_subdirectory(recursive/cmake)

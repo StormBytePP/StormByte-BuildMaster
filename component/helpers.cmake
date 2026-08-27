@@ -2,13 +2,13 @@
 # component/helpers.cmake — registry, graph, shared fragment emit
 # =============================================================================
 # Public: create_component, component_dependency, component_link,
-#         component_prerequisite.
+#         component_prerequisite, component_repack (see repack.cmake).
 # Backends (component/cmake, component/meson) own create_*_stages and
 # _buildmaster_materialize_{cmake,meson}.
 # Nested bootstrap that only include()s this file still loads the wrappers.
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME")
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY")
 
 ## @brief Split one options token into key and value.
 ## @param[in]  pair     Raw token (KEY=value, KEY=, or KEY for flags).
@@ -82,14 +82,19 @@ endfunction()
 ## @brief Parse the optional KEY=VALUE;… options string used by create_*_component.
 ## @param[out] out_indent     Indent level (integer, default 0).
 ## @param[out] out_toolchain  Toolchain name (empty = inherit).
-## @param[out] out_rename     TRUE/FALSE — normalize variant installs (default TRUE).
+## @param[out] out_rename     TRUE/FALSE — normalize variant names (default TRUE).
+## @param[out] out_buildonly  TRUE/FALSE — build without installing to the shared
+##            prefix (default FALSE). Artifacts live under the component BUILDDIR
+##            only; RENAME runs in that tree after build.
 ## @param[in]  options_string Optional "KEY=value;KEY2=…" string.
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit '='.
 ##       Unknown keys → WARNING. LINK_EXTRA is removed; use component_link().
-function(buildmaster_parse_component_options out_indent out_toolchain out_rename options_string)
+function(buildmaster_parse_component_options out_indent out_toolchain out_rename
+											out_buildonly options_string)
 	set(_indent 0)
 	set(_toolchain "")
 	set(_rename TRUE)
+	set(_buildonly FALSE)
 
 	if(NOT "${options_string}" STREQUAL "")
 		string(REPLACE ";" "\n" _tmp "${options_string}")
@@ -119,6 +124,8 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 					"[BuildMaster] LINK_EXTRA is removed; use component_link() (ignored)")
 			elseif(_key STREQUAL "RENAME")
 				buildmaster_option_flag_enabled("${_val}" _rename)
+			elseif(_key STREQUAL "BUILDONLY")
+				buildmaster_option_flag_enabled("${_val}" _buildonly)
 			else()
 				message(WARNING
 					"[BuildMaster] Unknown component option '${_key}' (ignored)")
@@ -129,13 +136,14 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(${out_indent} "${_indent}" PARENT_SCOPE)
 	set(${out_toolchain} "${_toolchain}" PARENT_SCOPE)
 	set(${out_rename} "${_rename}" PARENT_SCOPE)
+	set(${out_buildonly} "${_buildonly}" PARENT_SCOPE)
 endfunction()
 
 ## @brief Split a library spec into CMake target, library basename and libdir subdir.
 ## @param[in]  spec        Either `<name>` or `<subdir>/<name>`.
 ## @param[out] out_target  Imported CMake target name (`/` → `_`).
 ## @param[out] out_libname Library basename without prefix/suffix.
-## @param[out] out_subdir  Directory relative to BUILDMASTER_INSTALL_LIBDIR, or empty.
+## @param[out] out_subdir  Directory relative to the library base dir, or empty.
 function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
 	if("${spec}" STREQUAL "")
 		message(FATAL_ERROR
@@ -166,23 +174,28 @@ endfunction()
 ## @brief Resolve one library spec into IMPORTED name + file path (+ MSVC DLL).
 ## @param[in]  library_mode `static` or `shared`.
 ## @param[in]  spec         Library spec (`<name>` or `<subdir>/<name>`).
+## @param[in]  base_libdir  Root for archives (BUILDMASTER_INSTALL_LIBDIR, or the
+##            component BUILDDIR when BUILDONLY).
 ## @param[out] names_var    List variable receiving the imported target name.
 ## @param[out] files_var    List variable receiving the archive/import path.
 ## @param[out] dlls_var     List variable receiving the MSVC DLL path (shared only).
-macro(buildmaster_append_library_spec library_mode spec names_var files_var dlls_var)
+## @note BUILDONLY must pass the component's own BUILDDIR — never the parent
+##       install prefix or another component's build tree.
+macro(buildmaster_append_library_spec library_mode spec base_libdir
+									names_var files_var dlls_var)
 	buildmaster_parse_subcomponent("${spec}" _bm_as_tgt _bm_as_name _bm_as_subdir)
 	list(APPEND ${names_var} "${_bm_as_tgt}")
 	if("${library_mode}" STREQUAL "static")
 		library_import_static_hint(_bm_as_path "${_bm_as_name}"
-			"${BUILDMASTER_INSTALL_LIBDIR}" "${_bm_as_subdir}")
+			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 	else()
 		library_import_hint(_bm_as_path "${_bm_as_name}"
-			"${BUILDMASTER_INSTALL_LIBDIR}" "${_bm_as_subdir}")
+			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 		if(MSVC)
 			list(APPEND ${dlls_var}
-				"${BUILDMASTER_INSTALL_BINDIR}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+				"${base_libdir}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 		endif()
 	endif()
 endmacro()
@@ -193,7 +206,7 @@ endmacro()
 
 ## @brief Schedule deferred component materialization once per configure.
 ## @note Uses cmake_language(DEFER) on CMAKE_SOURCE_DIR so all create_* and
-##       component_dependency/link calls in the tree are seen first.
+##       component_dependency/link/repack calls in the tree are seen first.
 ##       Requires CMake >= 3.19.
 function(_buildmaster_component_defer_arm)
 	get_property(_armed GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEFER_ARMED)
@@ -214,9 +227,11 @@ endfunction()
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake` or `meson`.
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
-##            Empty for headers mode.
+##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
-##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag).
+##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
+##            BUILDONLY (flag). BUILDONLY: no install into the shared prefix;
+##            artifacts and RENAME use this component's BUILDDIR only.
 ## @note Does not return a fragment path and does not include() anything.
 ##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
@@ -252,6 +267,9 @@ function(create_component _component _component_title _srcdir _builddir
 	if(ARGC GREATER 8)
 		set(_options_string "${ARGV8}")
 	endif()
+
+	buildmaster_parse_component_options(
+		_reg_indent _reg_tc _reg_rename _reg_buildonly "${_options_string}")
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -302,19 +320,21 @@ function(create_component _component _component_title _srcdir _builddir
 		"${_produced}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR
 		"${_options_string}")
+	if(_reg_buildonly)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY FALSE)
+	endif()
 
 	_buildmaster_component_defer_arm()
 endfunction()
 
 ## @brief Declare an order-only edge (no link line).
 ## @param[in] source Component id or CMake target (resolved at finalize).
-##            For a registered component, deferred configure hangs off
-##            `<source>_configure`.
 ## @param[in] dest   Component id (→ `<dest>_install`), existing target, or
 ##            `<id>_install` / `<id>_configure` / `<id>_build`.
-## @note May be called before either end is registered. Any dependency on
-##       another install/target selects build-time configure (old dependant).
-## @note Resolution policy is applied in _buildmaster_component_dep_targets.
+## @note A non-BUILDONLY component must not depend on a BUILDONLY component
+##       (checked at materialize). BUILDONLY may depend on BUILDONLY or normal.
 function(component_dependency source dest)
 	if(ARGC GREATER 2)
 		message(FATAL_ERROR
@@ -338,12 +358,9 @@ endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE after finalize).
-## @param[in] dest   Registered component (all produced libs), library spec
-##            `<name>` or `<subdir>/<name>`, existing target, or archive path.
-## @note Order edges (`component_dependency`) are recorded only when `dest` is a
-##       registered component id, a `*_install`/`*_configure`/`*_build` name, or
-##       an existing CMake target. Pure library specs are link-only (plus install
-##       OUTPUT on the source component); they must not go through dep resolution.
+## @param[in] dest   Registered component (all produced libs), library spec,
+##            existing target, or archive path.
+## @note Linking to a BUILDONLY component is FATAL at materialize.
 function(component_link source dest)
 	if(ARGC GREATER 2)
 		message(FATAL_ERROR
@@ -363,7 +380,6 @@ function(component_link source dest)
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS
 		"${dest}")
 
-	# Order only for real graph nodes (not bare library specs under libdir).
 	_buildmaster_component_is_registered("${dest}" _dest_comp)
 	if(_dest_comp
 			OR TARGET "${dest}"
@@ -376,15 +392,11 @@ endfunction()
 
 ## @brief Declare a custom prerequisite target (download, unpack, codegen, …).
 ## @param[in] name Target name (must not already exist as a CMake target).
-## @param[in] COMMAND  One or more command argv tokens (same as add_custom_target).
-## @param[in] COMMENT  Optional progress text (default: "BuildMaster prerequisite: <name>").
-## @param[in] WORKING_DIRECTORY Optional working directory for the command.
-## @param[in] SCRIPT   Optional path to a CMake -P script. If set, COMMAND defaults to
-##            `${CMAKE_COMMAND} -P <SCRIPT>` unless COMMAND is also given.
+## @param[in] COMMAND  One or more command argv tokens.
+## @param[in] COMMENT  Optional progress text.
+## @param[in] WORKING_DIRECTORY Optional working directory.
+## @param[in] SCRIPT   Optional path to a CMake -P script.
 ## @param[in] DEPENDS  Optional list of CMake targets this prerequisite waits on.
-## @note Creates an `add_custom_target` at **declaration** time (not deferred), so the
-##       name is a real target for `component_dependency` / `component_link` dest
-##       resolution. Prefer file_download* / file_decompress when applicable.
 function(component_prerequisite name)
 	if("${name}" STREQUAL "")
 		message(FATAL_ERROR
@@ -439,8 +451,6 @@ endfunction()
 # =============================================================================
 
 ## @brief Whether `id` was registered with create_component.
-## @param[in]  id      Component identifier.
-## @param[out] out_var Parent-scope TRUE or FALSE.
 function(_buildmaster_component_is_registered id out_var)
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
@@ -453,10 +463,17 @@ function(_buildmaster_component_is_registered id out_var)
 	set(${out_var} FALSE PARENT_SCOPE)
 endfunction()
 
+## @brief Whether a registered component is BUILDONLY.
+function(_buildmaster_component_is_buildonly id out_var)
+	get_property(_bo GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_BUILDONLY)
+	if(_bo)
+		set(${out_var} TRUE PARENT_SCOPE)
+	else()
+		set(${out_var} FALSE PARENT_SCOPE)
+	endif()
+endfunction()
+
 ## @brief Whether this component must use build-time configure.
-## @param[in]  id      Component identifier.
-## @param[out] out_var Parent-scope TRUE if any component_dependency lists id
-##            as source (same behaviour as the old dependant templates).
 function(_buildmaster_component_has_deferred_configure id out_var)
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	if(_srcs)
@@ -470,14 +487,6 @@ function(_buildmaster_component_has_deferred_configure id out_var)
 endfunction()
 
 ## @brief Resolve one dependency dest to a CMake target name.
-## @param[in]  dest    Declared dest (component id, stage name, or target).
-## @param[out] out_tgt Parent-scope target name, or empty if unresolved.
-## @param[out] out_ok  Parent-scope TRUE if resolved.
-## @note Policy (first match):
-##       1. Registered component id → `<id>_install`
-##       2. Name matching `*_install` / `*_configure` / `*_build` → as-is
-##       3. Existing CMake TARGET → as-is
-##       Otherwise out_ok is FALSE (caller decides FATAL).
 function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
 	_buildmaster_component_is_registered("${dest}" _is_comp)
 	if(_is_comp)
@@ -500,14 +509,12 @@ function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
 endfunction()
 
 ## @brief Space-separated prerequisite targets for the dependant template.
-## @param[in]  id      Component identifier (dependency source).
-## @param[out] out_var Parent-scope string for @_LIBRARY_DEPENDENCIES@.
-## @note Every component_dependency(source=id, dest) must resolve; unresolved
-##       dest → FATAL_ERROR with the policy summary.
 function(_buildmaster_component_dep_targets id out_var)
 	set(_dep_targets "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
+	_buildmaster_component_is_buildonly("${id}" _src_bo)
+
 	set(_i 0)
 	foreach(_src IN LISTS _srcs)
 		list(GET _dsts ${_i} _dst)
@@ -515,6 +522,19 @@ function(_buildmaster_component_dep_targets id out_var)
 		if(NOT _src STREQUAL "${id}")
 			continue()
 		endif()
+
+		_buildmaster_component_is_registered("${_dst}" _dst_comp)
+		if(_dst_comp)
+			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
+			if(_dst_bo AND NOT _src_bo)
+				message(FATAL_ERROR
+					"[BuildMaster] component_dependency('${id}', '${_dst}'): "
+					"a non-BUILDONLY component cannot depend on BUILDONLY "
+					"'${_dst}' (use component_repack to publish, or make "
+					"'${id}' BUILDONLY too)")
+			endif()
+		endif()
+
 		_buildmaster_resolve_dep_dest("${_dst}" _tgt _ok)
 		if(NOT _ok)
 			message(FATAL_ERROR
@@ -534,22 +554,23 @@ function(_buildmaster_component_dep_targets id out_var)
 	set(${out_var} "${_joined}" PARENT_SCOPE)
 endfunction()
 
-## @brief Fill produced names/files/dlls and install-contract outputs.
-## @param[in] _component Component identifier.
-## @note Sets parent-scope: `_LIBRARY_COMPONENT_NAMES`, `_LIBRARY_COMPONENT_FILES`,
-##       `_LIBRARY_COMPONENT_DLL_FILES`, `_output_libraries`, `_BM_RENAME_ENABLED`,
-##       `_indent_level`, `_toolchain`.
-## @note Also appends library specs from `component_link(<this>, <spec>)` so those
-##       archives are install OUTPUTs (Ninja needs a rule; same role as the old
-##       LINK_EXTRA list). Registered components, existing targets, and plain
-##       filesystem paths are skipped here.
+## @brief Fill produced names/files/dlls and install/build contract outputs.
 function(_buildmaster_component_collect_outputs _component)
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
+	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 
 	buildmaster_parse_component_options(
-		_indent_level _toolchain _rename_on "${_options_string}")
+		_indent_level _toolchain _rename_on _buildonly "${_options_string}")
+
+	if(_buildonly)
+		set(_BM_BUILDONLY "1")
+		set(_base_libdir "${_builddir}")
+	else()
+		set(_BM_BUILDONLY "0")
+		set(_base_libdir "${BUILDMASTER_INSTALL_LIBDIR}")
+	endif()
 
 	if(_library_mode STREQUAL "headers")
 		set(_BM_RENAME_ENABLED "0")
@@ -565,8 +586,13 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_output_libraries "")
 
 	if(_library_mode STREQUAL "headers")
-		set(_headers_stamp
-			"${BUILDMASTER_INSTALL_INCLUDEDIR}/.bm_${_component}_headers.stamp")
+		if(_buildonly)
+			set(_headers_stamp
+				"${_builddir}/.bm_${_component}_headers.stamp")
+		else()
+			set(_headers_stamp
+				"${BUILDMASTER_INSTALL_INCLUDEDIR}/.bm_${_component}_headers.stamp")
+		endif()
 		set(_output_libraries "${_headers_stamp}")
 	else()
 		foreach(_spec IN LISTS _produced)
@@ -574,36 +600,38 @@ function(_buildmaster_component_collect_outputs _component)
 				continue()
 			endif()
 			buildmaster_append_library_spec(
-				"${_library_mode}" "${_spec}"
+				"${_library_mode}" "${_spec}" "${_base_libdir}"
 				_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
 				_LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
 
-		get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
-		get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
-		if(_lsrcs)
-			set(_li 0)
-			foreach(_lsrc IN LISTS _lsrcs)
-				list(GET _ldsts ${_li} _ldst)
-				math(EXPR _li "${_li} + 1")
-				if(NOT _lsrc STREQUAL "${_component}")
-					continue()
-				endif()
-				_buildmaster_component_is_registered("${_ldst}" _ldst_comp)
-				if(_ldst_comp)
-					continue()
-				endif()
-				if(TARGET "${_ldst}")
-					continue()
-				endif()
-				if(EXISTS "${_ldst}" AND NOT IS_DIRECTORY "${_ldst}")
-					continue()
-				endif()
-				buildmaster_append_library_spec(
-					"${_library_mode}" "${_ldst}"
-					_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
-					_LIBRARY_COMPONENT_DLL_FILES)
-			endforeach()
+		if(NOT _buildonly)
+			get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
+			get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
+			if(_lsrcs)
+				set(_li 0)
+				foreach(_lsrc IN LISTS _lsrcs)
+					list(GET _ldsts ${_li} _ldst)
+					math(EXPR _li "${_li} + 1")
+					if(NOT _lsrc STREQUAL "${_component}")
+						continue()
+					endif()
+					_buildmaster_component_is_registered("${_ldst}" _ldst_comp)
+					if(_ldst_comp)
+						continue()
+					endif()
+					if(TARGET "${_ldst}")
+						continue()
+					endif()
+					if(EXISTS "${_ldst}" AND NOT IS_DIRECTORY "${_ldst}")
+						continue()
+					endif()
+					buildmaster_append_library_spec(
+						"${_library_mode}" "${_ldst}" "${_base_libdir}"
+						_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
+						_LIBRARY_COMPONENT_DLL_FILES)
+				endforeach()
+			endif()
 		endif()
 
 		set(_output_libraries "${_LIBRARY_COMPONENT_FILES}")
@@ -617,20 +645,21 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_LIBRARY_COMPONENT_DLL_FILES "${_LIBRARY_COMPONENT_DLL_FILES}" PARENT_SCOPE)
 	set(_output_libraries "${_output_libraries}" PARENT_SCOPE)
 	set(_BM_RENAME_ENABLED "${_BM_RENAME_ENABLED}" PARENT_SCOPE)
+	set(_BM_BUILDONLY "${_BM_BUILDONLY}" PARENT_SCOPE)
 	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
 endfunction()
 
 ## @brief configure_file + include the shared component fragment template.
-## @param[in] _component Component identifier.
-## @param[in] _deferred  TRUE → use `*_dependant.cmake.in` templates.
-## @note Caller must set `_LIBRARY_CONFIGURE_FILE`, `_LIBRARY_BUILD_FILE`,
-##       `_LIBRARY_INSTALL_FILE`, and `_LIBRARY_COMPONENT_*` in the current
-##       scope (typically after create_*_stages and collect_outputs).
 function(_buildmaster_component_write_fragment _component _deferred)
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
-	buildmaster_parse_component_options(_il _toolchain _rn "${_options_string}")
+	buildmaster_parse_component_options(_il _toolchain _rn _bo "${_options_string}")
+	if(_bo)
+		set(_BM_BUILDONLY "1")
+	else()
+		set(_BM_BUILDONLY "0")
+	endif()
 
 	if(DEFINED BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND)
 		set(ENV_CMAKE_SILENT_COMMAND ${BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND})
@@ -685,12 +714,6 @@ function(_buildmaster_component_write_fragment _component _deferred)
 endfunction()
 
 ## @brief Apply recorded component_link edges after all fragments are included.
-## @note Resolution policy for dest (first match):
-##       1. Registered component → link produced IMPORTED names + INTERFACE id
-##       2. Existing TARGET → INTERFACE link
-##       3. Existing non-directory path → INTERFACE link of that file
-##       4. Library spec (`name` or `subdir/name`) → IMPORTED under install libdir
-##       Otherwise FATAL_ERROR. Source must be a registered component target.
 function(_buildmaster_apply_links)
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 	get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
@@ -710,6 +733,13 @@ function(_buildmaster_apply_links)
 
 		_buildmaster_component_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
+			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
+			if(_dst_bo)
+				message(FATAL_ERROR
+					"[BuildMaster] component_link: cannot link to BUILDONLY "
+					"component '${_dst}' (order only via component_dependency "
+					"between BUILDONLY phases, or component_repack to publish)")
+			endif()
 			get_property(_names GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_NAMES)
 			foreach(_lib IN LISTS _names)
 				if(TARGET "${_lib}")
@@ -740,7 +770,8 @@ function(_buildmaster_apply_links)
 		set(_f "")
 		set(_d "")
 		buildmaster_parse_subcomponent("${_dst}" _t _n0 _s)
-		buildmaster_append_library_spec("${_mode}" "${_dst}" _n _f _d)
+		buildmaster_append_library_spec(
+			"${_mode}" "${_dst}" "${BUILDMASTER_INSTALL_LIBDIR}" _n _f _d)
 		list(GET _n 0 _tn)
 		list(GET _f 0 _tf)
 		if(NOT TARGET "${_tn}")
@@ -761,7 +792,7 @@ function(_buildmaster_apply_links)
 	endforeach()
 endfunction()
 
-## @brief Deferred materialize: dispatch per backend, then apply links.
+## @brief Deferred materialize: components, then repacks, then apply links.
 ## @note Idempotent. Scheduled by _buildmaster_component_defer_arm; not public.
 ##       Harness may call this before configure-time contract checks.
 function(_buildmaster_finalize_components)
@@ -772,24 +803,24 @@ function(_buildmaster_finalize_components)
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
-	if(NOT _ids)
-		return()
+	if(_ids)
+		foreach(_id IN LISTS _ids)
+			get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
+			if(_sys STREQUAL "cmake")
+				_buildmaster_materialize_cmake("${_id}")
+			elseif(_sys STREQUAL "meson")
+				_buildmaster_materialize_meson("${_id}")
+			else()
+				message(FATAL_ERROR
+					"[BuildMaster] finalize: unknown system '${_sys}' for '${_id}'")
+			endif()
+		endforeach()
 	endif()
 
-	foreach(_id IN LISTS _ids)
-		get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
-		if(_sys STREQUAL "cmake")
-			_buildmaster_materialize_cmake("${_id}")
-		elseif(_sys STREQUAL "meson")
-			_buildmaster_materialize_meson("${_id}")
-		else()
-			message(FATAL_ERROR
-				"[BuildMaster] finalize: unknown system '${_sys}' for '${_id}'")
-		endif()
-	endforeach()
-
+	_buildmaster_materialize_repacks()
 	_buildmaster_apply_links()
 endfunction()
 
+include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/helpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/meson/helpers.cmake")

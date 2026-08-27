@@ -285,6 +285,7 @@ include(${BUILDMASTER_SRCDIR}/tools/cmake/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/file/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/git/helpers.cmake)
 include(${BUILDMASTER_SRCDIR}/tools/meson/helpers.cmake)
+include(${BUILDMASTER_SRCDIR}/tools/archive/helpers.cmake)
 # Component helpers need to be included after tools so cmake and
 # meson helpers are available
 include(${BUILDMASTER_SRCDIR}/component/helpers.cmake)

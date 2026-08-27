@@ -12,20 +12,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `component_dependency(source, dest)` — order-only edge (configure deferred when needed).
   - `component_link(source, dest)` — link edge; records `component_dependency` only when `dest` is a graph node (component id, `*_install`/`*_configure`/`*_build`, or existing target), not for bare library specs.
   - `component_prerequisite(name …)` — first-class custom target (`COMMAND` / `SCRIPT` / `DEPENDS`) usable as a dependency dest.
-- **Eager vs deferred configure:** components with no dependency edges configure at parent configure time; those with edges configure at build time under `<id>_configure` (same behaviour as the old dependant templates).
-- **Options:** `RENAME` flag (`RENAME` ≡ `RENAME=ON`) normalizes variant install basenames to the produced name before the install contract check (default ON for library modes).
+  - `component_repack(id OUTPUT <name> INPUTS …)` — merge static archives into one canonical library under `BUILDMASTER_INSTALL_LIBDIR`; exposes `INTERFACE` `<id>` and graph anchor `<id>_install`.
+- **Eager vs deferred configure:** components with no dependency edges configure at parent configure time; those with edges configure at build time under `<id>_configure` (same behaviour as the old dependant templates). Applies to `BUILDONLY` as well.
+- **Options:**
+  - `RENAME` flag (`RENAME` ≡ `RENAME=ON`) normalizes variant basenames to the produced name before the artifact contract check (default ON for library modes). Under `BUILDONLY`, rename runs in the component **BUILDDIR**.
+  - `BUILDONLY` flag (`BUILDONLY` ≡ `BUILDONLY=ON`) builds without installing into the shared prefix; produced paths and RENAME use that component’s BUILDDIR only. Non-BUILDONLY components must not depend on or `component_link` to BUILDONLY ids (FATAL).
+- **Archiver resolution:** `buildmaster_find_archiver` (`CMAKE_AR`, then `ENV{AR}`, then platform tools: `llvm-lib`/`lib`, `llvm-ar`/`gcc-ar`/`ar`). Styles `msvc_lib` (`/OUT:`) and `gnu_ar` (MRI). Used by static merge (`tools/bundle/merge_static_archives.cmake`).
 - **File helpers (declarative):** `file_download` / `file_download_cached` / `file_decompress` take a **target name** as first argument, generate scripts, and create `add_custom_target`s (no out-var, no `include()`). Wire with `component_dependency`.
 - **Git helpers (declarative):** `create_git_*` no longer return an out-var; they generate the script and `include()` it immediately, then register post-install reset by component id.
 - **Resolve policy** documented in-code for dependency/link destinations (component → `_install`, stage names, existing targets, library specs / paths for link only).
-- **Harness:** order-independent declaration, prerequisite, file-decompress + checksum, file-to-component, git-sandbox (local clone: reset / patch / fetch / marker), link component-to-component, recursive cmake/meson, rename; expected lists under `.github/tests/expected/`.
+- **Harness** (`.github/tests/`): order-independent declaration, prerequisite, file-decompress + checksum, file-to-component, git-sandbox (local clone), link component-to-component, recursive cmake/meson, rename, **BUILDONLY** (prefix absence via `!` lines), **repack** (multi-phase static merge + link). Expected lists under `.github/tests/expected/`. Smoke summary reports `N expected absent` for intentional missing prefix paths.
 
 ### Changed
 - **Breaking:** `create_*_component` / headers wrappers no longer return a fragment path and must not be `include()`d by the user. Prefer `create_cmake_*` / `create_meson_*`; stages are **internal**.
 - **Breaking:** removed public `create_*_dependant_component` and public `create_*_stages`. Use `component_dependency` / `component_link` instead of dependant factories and `LINK_EXTRA`.
-- **Breaking:** `create_*` positional `indent_level` / `toolchain` replaced by optional trailing options string `KEY=value;…` (`INDENT`/`INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`). Flag-form keys listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` may omit `=`.
+- **Breaking:** `create_*` positional `indent_level` / `toolchain` replaced by optional trailing options string `KEY=value;…` (`INDENT`/`INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `BUILDONLY`). Flag-form keys listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` may omit `=`.
 - **Breaking:** `file_download` / `file_download_cached` / `file_decompress` first argument is the target name, not an out-var.
 - **Breaking:** `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` drop the out-var argument.
-- Subcomponent specs `<name>` or `<subdir>/<name>` unchanged; consumers should prefer `component_link` for extra archives instead of listing every transitive static on the outer `create_*` when edges express the graph (listing all produced specs on one component remains valid).
+- Subcomponent specs `<name>` or `<subdir>/<name>` unchanged; consumers should prefer `component_link` for extra archives instead of listing every transitive static on the outer `create_*` when edges express the graph (listing all produced specs on one component remains valid). Multi-phase static products that must not land in the prefix use `BUILDONLY` + `component_repack`.
 
 ### Removed
 - Public dependant component API and public stage generators as supported surface.
