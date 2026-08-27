@@ -62,6 +62,14 @@
 <include>/slow.h|all
 <include>/wlib.h|all
 
+# Meta TOOLCHAIN inherit
+<include>/meta-toolchain/mtc_inherit.h|all
+<include>/meta-toolchain/mtc_pinned.h|all
+<lib>/meta-toolchain/libmtcinherit.a|unix
+<lib>/meta-toolchain/libmtcpinned.a|unix
+<lib>/meta-toolchain/mtcinherit.lib|windows
+<lib>/meta-toolchain/mtcpinned.lib|windows
+
 # Recursive cmake
 <include>/recursive/cmake/leaf.h|all
 <include>/recursive/cmake/mid.h|all

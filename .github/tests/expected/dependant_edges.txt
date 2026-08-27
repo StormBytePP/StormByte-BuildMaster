@@ -17,6 +17,8 @@ meta-inner_install -> leaf-a_install
 meta-inner_install -> leaf-b_install
 meta-plugins_install -> leaf-a_install
 meta-plugins_install -> leaf-b_install
+meta-tc_install -> mtc-inherit_install
+meta-tc_install -> mtc-pinned_install
 
 # order-independent
 second -> second_install

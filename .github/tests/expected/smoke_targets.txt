@@ -22,7 +22,10 @@ leaf-b_install
 meta-inner_install
 meta-out_install
 meta-plugins_install
+meta-tc_install
 meta_link_test_run
+mtc-inherit_install
+mtc-pinned_install
 
 # Order / link tests
 link_component_test

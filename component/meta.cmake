@@ -2,7 +2,7 @@
 # component/meta.cmake — meta components (INTERFACE collections, no sources)
 # =============================================================================
 # Public: create_meta_component, meta_component_add
-# Materialize runs from _buildmaster_finalize_components (helpers.cmake)
+# Materialize runs from _buildmaster_finalize_components (materialize.cmake)
 # BEFORE real components, so component_link/dependency already see meta ids.
 
 include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
@@ -11,7 +11,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ## @param[in] id Meta component identifier (non-empty).
 ## @note Does not create CMake targets. Safe before `create_meta_component()`.
 ## @note First call appends to BUILDMASTER_META_IDS and sets TITLE=id,
-##       WHOLE=FALSE, CREATED=FALSE, INDENT=0. Later calls are no-ops.
+##       WHOLE=FALSE, CREATED=FALSE, INDENT=0, TOOLCHAIN="". Later calls
+##       are no-ops.
 ## @note Empty id is FATAL.
 function(_buildmaster_meta_ensure id)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_ensure")
@@ -31,6 +32,7 @@ function(_buildmaster_meta_ensure id)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_WHOLE FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_CREATED FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_INDENT 0)
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN "")
 	buildmaster_message(COMPONENT DEBUG "Lazy-registered meta ${id}")
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_ensure")
 endfunction()
@@ -59,11 +61,17 @@ endfunction()
 ## @param[in] _id              Identifier (INTERFACE target name after finalize).
 ## @param[in] _title           Human-readable title (STATUS only).
 ## @param[in] options_string   Optional "KEY=value;…". Keys: INDENT / INDENT_LEVEL,
-##            WHOLE (flag). TOOLCHAIN / RENAME / BUILDONLY → WARNING, ignored.
+##            WHOLE (flag), TOOLCHAIN (inherited by members without their own).
+## @note RENAME / BUILDONLY → WARNING, ignored (meta produces no archives).
+## @note TOOLCHAIN does not compile the meta. Finalize copies it onto
+##       `meta_component_add` members and onto `component_dependency` /
+##       `component_link` dests from this meta when those dests have no
+##       TOOLCHAIN yet. Two metas assigning different profiles to the same
+##       dest is FATAL.
 ## @note May be called after meta_component_add() for the same id (fills title
 ##       and options). A second create_meta_component() for the same id is FATAL.
 ## @note If never called, lazy ids from meta_component_add() still materialize
-##       with title = id and WHOLE off.
+##       with title = id, WHOLE off, TOOLCHAIN empty.
 function(create_meta_component _id _title)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meta_component")
 	if(ARGC GREATER 3)
@@ -103,10 +111,6 @@ function(create_meta_component _id _title)
 
 	buildmaster_parse_component_options(
 		_indent _tc _rename _buildonly _whole "${_optstr}")
-	if(NOT "${_tc}" STREQUAL "")
-		buildmaster_message(COMPONENT WARNING
-			"create_meta_component('${_id}'): TOOLCHAIN ignored (meta has no compile stage)")
-	endif()
 	if(_buildonly)
 		buildmaster_message(COMPONENT WARNING
 			"create_meta_component('${_id}'): BUILDONLY ignored (meta does not install artifacts)")
@@ -124,6 +128,7 @@ function(create_meta_component _id _title)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_TITLE "${_disp}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_CREATED TRUE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_INDENT "${_indent}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_TOOLCHAIN "${_tc}")
 	if(_whole)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE TRUE)
 	else()

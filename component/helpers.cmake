@@ -15,6 +15,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/graph.cmake")
 # Meta components (no sources; membership + INTERFACE).
 include("${CMAKE_CURRENT_LIST_DIR}/meta.cmake")
 
+# Meta TOOLCHAIN → members / graph dests (empty child inherits).
+include("${CMAKE_CURRENT_LIST_DIR}/toolchain_inherit.cmake")
+
 # Static archive merge (component_repack).
 include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 

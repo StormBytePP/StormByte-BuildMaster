@@ -305,13 +305,15 @@ function(_buildmaster_apply_links)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
 endfunction()
 
-## @brief Deferred materialize: metas, components, repacks, links, orphan warn.
+## @brief Deferred materialize: metas, toolchain inherit, components, repacks,
+##        links, orphan warn.
 ## @note Idempotent. Scheduled by `_buildmaster_component_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
 ##       Metas are created first so component_link/dependency can resolve them;
 ##       their INTERFACE is wired after real components exist.
-## @note Order: materialize metas → per-id cmake/meson materialize → repacks →
-##       meta wire → apply links → orphan warning.
+## @note Order: materialize metas → propagate meta TOOLCHAIN onto members →
+##       per-id cmake/meson materialize → repacks → meta wire → apply links →
+##       orphan warning.
 function(_buildmaster_finalize_components)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -322,6 +324,7 @@ function(_buildmaster_finalize_components)
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
 
 	_buildmaster_materialize_metas()
+	_buildmaster_propagate_meta_toolchains()
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)

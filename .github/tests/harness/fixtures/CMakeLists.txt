@@ -2,10 +2,10 @@
 # One subdirectory per feature. recursive/ stays as cmake|meson.
 
 if(NOT BM_TEST_REPO_ROOT)
-	get_filename_component(BM_TEST_REPO_ROOT
-		"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
-		ABSOLUTE
-	)
+    get_filename_component(BM_TEST_REPO_ROOT
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+        ABSOLUTE
+    )
 endif()
 
 # ---------------------------------------------------------------------------
@@ -36,6 +36,7 @@ add_subdirectory(git-sandbox)
 # Meta collections
 # ---------------------------------------------------------------------------
 add_subdirectory(meta)
+add_subdirectory(meta-toolchain)
 
 # ---------------------------------------------------------------------------
 # Order / link

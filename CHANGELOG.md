@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
 - **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
 - **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
+- **Meta `TOOLCHAIN` inheritance:** `create_meta_component(… "TOOLCHAIN=<profile>")` no longer ignores the key. After leaves are known and before cmake/meson materialize, the profile is copied onto members (nested metas included) and onto `component_dependency` / `component_link` dests from that meta that have no `TOOLCHAIN` yet. An explicit child `TOOLCHAIN` is kept. Two metas inheriting different profiles onto the same empty destination is fatal.
 - **Unified logging API** (`log.cmake`):
   - `buildmaster_message(<module> <level> "<text>" [<indent>])` — only public way to print from BuildMaster (and recommended for consumers).
   - Levels (ascending, quieter filter): `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
@@ -27,7 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Header is never indented; optional indent applies only to the body.
   - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
   - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up Opus" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
-- **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
+- **Harness:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, and **meta-toolchain** (`meta-tc` pushes `TOOLCHAIN` onto `mtc-inherit`; `mtc-pinned` keeps an explicit host profile).
 
 ### Changed
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.

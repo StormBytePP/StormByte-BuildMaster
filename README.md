@@ -273,6 +273,16 @@ no artifacts of its own. It collects members (components, other metas,
 static or shared) and forwards wait + link. It may set `WHOLE` on the
 collection even if members did not.
 
+`TOOLCHAIN` on a meta does **not** compile the meta. At materialize time
+that profile is copied onto members (and onto `component_dependency` /
+`component_link` destinations whose source is the meta) that do not
+already have `TOOLCHAIN` set. An explicit `TOOLCHAIN` on the child is
+kept. Two metas inheriting **different** profiles onto the same empty
+destination is **FATAL**.
+
+`RENAME` and `BUILDONLY` on a meta are ignored with a warning (there is
+nothing to install).
+
 ### Membership is not consumption
 
 | Call | Meaning |
@@ -289,10 +299,13 @@ silently compile half the tree.
 
 ```cmake
 meta_component_add(plugins zlib png)
-create_meta_component(plugins "Plugin pack" "INDENT=1;WHOLE")
+create_meta_component(plugins "Plugin pack" "INDENT=1;WHOLE;TOOLCHAIN=clang")
 component_link(engine plugins)
 target_link_libraries(MyApp PRIVATE engine)
 ```
+
+`zlib` and `png` compile as `clang` unless they already declared their
+own `TOOLCHAIN`.
 
 ---
 

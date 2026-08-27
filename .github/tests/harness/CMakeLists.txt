@@ -65,7 +65,8 @@ add_custom_target(run_buildmaster_smoke
 		sdkloader_install second_install
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
-		meta-plugins_install meta_link_test_run
+		meta-plugins_install meta-tc_install meta_link_test_run
+		mtc-inherit_install mtc-pinned_install
 		# Order / link tests
 		link_component_test order_independent_link_test
 		# Recursive
