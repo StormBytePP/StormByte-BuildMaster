@@ -7,8 +7,14 @@ if(NOT DEFINED OUTPUTS OR OUTPUTS STREQUAL "")
 endif()
 
 if(NOT DEFINED BUILDMASTER_SRCDIR OR BUILDMASTER_SRCDIR STREQUAL "")
-	message(FATAL_ERROR
-		"[BuildMaster] normalize_install_outputs: BUILDMASTER_SRCDIR is required")
+	# log.cmake is not reachable without SRCDIR — this is the only raw message()
+	# allowed in this file.
+	message(FATAL_ERROR "normalize_install_outputs: BUILDMASTER_SRCDIR is required")
+endif()
+
+include("${BUILDMASTER_SRCDIR}/log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
 endif()
 
 include("${BUILDMASTER_SRCDIR}/tools/rename/variants.cmake")
@@ -19,6 +25,16 @@ endif()
 
 # ---- helpers ----
 
+## @brief Split an archive / import / shared filename into stem and suffix.
+## @param[in]  _filename   Basename or path (only the filename is used).
+## @param[out] _out_stem   Parent-scope stem without a leading `lib` prefix
+##                         (e.g. `z` from `libz.a` or `z.lib`). Empty if the
+##                         name is not a recognised library filename.
+## @param[out] _out_suffix Parent-scope suffix including the dot: `.a`,
+##                         `.lib`, `.dll`, `.so`, or `.dylib`. Empty when
+##                         the stem is empty.
+## @note Matching is case-insensitive. A trailing SONAME suffix after `.so`
+##       (e.g. `.so.1.2`) is treated as `.so`. PDB files are not parsed here.
 function(_bm_rename_split_name _filename _out_stem _out_suffix)
 	get_filename_component(_bn "${_filename}" NAME)
 	string(TOLOWER "${_bn}" _bn_l)
@@ -54,6 +70,15 @@ function(_bm_rename_split_name _filename _out_stem _out_suffix)
 	set(${_out_suffix} "${_suf}" PARENT_SCOPE)
 endfunction()
 
+## @brief Build glob patterns for variant filenames of one stem + suffix.
+## @param[in]  stem     Canonical stem without `lib` prefix (e.g. `z`).
+## @param[in]  suffix   File suffix including the dot (e.g. `.a`, `.lib`).
+## @param[out] out_list Parent-scope CMake list of filename patterns.
+## @note For each token in `BUILDMASTER_RENAME_VARIANTS` two names are
+##       appended: `${stem}${variant}${suffix}` and
+##       `lib${stem}${variant}${suffix}`. A broad fallback
+##       `${stem}*${suffix}` / `lib${stem}*${suffix}` is appended last.
+##       The caller still filters PDB files and exact canonical hits.
 function(_bm_rename_candidate_names stem suffix out_list)
 	set(_names "")
 	foreach(_v IN LISTS BUILDMASTER_RENAME_VARIANTS)
@@ -66,6 +91,19 @@ function(_bm_rename_candidate_names stem suffix out_list)
 	set(${out_list} "${_names}" PARENT_SCOPE)
 endfunction()
 
+## @brief Locate a non-canonical source file to rename onto a produced path.
+## @param[in]  dir               Directory to search (`file(GLOB)`).
+## @param[in]  stem              Canonical stem (no `lib` prefix).
+## @param[in]  suffix            Canonical suffix including the dot.
+## @param[out] out_src           Parent-scope absolute-or-glob path of the
+##                               first acceptable candidate, or empty.
+## @param[out] out_variant_token Parent-scope variant piece left after
+##                               stripping `lib` and the stem (e.g. `s`,
+##                               `d`, `sd`, `-static`). Empty when the
+##                               remainder cannot be derived.
+## @note Skips directories and `*.pdb`. Skips a hit that is already the
+##       exact canonical file `${dir}/${stem}${suffix}`. `lib${stem}${suffix}`
+##       remains a valid source toward `${stem}${suffix}`. First match wins.
 function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
 	set(_found "")
 	set(_token "")
@@ -125,7 +163,7 @@ foreach(_out IN LISTS OUTPUTS)
 		continue()
 	endif()
 	if(EXISTS "${_out}")
-		message(STATUS "[BuildMaster] rename: ${_out} already present (skip)")
+		buildmaster_message(RENAME INFO "rename: ${_out} already present (skip)")
 		continue()
 	endif()
 
@@ -133,23 +171,21 @@ foreach(_out IN LISTS OUTPUTS)
 	get_filename_component(_fn "${_out}" NAME)
 	_bm_rename_split_name("${_fn}" _stem _suffix)
 	if(_stem STREQUAL "" OR _suffix STREQUAL "")
-		message(FATAL_ERROR
-			"[BuildMaster] rename: cannot parse stem/suffix from '${_fn}'")
+		buildmaster_message(RENAME FATAL "rename: cannot parse stem/suffix from '${_fn}'")
 	endif()
 
 	if(NOT IS_DIRECTORY "${_dir}")
-		message(FATAL_ERROR
-			"[BuildMaster] rename: directory missing for '${_out}': ${_dir}")
+		buildmaster_message(RENAME FATAL "rename: directory missing for '${_out}': ${_dir}")
 	endif()
 
 	_bm_rename_find_source("${_dir}" "${_stem}" "${_suffix}" _src _vtok)
 	if(_src STREQUAL "")
-		message(FATAL_ERROR
-			"[BuildMaster] rename: no candidate for '${_out}' (stem='${_stem}' suffix='${_suffix}') in ${_dir}")
+		buildmaster_message(RENAME FATAL
+			"rename: no candidate for '${_out}' (stem='${_stem}' suffix='${_suffix}') in ${_dir}")
 	endif()
 
 	file(RENAME "${_src}" "${_out}")
-	message(STATUS "[BuildMaster] rename: ${_src} → ${_out}")
+	buildmaster_message(RENAME INFO "rename: ${_src} → ${_out}")
 
 	# Windows shared: pair DLL with same variant token
 	if(_suffix STREQUAL ".lib" AND NOT BINDIR STREQUAL "")
@@ -171,7 +207,7 @@ foreach(_out IN LISTS OUTPUTS)
 			endif()
 			if(NOT _dll_src STREQUAL "" AND NOT EXISTS "${_dll_dst}")
 				file(RENAME "${_dll_src}" "${_dll_dst}")
-				message(STATUS "[BuildMaster] rename: ${_dll_src} → ${_dll_dst}")
+				buildmaster_message(RENAME INFO "rename: ${_dll_src} → ${_dll_dst}")
 			endif()
 		endif()
 	endif()

@@ -1,28 +1,33 @@
 # cmake -DOUTPUT=... -DINPUTS=a.a,b.a -DBUILDMASTER_SRCDIR=... [-DCMAKE_AR=...] -P merge_static_archives.cmake
 # INPUTS is comma-separated.
 
+if(NOT BUILDMASTER_SRCDIR)
+	get_filename_component(_here "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
+	get_filename_component(BUILDMASTER_SRCDIR "${_here}" DIRECTORY)
+endif()
+
+include("${BUILDMASTER_SRCDIR}/log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 if(NOT OUTPUT OR NOT INPUTS)
-	message(FATAL_ERROR "merge_static_archives: need -DOUTPUT= and -DINPUTS=")
+	buildmaster_message(BUNDLE FATAL "merge_static_archives: need -DOUTPUT= and -DINPUTS=")
 endif()
 
 string(REPLACE "," ";" _inputs "${INPUTS}")
 if(NOT _inputs)
-	message(FATAL_ERROR "merge_static_archives: empty INPUTS")
+	buildmaster_message(BUNDLE FATAL "merge_static_archives: empty INPUTS")
 endif()
 
 foreach(_in IN LISTS _inputs)
 	if(NOT EXISTS "${_in}")
-		message(FATAL_ERROR "merge_static_archives: missing input ${_in}")
+		buildmaster_message(BUNDLE FATAL "merge_static_archives: missing input ${_in}")
 	endif()
 endforeach()
 
 get_filename_component(_out_dir "${OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${_out_dir}")
-
-if(NOT BUILDMASTER_SRCDIR)
-	get_filename_component(_here "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
-	get_filename_component(BUILDMASTER_SRCDIR "${_here}" DIRECTORY)
-endif()
 
 include("${BUILDMASTER_SRCDIR}/tools/archive/helpers.cmake")
 buildmaster_find_archiver(_ar _style)
@@ -31,7 +36,7 @@ buildmaster_find_archiver(_ar _style)
 if(APPLE)
 	find_program(_libtool NAMES libtool)
 	if(NOT _libtool)
-		message(FATAL_ERROR "merge_static_archives: libtool not found (needed on Apple)")
+		buildmaster_message(BUNDLE FATAL "merge_static_archives: libtool not found (needed on Apple)")
 	endif()
 	execute_process(
 		COMMAND "${_libtool}" -static -o "${OUTPUT}" ${_inputs}
@@ -40,9 +45,9 @@ if(APPLE)
 		ERROR_VARIABLE _err
 	)
 	if(NOT _rc EQUAL 0)
-		message(FATAL_ERROR "merge_static_archives: libtool -static failed (${_rc}): ${_err}")
+		buildmaster_message(BUNDLE FATAL "merge_static_archives: libtool -static failed (${_rc}): ${_err}")
 	endif()
-	message(STATUS "[BuildMaster] merged ${OUTPUT} (${_inputs}) with libtool -static")
+	buildmaster_message(BUNDLE INFO "merged ${OUTPUT} (${_inputs}) with libtool -static")
 	return()
 endif()
 
@@ -54,9 +59,9 @@ if(_style STREQUAL "msvc_lib")
 		ERROR_VARIABLE _err
 	)
 	if(NOT _rc EQUAL 0)
-		message(FATAL_ERROR "merge_static_archives: ${_ar} /OUT failed (${_rc}): ${_err}")
+		buildmaster_message(BUNDLE FATAL "merge_static_archives: ${_ar} /OUT failed (${_rc}): ${_err}")
 	endif()
-	message(STATUS "[BuildMaster] merged ${OUTPUT} with ${_ar} (msvc_lib)")
+	buildmaster_message(BUNDLE INFO "merged ${OUTPUT} with ${_ar} (msvc_lib)")
 	return()
 endif()
 
@@ -78,6 +83,6 @@ execute_process(
 )
 file(REMOVE "${_mri}")
 if(NOT _rc EQUAL 0)
-	message(FATAL_ERROR "merge_static_archives: ar -M failed (${_rc}): ${_err}")
+	buildmaster_message(BUNDLE FATAL "merge_static_archives: ar -M failed (${_rc}): ${_err}")
 endif()
-message(STATUS "[BuildMaster] merged ${OUTPUT} with ${_ar} (gnu_ar)")
+buildmaster_message(BUNDLE INFO "merged ${OUTPUT} with ${_ar} (gnu_ar)")

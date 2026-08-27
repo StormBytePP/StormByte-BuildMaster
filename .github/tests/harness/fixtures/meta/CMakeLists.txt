@@ -58,5 +58,5 @@ add_dependencies(meta_link_test meta-plugins_install meta-out_install)
 add_custom_target(meta_link_test_run
 	COMMAND $<TARGET_FILE:meta_link_test>
 	DEPENDS meta_link_test
-	COMMENT "Run meta_link_test (WHOLE nested meta + outside; expect 0)"
+	COMMENT "[BuildMaster/Core     ]: run meta_link_test (WHOLE nested meta + outside; expect 0)"
 )

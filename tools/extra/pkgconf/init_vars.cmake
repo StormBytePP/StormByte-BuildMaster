@@ -1,4 +1,9 @@
 # Here we don't protect against double initialization as it is already done by extra tools helpers
+include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 set(BUILDMASTER_TOOLS_PKGCONF_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 
 # Set initial state: assume pkg-config/pkgconf is not usable
@@ -17,11 +22,11 @@ if(PKG_CONFIG_FOUND)
 	)
 
 	if(NOT _pkg_config_test_result EQUAL 0)
-		message(WARNING "Testing system pkg-config failed, using bundled one instead")
+		buildmaster_message(PKGCONF WARNING "Testing system pkg-config failed, using bundled one instead")
 	else()
 		set(PKG_CONFIG_WORKING TRUE)
 		set(PKG_CONFIG_VERSION "${PKG_CONFIG_VERSION_STRING}")
-		message(STATUS "\t\t\tUsing system pkg-config version: ${PKG_CONFIG_VERSION}")
+		buildmaster_message(PKGCONF STATUS "Using system pkg-config version: ${PKG_CONFIG_VERSION}" 3)
 	endif()
 endif()
 
@@ -59,7 +64,7 @@ if(NOT PKG_CONFIG_WORKING)
 		WORKING_DIRECTORY "${PKGCONF_BUILD_DIR}"
 	)
 	if(NOT _pkgconf_build_result EQUAL 0)
-		message(FATAL_ERROR "Building pkgconf failed:\n${_pkgconf_build_err}")
+		buildmaster_message(PKGCONF FATAL "Building pkgconf failed:\n${_pkgconf_build_err}")
 	endif()
 
 	# Set pkgconf executable path and config path
@@ -74,11 +79,11 @@ if(NOT PKG_CONFIG_WORKING)
 	)
 
 	if(NOT _pkgconf_test_result EQUAL 0)
-		message(FATAL_ERROR "Testing pkgconf failed")
+		buildmaster_message(PKGCONF FATAL "Testing pkgconf failed")
 	else()
 		set(PKG_CONFIG_WORKING TRUE) # Not really needed, but for consistency
 		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
-		message(STATUS "\t\t\tUsing bundled pkgconf version: ${PKG_CONFIG_VERSION}")
+		buildmaster_message(PKGCONF STATUS "Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
 
 		# Propagate to parent scope and regenerate bootstrap env runner
 		update_env_runner()

@@ -1,35 +1,48 @@
-execute_process(
-	COMMAND @ENV_GIT_SILENT_COMMAND@ reset --hard
-	WORKING_DIRECTORY @GIT_REPO@
-	RESULT_VARIABLE GIT_RESULT
-	OUTPUT_VARIABLE GIT_OUT
-	ERROR_VARIABLE GIT_ERROR
-)
+include("@BUILDMASTER_SRCDIR@/log.cmake")
 
-if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR
-		"Git reset --hard failed (exit ${GIT_RESULT}) in @GIT_REPO@\n"
-		"--- stdout ---\n${GIT_OUT}\n"
-		"--- stderr ---\n${GIT_ERROR}"
-	)
+buildmaster_message(GIT LOWLEVEL "Entering git reset script (@GIT_REPO@)")
+
+if(NOT EXISTS "@GIT_REPO@")
+	buildmaster_message(GIT FATAL
+		"Git reset --hard: repository does not exist:\n  @GIT_REPO@")
 endif()
 
 execute_process(
-	COMMAND @ENV_GIT_SILENT_COMMAND@ clean -fd
-	WORKING_DIRECTORY @GIT_REPO@
+	COMMAND "@GIT_EXECUTABLE@" reset --hard
+	WORKING_DIRECTORY "@GIT_REPO@"
 	RESULT_VARIABLE GIT_RESULT
 	OUTPUT_VARIABLE GIT_OUT
 	ERROR_VARIABLE GIT_ERROR
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_STRIP_TRAILING_WHITESPACE
 )
-
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR
-		"Git clean -fd failed (exit ${GIT_RESULT}) in @GIT_REPO@\n"
-		"--- stdout ---\n${GIT_OUT}\n"
-		"--- stderr ---\n${GIT_ERROR}"
-	)
+	buildmaster_message(GIT FATAL
+		"Git reset --hard failed (exit ${GIT_RESULT}) in\n  @GIT_REPO@\n\n--- stdout ---\n${GIT_OUT}\n\n--- stderr ---\n${GIT_ERROR}")
+endif()
+if(NOT "${GIT_OUT}" STREQUAL "")
+	buildmaster_message(GIT DEBUG "git reset: ${GIT_OUT}")
+endif()
+if(NOT "${GIT_ERROR}" STREQUAL "")
+	buildmaster_message(GIT DEBUG "git reset stderr: ${GIT_ERROR}")
 endif()
 
-if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
-	message(STATUS "[BUILDMASTER_DEBUG] git reset/clean completed in @GIT_REPO@")
+execute_process(
+	COMMAND "@GIT_EXECUTABLE@" clean -fdx
+	WORKING_DIRECTORY "@GIT_REPO@"
+	RESULT_VARIABLE GIT_CLEAN_RESULT
+	OUTPUT_VARIABLE GIT_CLEAN_OUT
+	ERROR_VARIABLE GIT_CLEAN_ERROR
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_STRIP_TRAILING_WHITESPACE
+)
+if(NOT GIT_CLEAN_RESULT EQUAL 0)
+	buildmaster_message(GIT FATAL
+		"Git clean -fdx failed (exit ${GIT_CLEAN_RESULT}) in\n  @GIT_REPO@\n\n--- stdout ---\n${GIT_CLEAN_OUT}\n\n--- stderr ---\n${GIT_CLEAN_ERROR}")
 endif()
+if(NOT "${GIT_CLEAN_OUT}" STREQUAL "")
+	buildmaster_message(GIT DEBUG "git clean: ${GIT_CLEAN_OUT}")
+endif()
+
+buildmaster_message(GIT DEBUG "git reset/clean completed in @GIT_REPO@")
+buildmaster_message(GIT LOWLEVEL "Exiting git reset script")

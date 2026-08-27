@@ -18,10 +18,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
 - **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
 - **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
+- **Unified logging API** (`log.cmake`):
+  - `buildmaster_message(<module> <level> "<text>" [<indent>])` — only public way to print from BuildMaster (and recommended for consumers).
+  - Levels (ascending, quieter filter): `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
+  - `BUILDMASTER_LOGLEVEL` (cache or env, default `STATUS`). Unknown names are fatal and list the accepted set.
+  - `FATAL` is never filtered. `WARNING` is hidden when the current level is stricter than `INFO`.
+  - Format: `[BuildMaster/<Module>]: …` for `STATUS`; `[<LEVEL>][BuildMaster/<Module>]: …` otherwise (no space between brackets; level and module labels padded).
+  - Header is never indented; optional indent applies only to the body.
+  - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
+  - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up Opus" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
 - **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
 
 ### Changed
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
+- **Breaking — logging:**
+  - `BUILDMASTER_DEBUG` (cache and env) is removed and ignored. Use `BUILDMASTER_LOGLEVEL` (`LOWLEVEL` / `DEBUG` / `INFO` / `STATUS` / `WARNING` / `FATAL`).
+  - `BUILDMASTER_VERBOSE` is unchanged and independent (live compiler/linker output only).
 - **Breaking — fully declarative `create_*` API:**
   - No out-variable and no consumer `include()` of a generated fragment.
   - Signature: `create_cmake_component(<id> <title> <srcdir> <builddir> <options> <mode> <produced> [options_string])` (and Meson / headers analogues).

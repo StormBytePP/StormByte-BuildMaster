@@ -7,6 +7,8 @@
 #   component_dependency(<component> <file_target>)
 # =============================================================================
 
+include("${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
+
 # -----------------------------------------------------------------------------
 # Internal helpers
 # -----------------------------------------------------------------------------
@@ -15,12 +17,13 @@
 ## @param[in] _path Path to validate.
 ## @note Emits FATAL_ERROR if the path contains ".." anywhere.
 function(_file_validate_no_traversal _path)
+	buildmaster_message(FILE LOWLEVEL "Entering _file_validate_no_traversal")
 	if("${_path}" MATCHES "\\.\\.")
-		message(FATAL_ERROR
-			"Path traversal detected (contains '..'):\n  ${_path}\n"
-			"Refusing to continue for security reasons."
+		buildmaster_message(FILE FATAL
+			"Path traversal detected (contains '..'): ${_path}. Refusing to continue for security reasons."
 		)
 	endif()
+	buildmaster_message(FILE LOWLEVEL "Exiting _file_validate_no_traversal")
 endfunction()
 
 ## @brief Check whether a file matches an expected checksum.
@@ -33,13 +36,16 @@ endfunction()
 ## @note Supports any algorithm accepted by file(<ALGO>).
 ##       Algorithm names may contain underscores (SHA3_256, etc.).
 function(file_checksum_correct _result _file _hash)
+	buildmaster_message(FILE LOWLEVEL "Entering file_checksum_correct")
 	if("${_hash}" STREQUAL "")
 		set(${_result} FALSE PARENT_SCOPE)
+		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
 	if(NOT EXISTS "${_file}")
 		set(${_result} FALSE PARENT_SCOPE)
+		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
@@ -63,20 +69,23 @@ function(file_checksum_correct _result _file _hash)
 	)
 	list(FIND _known_algos "${_algo}" _idx)
 	if(_idx EQUAL -1)
-		message(WARNING
-			"Unknown hash algorithm '${_algo}' for ${_file}. "
-			"Known: ${_known_algos}. Treating as mismatch."
+		buildmaster_message(FILE WARNING
+			"Unknown hash algorithm '${_algo}' for ${_file}. Known: ${_known_algos}. Treating as mismatch."
 		)
 		set(${_result} FALSE PARENT_SCOPE)
+		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
 	file(${_algo} "${_file}" _actual)
 	if(_actual STREQUAL _expected)
 		set(${_result} TRUE PARENT_SCOPE)
+		buildmaster_message(FILE DEBUG "Checksum match ${_file} (${_algo})")
 	else()
 		set(${_result} FALSE PARENT_SCOPE)
+		buildmaster_message(FILE DEBUG "Checksum mismatch ${_file} (${_algo})")
 	endif()
+	buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 endfunction()
 
 ## @brief Generate the force-download script and return its path (internal).
@@ -89,6 +98,7 @@ endfunction()
 ## @param[in]  indent_level Status indentation tabs (default 0).
 function(_file_generate_download_script out_script url title expected_hash
 										max_retries current_try indent_level)
+	buildmaster_message(FILE LOWLEVEL "Entering _file_generate_download_script")
 	if("${title}" STREQUAL "")
 		get_filename_component(title "${url}" NAME)
 	endif()
@@ -127,24 +137,32 @@ function(_file_generate_download_script out_script url title expected_hash
 	)
 
 	set(${out_script} "${_script}" PARENT_SCOPE)
+	buildmaster_message(FILE DEBUG "Generated download script ${_script}")
+	buildmaster_message(FILE LOWLEVEL "Exiting _file_generate_download_script")
 endfunction()
 
 ## @brief Create (or fatal) a BuildMaster file prerequisite target.
 ## @param[in] name    Target name.
 ## @param[in] script  Path to cmake -P script.
-## @param[in] comment Progress COMMENT.
+## @param[in] comment Progress COMMENT (wrapped with the File log header).
 ## @param[in] depends Optional list of target dependencies.
 function(_file_add_prerequisite_target name script comment depends)
+	buildmaster_message(FILE LOWLEVEL "Entering _file_add_prerequisite_target")
 	if(TARGET "${name}")
-		message(FATAL_ERROR
-			"[BuildMaster] file helper: target '${name}' already exists")
+		buildmaster_message(FILE FATAL
+			"file helper: target '${name}' already exists")
 	endif()
 	if("${comment}" STREQUAL "")
-		set(comment "BuildMaster file: ${name}")
+		set(comment "file: ${name}")
+	endif()
+	if(COMMAND buildmaster_log_comment)
+		buildmaster_log_comment(_bm_cmt FILE "${comment}")
+	else()
+		set(_bm_cmt "[BuildMaster/File     ]: ${comment}")
 	endif()
 	add_custom_target(${name}
 		COMMAND ${CMAKE_COMMAND} -P "${script}"
-		COMMENT "${comment}"
+		COMMENT "${_bm_cmt}"
 		USES_TERMINAL
 		VERBATIM
 	)
@@ -153,6 +171,7 @@ function(_file_add_prerequisite_target name script comment depends)
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_FILE_TARGET_IDS "${name}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_FILE_${name}_SCRIPT "${script}")
+	buildmaster_message(FILE LOWLEVEL "Exiting _file_add_prerequisite_target")
 endfunction()
 
 # -----------------------------------------------------------------------------
@@ -170,11 +189,12 @@ endfunction()
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
 ## @note No out-variable and no include(). The download runs when `name` builds.
 function(file_download name url)
+	buildmaster_message(FILE LOWLEVEL "Entering file_download")
 	if("${name}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_download: empty name")
+		buildmaster_message(FILE FATAL "file_download: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_download: empty url")
+		buildmaster_message(FILE FATAL "file_download: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -203,6 +223,8 @@ function(file_download name url)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
+	buildmaster_message(FILE DEBUG "file_download target ${name}")
+	buildmaster_message(FILE LOWLEVEL "Exiting file_download")
 endfunction()
 
 ## @brief Cache-aware download; creates a target named `name`.
@@ -217,11 +239,12 @@ endfunction()
 ## @note Generates force-download + cached wrapper scripts. Builds `name` runs
 ##       the cached wrapper via cmake -P. No out-variable / include().
 function(file_download_cached name url)
+	buildmaster_message(FILE LOWLEVEL "Entering file_download_cached")
 	if("${name}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_download_cached: empty name")
+		buildmaster_message(FILE FATAL "file_download_cached: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_download_cached: empty url")
+		buildmaster_message(FILE FATAL "file_download_cached: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -278,6 +301,8 @@ function(file_download_cached name url)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
+	buildmaster_message(FILE DEBUG "file_download_cached target ${name}")
+	buildmaster_message(FILE LOWLEVEL "Exiting file_download_cached")
 endfunction()
 
 ## @brief Decompress an archive into a directory; creates a target named `name`.
@@ -292,14 +317,15 @@ endfunction()
 ## @note Uses file(ARCHIVE_EXTRACT) inside the generated -P script.
 ##       No out-variable / include().
 function(file_decompress name archive out_dir)
+	buildmaster_message(FILE LOWLEVEL "Entering file_decompress")
 	if("${name}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_decompress: empty name")
+		buildmaster_message(FILE FATAL "file_decompress: empty name")
 	endif()
 	if("${archive}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_decompress: empty archive")
+		buildmaster_message(FILE FATAL "file_decompress: empty archive")
 	endif()
 	if("${out_dir}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] file_decompress: empty out_dir")
+		buildmaster_message(FILE FATAL "file_decompress: empty out_dir")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -347,4 +373,6 @@ function(file_decompress name archive out_dir)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
+	buildmaster_message(FILE DEBUG "file_decompress target ${name}")
+	buildmaster_message(FILE LOWLEVEL "Exiting file_decompress")
 endfunction()

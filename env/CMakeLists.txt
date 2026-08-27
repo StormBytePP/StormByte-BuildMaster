@@ -1,4 +1,4 @@
-message(STATUS "\tSetting up environment...")
+buildmaster_message(ENV STATUS "Setting up environment..." 1)
 
 # Set up environment runner scripts
 include(init_vars.cmake)

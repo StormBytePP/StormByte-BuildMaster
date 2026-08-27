@@ -14,7 +14,7 @@ execute_process(
 	RESULT_VARIABLE _tar_rc
 )
 if(NOT _tar_rc EQUAL 0)
-	message(FATAL_ERROR "file-to-component: tar failed")
+	buildmaster_message(CORE FATAL "file-to-component: tar failed")
 endif()
 
 file_decompress(payload_unpack

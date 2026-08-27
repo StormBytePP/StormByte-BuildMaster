@@ -4,6 +4,8 @@
 set(BUILDMASTER_VERSION "1.1.0")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
+include("${CMAKE_CURRENT_LIST_DIR}/log.cmake")
+
 # -----------------------------------------------------------------------------
 # 1. Core directory variables
 # -----------------------------------------------------------------------------
@@ -32,16 +34,17 @@ include(init_vars.cmake)
 # modules. Nested hosts still need helpers.cmake so create_* APIs remain
 # available; then we propagate and stop.
 if(BUILDMASTER_CONFIGURED)
-    # Root helpers do not pull tools/helpers.cmake; that file is normally
-    # loaded by add_subdirectory(tools). Nested bootstrap skips subdirs but
-    # still runs tools/propagate_vars.cmake → need the extra-tools macros.
-    include(helpers.cmake)
-    include("${BUILDMASTER_SRCDIR}/tools/helpers.cmake")
-    include(propagate_vars.cmake)
-    return()
+	# Root helpers do not pull tools/helpers.cmake; that file is normally
+	# loaded by add_subdirectory(tools). Nested bootstrap skips subdirs but
+	# still runs tools/propagate_vars.cmake → need the extra-tools macros.
+	include(helpers.cmake)
+	include("${BUILDMASTER_SRCDIR}/tools/helpers.cmake")
+	include(propagate_vars.cmake)
+	return()
 endif()
 
-message(STATUS "Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")
+buildmaster_message(CORE STATUS
+	"Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")
 
 # -----------------------------------------------------------------------------
 # 2. Helper functions (utilities + module helpers; loads toolchain export API)

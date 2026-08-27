@@ -1,6 +1,11 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 set(_bm_api_list "${BM_TEST_EXPECTED_DIR}/public_functions.txt")
 if(NOT EXISTS "${_bm_api_list}")
-	message(FATAL_ERROR "Missing ${_bm_api_list}")
+	buildmaster_message(CORE FATAL "Missing ${_bm_api_list}")
 endif()
 
 file(STRINGS "${_bm_api_list}" _bm_lines)
@@ -17,7 +22,7 @@ endforeach()
 
 if(_bm_missing)
 	list(JOIN _bm_missing ", " _msg)
-	message(FATAL_ERROR "BuildMaster API missing commands: ${_msg}")
+	buildmaster_message(CORE FATAL "API missing commands: ${_msg}")
 endif()
 
-message(STATUS "BuildMaster API: all public commands present")
+buildmaster_message(CORE STATUS "API: all public commands present")

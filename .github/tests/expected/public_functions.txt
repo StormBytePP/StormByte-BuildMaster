@@ -26,6 +26,9 @@ create_git_patch_file
 create_git_reset_file
 create_git_switch_branch
 
+# Logging
+buildmaster_message
+
 # Path and utility helpers
 buildmaster_find_archiver
 ensure_build_dir

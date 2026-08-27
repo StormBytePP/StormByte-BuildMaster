@@ -22,11 +22,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	file(MAKE_DIRECTORY "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 	set(PATH "${BUILDMASTER_INSTALL_BINDIR}")
 
-	if(DEFINED ENV{BUILDMASTER_DEBUG} AND "$ENV{BUILDMASTER_DEBUG}" STREQUAL "1")
-		set(BUILDMASTER_DEBUG ON)
-	else()
-		set(BUILDMASTER_DEBUG OFF)
-	endif()
+	buildmaster_loglevel_init()
 
 	if(DEFINED ENV{BUILDMASTER_VERBOSE} AND "$ENV{BUILDMASTER_VERBOSE}" STREQUAL "1")
 		set(BUILDMASTER_VERBOSE ON)
@@ -83,10 +79,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 		"${BUILDMASTER_GIT_CONFIGURE_STAMP}")
 
 	if(NOT TARGET buildmaster_build_init)
+		buildmaster_log_comment(_bm_init_c CORE "reset fail markers")
 		add_custom_target(buildmaster_build_init
 			COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILDMASTER_MARKERS_DIR}"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILDMASTER_MARKERS_DIR}"
-			COMMENT "BuildMaster: reset fail markers"
+			COMMENT "${_bm_init_c}"
 			VERBATIM
 		)
 	endif()

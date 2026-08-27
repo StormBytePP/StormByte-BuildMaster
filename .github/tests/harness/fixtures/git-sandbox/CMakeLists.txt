@@ -86,4 +86,4 @@ create_git_fetch(
 	"${_sandbox}"
 )
 
-message(STATUS "BuildMaster git-sandbox: OK")
+buildmaster_message(CORE STATUS "git-sandbox: OK")

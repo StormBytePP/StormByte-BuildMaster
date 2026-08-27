@@ -1,9 +1,18 @@
-# cmake -DEXE=... -P expect_nonzero.cmake
-if(NOT EXE)
-	message(FATAL_ERROR "expect_nonzero: need -DEXE=")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../../log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
 endif()
-execute_process(COMMAND "${EXE}" RESULT_VARIABLE _r)
-if(_r EQUAL 0)
-	message(FATAL_ERROR "expect_nonzero: ${EXE} exited 0 (expected non-zero without WHOLE)")
+
+if(NOT DEFINED EXE OR EXE STREQUAL "")
+	buildmaster_message(CORE FATAL "expect_nonzero: EXE is required")
 endif()
-message(STATUS "expect_nonzero: ${EXE} exited ${_r} (OK)")
+
+execute_process(
+	COMMAND "${EXE}"
+	RESULT_VARIABLE _rc
+)
+if(_rc EQUAL 0)
+	buildmaster_message(CORE FATAL
+		"expect_nonzero: ${EXE} exited 0 (expected non-zero)")
+endif()
+buildmaster_message(CORE INFO "expect_nonzero: ${EXE} exited ${_rc} (OK)")

@@ -1,3 +1,5 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
+
 ## @brief Validate and normalize a BuildMaster toolchain name.
 ## @param[out] out_normalized Parent-scope variable receiving the lowercased
 ##            name, or an empty string when @p input is empty (no override).
@@ -9,11 +11,13 @@
 ##       newline/space-separated string from a nested toolchain dump. Both
 ##       forms are accepted.
 function(buildmaster_validate_toolchain out_normalized input)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_validate_toolchain")
 	string(STRIP "${input}" _t)
 	string(TOLOWER "${_t}" _t)
 
 	if(_t STREQUAL "")
 		set(${out_normalized} "" PARENT_SCOPE)
+		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
 		return()
 	endif()
 
@@ -27,34 +31,32 @@ function(buildmaster_validate_toolchain out_normalized input)
 	list(FIND _known "${_t}" _idx)
 	if(_idx EQUAL -1)
 		list(JOIN _known ", " _known_pretty)
-		message(FATAL_ERROR
-			"[BuildMaster] Unknown TOOLCHAIN '${input}'.\n"
-			"  Known toolchains: ${_known_pretty}"
+		buildmaster_message(TOOLCHAIN FATAL
+			"Unknown TOOLCHAIN '${input}'. Known toolchains: ${_known_pretty}"
 		)
 	endif()
 
 	if(_t STREQUAL "msvc" OR _t STREQUAL "clang-cl")
 		if(NOT WIN32)
 			list(JOIN _known ", " _known_pretty)
-			message(FATAL_ERROR
-				"[BuildMaster] TOOLCHAIN '${_t}' is only valid on Windows.\n"
-				"  Known toolchains: ${_known_pretty}"
+			buildmaster_message(TOOLCHAIN FATAL
+				"TOOLCHAIN '${_t}' is only valid on Windows. Known toolchains: ${_known_pretty}"
 			)
 		endif()
 	endif()
 
 	if(_t STREQUAL "gcc" OR _t STREQUAL "clang")
 		if(WIN32)
-			message(FATAL_ERROR
-				"[BuildMaster] TOOLCHAIN '${_t}' is not supported on Windows.\n"
-				"  On Windows use: clang-cl, msvc"
+			buildmaster_message(TOOLCHAIN FATAL
+				"TOOLCHAIN '${_t}' is not supported on Windows. On Windows use: clang-cl, msvc"
 			)
 		endif()
 	endif()
 
 	set(${out_normalized} "${_t}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN DEBUG "Validated TOOLCHAIN=${_t}")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
 endfunction()
-
 
 ## @brief Load a toolchain profile into BM_TC_* variables in the caller scope.
 ## @param[in] name Normalized toolchain name (from buildmaster_validate_toolchain).
@@ -64,14 +66,15 @@ endfunction()
 ##       caller with PARENT_SCOPE (required because CMake functions isolate scope).
 ##       Does not modify the parent project toolchain or the global env runner.
 function(buildmaster_load_toolchain_profile name)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_load_toolchain_profile")
 	if(name STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] buildmaster_load_toolchain_profile: empty name")
+		buildmaster_message(TOOLCHAIN FATAL "buildmaster_load_toolchain_profile: empty name")
 	endif()
 
 	set(_profile_file "${BUILDMASTER_TOOLCHAIN_PROFILES_DIR}/${name}.cmake")
 	if(NOT EXISTS "${_profile_file}")
-		message(FATAL_ERROR
-			"[BuildMaster] Missing toolchain profile file:\n  ${_profile_file}"
+		buildmaster_message(TOOLCHAIN FATAL
+			"Missing toolchain profile file: ${_profile_file}"
 		)
 	endif()
 
@@ -86,6 +89,8 @@ function(buildmaster_load_toolchain_profile name)
 	set(BM_TC_RANLIB "${BM_TC_RANLIB}" PARENT_SCOPE)
 	set(BM_TC_NM "${BM_TC_NM}" PARENT_SCOPE)
 	set(BM_TC_FORCE_LLD "${BM_TC_FORCE_LLD}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN DEBUG "Loaded profile ${name}")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_load_toolchain_profile")
 endfunction()
 
 ## @brief Strip linker-flag tokens that are invalid for a given toolchain.
@@ -96,6 +101,7 @@ endfunction()
 ## @note Does not clear the entire flag string. Only removes known-incoherent
 ##       tokens for that profile. Unknown tokens are preserved.
 function(buildmaster_clean_ldflags out_flags flags toolchain_name)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_ldflags")
 	set(_f "${flags}")
 
 	if(toolchain_name STREQUAL "msvc")
@@ -132,6 +138,7 @@ function(buildmaster_clean_ldflags out_flags flags toolchain_name)
 	endif()
 
 	set(${out_flags} "${_f}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_ldflags")
 endfunction()
 
 ## @brief Strip compile-flag tokens that are invalid for a given toolchain.
@@ -144,6 +151,7 @@ endfunction()
 ##       MSVC whole-program LTCG compile switches (`/GL`) that clang-cl ignores
 ##       with “unknown argument ignored”.
 function(buildmaster_clean_cflags out_flags flags toolchain_name)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_cflags")
 	set(_f "${flags}")
 
 	if(toolchain_name STREQUAL "msvc")
@@ -187,6 +195,7 @@ function(buildmaster_clean_cflags out_flags flags toolchain_name)
 	endif()
 
 	set(${out_flags} "${_f}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_cflags")
 endfunction()
 
 ## @brief Map linker type/path to a driver-safe -fuse-ld= flag for Meson/CMake.
@@ -200,6 +209,7 @@ endfunction()
 ##       link). System `ld` and unknown paths yield an empty flag so Meson
 ##       keeps the default linker.
 function(buildmaster_fuse_ld_flag out_flag linker_type linker)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_fuse_ld_flag")
 	set(_flag "")
 	string(STRIP "${linker_type}" _lt)
 	string(TOUPPER "${_lt}" _lt)
@@ -241,6 +251,7 @@ function(buildmaster_fuse_ld_flag out_flag linker_type linker)
 	endif()
 
 	set(${out_flag} "${_flag}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_fuse_ld_flag")
 endfunction()
 
 ## @brief Resolve a short MSVC tool name to an absolute path when possible.
@@ -253,14 +264,17 @@ endfunction()
 ##       Uses a unique cache variable per tool name so successive resolves
 ##       (cl, then lib, then link) do not reuse a stale find_program result.
 function(buildmaster_resolve_msvc_tool out_var tool_name)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_resolve_msvc_tool")
 	if(tool_name STREQUAL "")
 		set(${out_var} "" PARENT_SCOPE)
+		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_resolve_msvc_tool")
 		return()
 	endif()
 
 	if(IS_ABSOLUTE "${tool_name}" AND EXISTS "${tool_name}")
 		normalize_cmake_path(_abs "${tool_name}")
 		set(${out_var} "${_abs}" PARENT_SCOPE)
+		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_resolve_msvc_tool")
 		return()
 	endif()
 
@@ -272,6 +286,7 @@ function(buildmaster_resolve_msvc_tool out_var tool_name)
 	if(${_bm_cache_var})
 		normalize_cmake_path(_bm_found "${${_bm_cache_var}}")
 		set(${out_var} "${_bm_found}" PARENT_SCOPE)
+		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_resolve_msvc_tool")
 		return()
 	endif()
 
@@ -302,6 +317,7 @@ function(buildmaster_resolve_msvc_tool out_var tool_name)
 				if(NOT _cand STREQUAL "" AND EXISTS "${_cand}")
 					normalize_cmake_path(_cand "${_cand}")
 					set(${out_var} "${_cand}" PARENT_SCOPE)
+					buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_resolve_msvc_tool")
 					return()
 				endif()
 			endforeach()
@@ -309,6 +325,7 @@ function(buildmaster_resolve_msvc_tool out_var tool_name)
 	endif()
 
 	set(${out_var} "${tool_name}" PARENT_SCOPE)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_resolve_msvc_tool")
 endfunction()
 
 # =============================================================================
@@ -319,7 +336,9 @@ endfunction()
 ## @note Call once at the start of a BuildMaster bootstrap before any
 ##       buildmaster_toolchain_export* calls. Safe to call more than once.
 function(buildmaster_toolchain_reset)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_reset")
 endfunction()
 
 ## @brief Register a simple string assignment for the toolchain file dump.
@@ -329,13 +348,15 @@ endfunction()
 ## @note Appends one line to the global BUILDMASTER_TOOLCHAIN_LINES property.
 ##       Does not write the toolchain file; call buildmaster_toolchain_write.
 function(buildmaster_toolchain_export name value)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export")
 	if("${name}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] buildmaster_toolchain_export: empty name")
+		buildmaster_message(TOOLCHAIN FATAL "buildmaster_toolchain_export: empty name")
 	endif()
 	string(REPLACE "\\" "/" _bm_tc_val "${value}")
 	string(REPLACE "\"" "\\\"" _bm_tc_val "${_bm_tc_val}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES
 		"set(${name} \"${_bm_tc_val}\")")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export")
 endfunction()
 
 ## @brief Register a pre-formatted CMake line for the toolchain file dump.
@@ -345,10 +366,13 @@ endfunction()
 ##       Empty lines are ignored. Does not write the file until
 ##       buildmaster_toolchain_write is called.
 function(buildmaster_toolchain_export_raw line)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export_raw")
 	if("${line}" STREQUAL "")
+		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
 		return()
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES "${line}")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
 endfunction()
 
 ## @brief Write all registered toolchain lines to a file.
@@ -357,8 +381,9 @@ endfunction()
 ##       lines matches registration order. Component TOOLCHAIN overlays should
 ##       call buildmaster_toolchain_write_component instead.
 function(buildmaster_toolchain_write path)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write")
 	if("${path}" STREQUAL "")
-		message(FATAL_ERROR "[BuildMaster] buildmaster_toolchain_write: empty path")
+		buildmaster_message(TOOLCHAIN FATAL "buildmaster_toolchain_write: empty path")
 	endif()
 	normalize_cmake_path(_bm_tc_out "${path}")
 	get_filename_component(_bm_tc_dir "${_bm_tc_out}" DIRECTORY)
@@ -373,6 +398,8 @@ function(buildmaster_toolchain_write path)
 		string(APPEND _bm_tc_body "${_bm_tc_line}\n")
 	endforeach()
 	file(WRITE "${_bm_tc_out}" "${_bm_tc_body}")
+	buildmaster_message(TOOLCHAIN DEBUG "Wrote toolchain dump ${_bm_tc_out}")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write")
 endfunction()
 
 # Write a component toolchain file: parent registry snapshot + profile overlay.
@@ -387,6 +414,7 @@ endfunction()
 # path            - Absolute path of the component toolchain.cmake to write.
 # toolchain_name  - Profile name (for comments only; tools come from BM_TC_*).
 macro(buildmaster_toolchain_write_component path toolchain_name)
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write_component")
 	buildmaster_toolchain_write("${path}")
 
 	normalize_cmake_path(_bm_tc_self "${path}")
@@ -442,4 +470,6 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 	file(APPEND "${path}" "${_bm_tc_overlay}")
 	unset(_bm_tc_overlay)
 	unset(_bm_tc_self)
+	buildmaster_message(TOOLCHAIN DEBUG "Wrote component toolchain overlay ${path}")
+	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write_component")
 endmacro()

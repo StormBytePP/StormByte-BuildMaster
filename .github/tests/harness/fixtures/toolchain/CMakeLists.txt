@@ -30,12 +30,11 @@ else()
 endif()
 
 if(NOT _bm_tc_other)
-	message(FATAL_ERROR
-		"Harness toolchain swap: unsupported compiler "
-		"'${CMAKE_C_COMPILER_ID}' (${CMAKE_C_COMPILER})")
+	buildmaster_message(CORE FATAL
+		"Harness toolchain swap: unsupported compiler '${CMAKE_C_COMPILER_ID}' (${CMAKE_C_COMPILER})")
 endif()
 
-message(STATUS
+buildmaster_message(CORE STATUS
 	"Harness toolchain swap: ${CMAKE_C_COMPILER_ID} → TOOLCHAIN=${_bm_tc_other}")
 
 ensure_build_dir(NEST_TC_BUILD_DIR "nest-tc")

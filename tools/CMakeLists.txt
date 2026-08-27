@@ -1,4 +1,9 @@
-message(STATUS "\tSetting up tools...")
+include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
+buildmaster_message(TOOLS STATUS "Setting up tools..." 1)
 
 # Initialize variables
 include("${CMAKE_CURRENT_LIST_DIR}/init_vars.cmake")

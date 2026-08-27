@@ -4,6 +4,15 @@
 # Usable from configure-time helpers and from cmake -P scripts (pass
 # BUILDMASTER_SRCDIR and include this file).
 
+if(DEFINED BUILDMASTER_SRCDIR AND EXISTS "${BUILDMASTER_SRCDIR}/log.cmake")
+	include("${BUILDMASTER_SRCDIR}/log.cmake")
+elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
+	include("${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
+endif()
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 ## @brief Resolve the static archiver for this toolchain/host.
 ## @param[out] out_path  Absolute path to the tool (parent scope).
 ## @param[out] out_style Parent-scope `msvc_lib` (lib.exe / llvm-lib, /OUT:)
@@ -18,6 +27,7 @@
 ##       5. else: llvm-ar, gcc-ar, ar
 ## @note Style is derived from the resolved binary name.
 function(buildmaster_find_archiver out_path out_style)
+	buildmaster_message(ARCHIVE LOWLEVEL "Entering buildmaster_find_archiver")
 	if(ARGC GREATER 2)
 		set(_hint "${ARGV2}")
 	else()
@@ -60,9 +70,8 @@ function(buildmaster_find_archiver out_path out_style)
 	endforeach()
 
 	if(_found STREQUAL "")
-		message(FATAL_ERROR
-			"[BuildMaster] buildmaster_find_archiver: no archiver found "
-			"(CMAKE_AR, ENV{AR}, llvm-lib/lib, llvm-ar/gcc-ar/ar)")
+		buildmaster_message(ARCHIVE FATAL
+			"buildmaster_find_archiver: no archiver found (CMAKE_AR, ENV{AR}, llvm-lib/lib, llvm-ar/gcc-ar/ar)")
 	endif()
 
 	get_filename_component(_name "${_found}" NAME)
@@ -74,6 +83,8 @@ function(buildmaster_find_archiver out_path out_style)
 		set(_style "msvc_lib")
 	endif()
 
+	buildmaster_message(ARCHIVE DEBUG "archiver=${_found} style=${_style}")
 	set(${out_path} "${_found}" PARENT_SCOPE)
 	set(${out_style} "${_style}" PARENT_SCOPE)
+	buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_find_archiver")
 endfunction()

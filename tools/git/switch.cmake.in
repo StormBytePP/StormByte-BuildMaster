@@ -1,3 +1,8 @@
+include("@BUILDMASTER_SRCDIR@/log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 execute_process(
 	COMMAND @ENV_GIT_SILENT_COMMAND@ -C @GIT_REPO@ switch -C @GIT_BRANCH@ --track origin/@GIT_BRANCH@
 	WORKING_DIRECTORY @GIT_REPO@
@@ -7,18 +12,13 @@ execute_process(
 )
 
 if(NOT GIT_RESULT EQUAL 0)
-	message(FATAL_ERROR
-		"Git switch failed (exit ${GIT_RESULT}) branch=@GIT_BRANCH@ repo=@GIT_REPO@\n"
-		"--- stdout ---\n${GIT_OUT}\n"
-		"--- stderr ---\n${GIT_ERROR}"
-	)
+	buildmaster_message(GIT FATAL
+		"Git switch failed (exit ${GIT_RESULT}) branch=@GIT_BRANCH@ repo=@GIT_REPO@\n--- stdout ---\n${GIT_OUT}\n--- stderr ---\n${GIT_ERROR}")
 endif()
 
-if("@BUILDMASTER_DEBUG@" STREQUAL "ON")
-	if(GIT_OUT)
-		message(STATUS "[BUILDMASTER_DEBUG] git switch stdout:\n${GIT_OUT}")
-	endif()
-	if(GIT_ERROR)
-		message(STATUS "[BUILDMASTER_DEBUG] git switch stderr:\n${GIT_ERROR}")
-	endif()
+if(GIT_OUT)
+	buildmaster_message(GIT DEBUG "git switch stdout:\n${GIT_OUT}")
+endif()
+if(GIT_ERROR)
+	buildmaster_message(GIT DEBUG "git switch stderr:\n${GIT_ERROR}")
 endif()

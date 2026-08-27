@@ -8,6 +8,11 @@
 #   "file DOWNLOAD cannot compute hash on failed download"
 # Hash is verified only after STATUS reports success.
 
+include("@BUILDMASTER_SRCDIR@/log.cmake")
+if(COMMAND buildmaster_loglevel_init)
+	buildmaster_loglevel_init()
+endif()
+
 set(_url            "@_FILE_URL@")
 set(_output         "@_FILE_OUTPUT@")
 set(_title          "@_FILE_TITLE@")
@@ -88,7 +93,7 @@ while(NOT _code EQUAL 0)
 	_file_dl_is_permanent_error(_permanent "${_msg}")
 	if(_permanent OR _current_try GREATER_EQUAL _max_retries)
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: ${_msg}")
-		message(FATAL_ERROR "Download failed for ${_title}: ${_msg}")
+		buildmaster_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
 	endif()
 
 	execute_process(COMMAND ${CMAKE_COMMAND} -E echo
@@ -123,7 +128,7 @@ if(NOT "${_expected_hash}" STREQUAL "")
 		if(_current_try GREATER_EQUAL _max_retries)
 			file(REMOVE "${_output}")
 			execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: Hash mismatch")
-			message(FATAL_ERROR "Hash mismatch for ${_title} after ${_max_retries} attempt(s)")
+			buildmaster_message(FILE FATAL "Hash mismatch for ${_title} after ${_max_retries} attempt(s)")
 		endif()
 
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo
@@ -153,7 +158,7 @@ if(NOT "${_expected_hash}" STREQUAL "")
 			_file_dl_is_permanent_error(_permanent "${_msg}")
 			if(_permanent OR _current_try GREATER_EQUAL _max_retries)
 				execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: ${_msg}")
-				message(FATAL_ERROR "Download failed for ${_title}: ${_msg}")
+				buildmaster_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
 			endif()
 			file(REMOVE "${_output}")
 			set(_hash_ok FALSE)

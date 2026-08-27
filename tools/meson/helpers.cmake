@@ -1,3 +1,5 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
+
 ## @brief Create setup/compile/install scripts for a Meson-built component.
 ## @param[out] _file_setup Name of the variable to set in parent scope
 ##            with the generated Meson `*_configure.cmake` script path.
@@ -36,6 +38,7 @@
 ## @note `_MESON_NATIVE_FILE` is the Meson `--native-file` for this component:
 ##       `TOOLCHAIN=` profile file, or this process's compiler family.
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
+	buildmaster_message(MESON LOWLEVEL "Entering create_meson_stages")
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
 		string(REPEAT "\t" ${_indent_level} _MESON_INDENT_)
@@ -77,6 +80,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	if(NOT _toolchain_name STREQUAL "")
 		set(_MESON_TOOLCHAIN_SUFFIX " (with toolchain ${_toolchain_name})")
+		buildmaster_message(MESON DEBUG "create_meson_stages(${_component}): TOOLCHAIN=${_toolchain_name}")
 	else()
 		set(_MESON_TOOLCHAIN_SUFFIX "")
 	endif()
@@ -90,7 +94,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_MESON_LIBRARY_TYPE "static")
 		list(APPEND _meson_options "-Db_staticpic=true")
 	else()
-		message(FATAL_ERROR "Unknown library mode '${_library_mode}' in create_meson_stages (expected static, shared, or headers)")
+		buildmaster_message(MESON FATAL "Unknown library mode '${_library_mode}' in create_meson_stages (expected static, shared, or headers)")
 	endif()
 
 	set(_MESON_COMPONENT "${_component}")
@@ -408,4 +412,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(${_file_setup} "${_MESON_SETUP_FILE}" PARENT_SCOPE)
 	set(${_file_compile} "${_MESON_COMPILE_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_MESON_INSTALL_FILE}" PARENT_SCOPE)
+	buildmaster_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE}")
+	buildmaster_message(MESON LOWLEVEL "Exiting create_meson_stages")
 endfunction()

@@ -40,7 +40,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_propagation.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
 
 add_custom_target(run_buildmaster_checks
-	COMMAND ${CMAKE_COMMAND} -E echo "BuildMaster harness checks finished"
+	COMMENT "[BuildMaster/Core     ]: harness contract checks"
 	VERBATIM
 )
 
@@ -55,7 +55,7 @@ add_custom_target(run_buildmaster_smoke
 		-DBM_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
 		-DBM_INSTALL_INCLUDEDIR=${CMAKE_INSTALL_INCLUDEDIR}
 		-P ${CMAKE_CURRENT_SOURCE_DIR}/check_smoke_artifacts.cmake
-	COMMENT "BuildMaster smoke: install stages + artifact contract"
+	COMMENT "[BuildMaster/Core     ]: smoke — install stages + artifact contract"
 	DEPENDS
 		# BUILDONLY
 		buildonly-lib_install

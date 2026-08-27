@@ -1,3 +1,5 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
+
 ## @brief Update the bootstrap env runner script based on current global
 ##        properties.
 ## @note Generates a platform-specific runner: PowerShell on WIN32
@@ -8,6 +10,7 @@
 ##       the same compiler cache as the parent job.
 ##       Also propagates AR/RANLIB/NM for clang-cl LTO static archives.
 function(update_env_runner)
+	buildmaster_message(ENV LOWLEVEL "Entering update_env_runner")
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
 		set(CMAKE_C_COMPILER_LAUNCHER "")
 	endif()
@@ -82,6 +85,8 @@ function(update_env_runner)
 			ERROR_QUIET
 		)
 	endif()
+	buildmaster_message(ENV DEBUG "Wrote env runner under ${BUILDMASTER_SCRIPTS_ENVDIR}")
+	buildmaster_message(ENV LOWLEVEL "Exiting update_env_runner")
 endfunction()
 
 ## @brief Prepare a tokenized command suitable for `execute_process(COMMAND ...)`.
@@ -98,8 +103,9 @@ endfunction()
 ##       platform. Paths that already contain spaces must NOT be passed
 ##       through this function a second time (use the list as-is).
 function(prepare_command _out _command_list)
+	buildmaster_message(ENV LOWLEVEL "Entering prepare_command")
 	if(NOT ARGC EQUAL 2)
-		message(FATAL_ERROR "prepare_command requires out variable and command list")
+		buildmaster_message(ENV FATAL "prepare_command requires out variable and command list")
 	endif()
 
 	string(REPLACE ";" " " _command_list_spaces "${_command_list}")
@@ -109,6 +115,7 @@ function(prepare_command _out _command_list)
 		separate_arguments(_separated_command_list UNIX_COMMAND "${_command_list_spaces}")
 	endif()
 	set(${_out} ${_separated_command_list} PARENT_SCOPE)
+	buildmaster_message(ENV LOWLEVEL "Exiting prepare_command")
 endfunction()
 
 ## @brief Format a command token list for embedding in a generated `.cmake` script.
@@ -120,6 +127,7 @@ endfunction()
 ##       token is double-quoted so `set(x ...)` and `execute_process(COMMAND ...)`
 ##       keep paths with spaces as a single argument.
 function(buildmaster_quote_cmd_list_for_script out_var)
+	buildmaster_message(ENV LOWLEVEL "Entering buildmaster_quote_cmd_list_for_script")
 	set(_acc "")
 	foreach(_tok IN LISTS ARGN)
 		string(REPLACE "\\" "/" _tok "${_tok}")
@@ -131,6 +139,7 @@ function(buildmaster_quote_cmd_list_for_script out_var)
 		endif()
 	endforeach()
 	set(${out_var} "${_acc}" PARENT_SCOPE)
+	buildmaster_message(ENV LOWLEVEL "Exiting buildmaster_quote_cmd_list_for_script")
 endfunction()
 
 ## @brief Generate component-local env runners from a loaded toolchain profile.
@@ -149,10 +158,10 @@ endfunction()
 ##       as the absolute path of that .ps1; CMake launches both via
 ##       powershell -ExecutionPolicy Bypass -File (process-local).
 macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
+	buildmaster_message(ENV LOWLEVEL "Entering buildmaster_create_component_env_runners")
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
-		message(FATAL_ERROR
-			"[BuildMaster] buildmaster_create_component_env_runners: "
-			"component and toolchain_name must be non-empty"
+		buildmaster_message(ENV FATAL
+			"buildmaster_create_component_env_runners: component and toolchain_name must be non-empty"
 		)
 	endif()
 
@@ -269,4 +278,6 @@ macro(buildmaster_create_component_env_runners out_runner out_runner_silent comp
 
 	set(${out_runner} ${_bm_tc_runner_cmd})
 	set(${out_runner_silent} ${_bm_tc_silent_cmd})
+	buildmaster_message(ENV DEBUG "Created component runners for ${component} (${toolchain_name})")
+	buildmaster_message(ENV LOWLEVEL "Exiting buildmaster_create_component_env_runners")
 endmacro()

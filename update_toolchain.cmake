@@ -9,7 +9,7 @@ buildmaster_toolchain_export(BUILDMASTER_INSTALL_LIBDIR "${BUILDMASTER_INSTALL_L
 buildmaster_toolchain_export(BUILDMASTER_INSTALL_BINDIR "${BUILDMASTER_INSTALL_BINDIR}")
 buildmaster_toolchain_export(BUILDMASTER_INSTALL_INCLUDEDIR "${BUILDMASTER_INSTALL_INCLUDEDIR}")
 buildmaster_toolchain_export(PATH "${BUILDMASTER_INSTALL_BINDIR}")
-buildmaster_toolchain_export(BUILDMASTER_DEBUG "${BUILDMASTER_DEBUG}")
+buildmaster_toolchain_export(BUILDMASTER_LOGLEVEL "${BUILDMASTER_LOGLEVEL}")
 buildmaster_toolchain_export(BUILDMASTER_VERBOSE "${BUILDMASTER_VERBOSE}")
 buildmaster_toolchain_export(BUILDMASTER_FAIL_FAST "${BUILDMASTER_FAIL_FAST}")
 buildmaster_toolchain_export(BUILDMASTER_CLEAN_RESET_REPOS "${BUILDMASTER_CLEAN_RESET_REPOS}")

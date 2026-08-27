@@ -68,5 +68,5 @@ add_custom_target(whole_link_test_nowhole_run
 		"-DEXE=$<TARGET_FILE:whole_link_test_nowhole>"
 		-P "${CMAKE_CURRENT_SOURCE_DIR}/expect_nonzero.cmake"
 	DEPENDS whole_link_test_nowhole
-	COMMENT "Run whole_link_test_nowhole (no WHOLE; expect non-zero)"
+	COMMENT "[BuildMaster/Core     ]: run whole_link_test_nowhole (no WHOLE; expect non-zero)"
 )

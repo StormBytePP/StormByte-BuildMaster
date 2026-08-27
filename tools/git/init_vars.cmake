@@ -3,7 +3,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(BUILDMASTER_SCRIPTS_GIT_DIR "${BUILDMASTER_SCRIPTSDIR}/git")
 	find_program(GIT_EXECUTABLE git QUIET)
 	if(NOT GIT_EXECUTABLE)
-		message(FATAL_ERROR "Git executable not found. Install Git.")
+		buildmaster_message(GIT FATAL "Git executable not found. Install Git.")
 	endif()
 	get_filename_component(GIT_EXECUTABLE "${GIT_EXECUTABLE}" NAME)
 	set(_env_git_list ${ENV_RUNNER} ${GIT_EXECUTABLE})
@@ -11,11 +11,5 @@ if(NOT BUILDMASTER_CONFIGURED)
 	prepare_command(ENV_GIT_COMMAND "${_env_git_list}")
 	prepare_command(ENV_GIT_SILENT_COMMAND "${_env_git_silent_list}")
 
-	# In debug mode, ENV_GIT_SILENT is the same as ENV_GIT
-	if(BUILDMASTER_DEBUG)
-		set(ENV_GIT_SILENT_COMMAND "${ENV_GIT_COMMAND}")
-	endif()
-
-	# Update out part of the toolchain file
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

@@ -97,12 +97,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 
 	prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 
-	if(BUILDMASTER_DEBUG)
-		set(ENV_RUNNER_SILENT "${ENV_RUNNER}")
-	endif()
-
 	# Compile-only runner: silent by default; full output when BUILDMASTER_VERBOSE
-	# DEBUG alone does not force verbose compile flags — only this alias + *_VERBOSE_ARGS
 	if(BUILDMASTER_VERBOSE)
 		set(ENV_RUNNER_COMPILE ${ENV_RUNNER})
 	else()
