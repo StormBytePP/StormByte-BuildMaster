@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project(lib_pc_lib LANGUAGES C)
+
+include(GNUInstallDirs)
+
+add_library(pclib STATIC pc_lib.c)
+target_include_directories(pclib PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(TARGETS pclib
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(FILES pc_lib.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

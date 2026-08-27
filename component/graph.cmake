@@ -39,7 +39,14 @@ endfunction()
 ##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
 ##            BUILDONLY (flag), WHOLE (flag; static whole-archive link),
 ##            STRIPRES (flag; default ON; strip `.res` members from static
-##            MSVC/clang-cl archives after RENAME).
+##            MSVC/clang-cl archives after RENAME),
+##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
+##            `.pc` under the BM prefix for *internal* BM consumers).
+## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
+##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
+##       FATAL (no shared prefix). An upstream `.pc` already at the canonical
+##       path is FATAL at install time (do not clobber). Meta + PC is FATAL
+##       in create_meta_component.
 ## @note Does not return a fragment path and does not include() anything.
 ##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
@@ -84,6 +91,9 @@ function(create_component _component _component_title _srcdir _builddir
 	buildmaster_parse_component_options(
 		_reg_indent _reg_tc _reg_rename _reg_buildonly _reg_whole _reg_stripres
 		"${_options_string}")
+	buildmaster_parse_component_pc(
+		"${_options_string}"
+		_pc_present _pc_enabled _pc_name _pc_version _pc_description)
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -119,6 +129,29 @@ function(create_component _component _component_title _srcdir _builddir
 			"create_component('${_component}'): STRIPRES ignored (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
 	endif()
 
+	if(_pc_enabled AND _reg_buildonly)
+		buildmaster_message(COMPONENT FATAL
+			"create_component('${_component}'): PC={…} cannot be used with BUILDONLY (helper .pc files are for internal consumers of the shared BM prefix)")
+	endif()
+
+	if(_pc_name STREQUAL "")
+		set(_first_spec "")
+		foreach(_spec IN LISTS _produced)
+			if(NOT _spec STREQUAL "")
+				set(_first_spec "${_spec}")
+				break()
+			endif()
+		endforeach()
+		if(NOT _first_spec STREQUAL "")
+			buildmaster_parse_subcomponent("${_first_spec}" _ign_tgt _pc_name _ign_dir)
+		else()
+			set(_pc_name "${_component}")
+		endif()
+	endif()
+	if(_pc_description STREQUAL "")
+		set(_pc_description "${_component_title}")
+	endif()
+
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_IDS "${_component}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_TITLE
 		"${_component_title}")
@@ -151,6 +184,17 @@ function(create_component _component _component_title _srcdir _builddir
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_STRIPRES FALSE)
 	endif()
+	if(_pc_enabled)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC FALSE)
+	endif()
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_NAME
+		"${_pc_name}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_VERSION
+		"${_pc_version}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_DESCRIPTION
+		"${_pc_description}")
 
 	_buildmaster_component_defer_arm()
 	buildmaster_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")

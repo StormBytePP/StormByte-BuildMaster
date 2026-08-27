@@ -41,6 +41,10 @@
 ##       `install_exec.cmake.in` strips `*.res` members from produced
 ##       `.lib` archives (MSVC / clang-cl `lib` / `llvm-lib` only; other
 ##       archivers are a no-op inside the strip script).
+## @note Reads `_BM_PC_ENABLED` and `_BM_PC_*` from the caller. If
+##       `_BM_PC_ENABLED` is unset, defaults to `"0"`. When `"1"`,
+##       `install_exec.cmake.in` writes a helper `.pc` after RENAME +
+##       STRIPRES (FATAL if the output path already exists).
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_COMMAND,
 ##       BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND and
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
@@ -76,6 +80,30 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	endif()
 	if(NOT DEFINED _BM_STRIPRES_ENABLED)
 		set(_BM_STRIPRES_ENABLED "1")
+	endif()
+	if(NOT DEFINED _BM_PC_ENABLED)
+		set(_BM_PC_ENABLED "0")
+	endif()
+	if(NOT DEFINED _BM_PC_NAME)
+		set(_BM_PC_NAME "")
+	endif()
+	if(NOT DEFINED _BM_PC_VERSION)
+		set(_BM_PC_VERSION "")
+	endif()
+	if(NOT DEFINED _BM_PC_DESCRIPTION)
+		set(_BM_PC_DESCRIPTION "")
+	endif()
+	if(NOT DEFINED _BM_PC_LIBS)
+		set(_BM_PC_LIBS "")
+	endif()
+	if(NOT DEFINED _BM_PC_REQUIRES)
+		set(_BM_PC_REQUIRES "")
+	endif()
+	if(NOT DEFINED _BM_PC_CFLAGS)
+		set(_BM_PC_CFLAGS "")
+	endif()
+	if(NOT DEFINED _BM_PC_OUT)
+		set(_BM_PC_OUT "")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")

@@ -4,15 +4,108 @@
 # Loaded from component/helpers.cmake. Does not include backends.
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, BUILDONLY, WHOLE and STRIPRES accept `KEY`, `KEY=` and
+## @note RENAME, BUILDONLY, WHOLE, STRIPRES and PC accept `KEY`, `KEY=` and
 ##       `KEY=ON|OFF`. Other keys require `KEY=value`. Keep this list in
 ##       sync with buildmaster_parse_component_options().
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES")
+## @note `PC` as a bare flag is accepted by the splitter so it is not treated
+##       as an unknown token, but a `.pc` is only generated from `PC={…}`.
+##       A bare `PC` / `PC=ON` without a brace group is FATAL.
+## @note `PC={…}` is forbidden on meta components (no sources, no single
+##       library contract). Membership can drag an unbounded set of leaves;
+##       generating one `.pc` from that would pull Requires the author did
+##       not choose and collide with upstream `.pc` files. create_meta_*
+##       must FATAL if PC is present.
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC")
+
+# CMake lists use ';' as the element separator. Tokens that contain ';'
+# (PC={VERSION=1;NAME=x}) are stored with this stand-in so foreach(IN LISTS)
+# does not re-split them. buildmaster_option_pair_split restores ';'.
+set(_BM_OPT_SEMI "__BM_SEMI__")
+
+## @brief Split an options string on `;` that are not inside `{…}`.
+## @param[in]  options_string Raw `"KEY=value;KEY2={A=1;B=2}"` string.
+## @param[out] out_pairs      Parent-scope CMake list of tokens. Embedded `;`
+##            inside `{…}` are stored as `__BM_SEMI__`.
+## @note Brace depth is not nested in v1 (`{` inside `{` still increments).
+##       Unbalanced `{` / `}` is FATAL. Empty tokens are dropped.
+##       Values still must not contain a raw `;` outside braces.
+function(buildmaster_split_option_pairs options_string out_pairs)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_split_option_pairs")
+	set(_pairs "")
+	set(_cur "")
+	set(_depth 0)
+	string(LENGTH "${options_string}" _n)
+	if(_n GREATER 0)
+		math(EXPR _last "${_n} - 1")
+		foreach(_i RANGE ${_last})
+			string(SUBSTRING "${options_string}" ${_i} 1 _ch)
+			if(_ch STREQUAL "{")
+				math(EXPR _depth "${_depth} + 1")
+				string(APPEND _cur "${_ch}")
+			elseif(_ch STREQUAL "}")
+				if(_depth EQUAL 0)
+					buildmaster_message(COMPONENT FATAL
+						"Unmatched '}' in options string")
+				endif()
+				math(EXPR _depth "${_depth} - 1")
+				string(APPEND _cur "${_ch}")
+			elseif(_ch STREQUAL ";" AND _depth EQUAL 0)
+				string(STRIP "${_cur}" _tok)
+				if(NOT _tok STREQUAL "")
+					string(REPLACE ";" "${_BM_OPT_SEMI}" _tok "${_tok}")
+					list(APPEND _pairs "${_tok}")
+				endif()
+				set(_cur "")
+			else()
+				string(APPEND _cur "${_ch}")
+			endif()
+		endforeach()
+	endif()
+	if(NOT _depth EQUAL 0)
+		buildmaster_message(COMPONENT FATAL
+			"Unclosed '{' in options string")
+	endif()
+	string(STRIP "${_cur}" _tok)
+	if(NOT _tok STREQUAL "")
+		string(REPLACE ";" "${_BM_OPT_SEMI}" _tok "${_tok}")
+		list(APPEND _pairs "${_tok}")
+	endif()
+	set(${out_pairs} "${_pairs}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_split_option_pairs")
+endfunction()
+
+## @brief Extract the interior of a `{…}` group.
+## @param[in]  val        Stripped value that should be `{…}`.
+## @param[out] out_inner  Text between the outermost braces (parent scope).
+## @param[out] out_ok     TRUE if `val` is a single brace group.
+function(buildmaster_unwrap_brace_group val out_inner out_ok)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_unwrap_brace_group")
+	string(STRIP "${val}" _v)
+	set(_ok FALSE)
+	set(_inner "")
+	string(LENGTH "${_v}" _len)
+	if(_len GREATER 1)
+		string(SUBSTRING "${_v}" 0 1 _first)
+		math(EXPR _last "${_len} - 1")
+		string(SUBSTRING "${_v}" ${_last} 1 _lastch)
+		if(_first STREQUAL "{" AND _lastch STREQUAL "}")
+			math(EXPR _ilen "${_len} - 2")
+			string(SUBSTRING "${_v}" 1 ${_ilen} _inner)
+			string(STRIP "${_inner}" _inner)
+			set(_ok TRUE)
+		endif()
+	endif()
+	set(${out_inner} "${_inner}" PARENT_SCOPE)
+	set(${out_ok} "${_ok}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_unwrap_brace_group")
+endfunction()
 
 ## @brief Split one options token into key and value.
 ## @param[in]  pair     Raw token (`KEY=value`, `KEY=`, or `KEY` for flags).
+##            May contain `__BM_SEMI__` in place of an embedded `;`.
 ## @param[out] out_key  Uppercase stripped key (parent scope).
-## @param[out] out_val  Value after the first `=` (may be empty; may contain `=`).
+## @param[out] out_val  Value after the first `=` (may be empty; may contain `=`
+##            and restored `;`).
 ## @param[out] out_ok   TRUE if the token is usable; FALSE if ignored.
 ## @note Tokens without `=` are only accepted when the key is listed in
 ##       BUILDMASTER_COMPONENT_OPTION_FLAGS (e.g. `RENAME` ≡ `RENAME=ON`).
@@ -23,6 +116,8 @@ function(buildmaster_option_pair_split pair out_key out_val out_ok)
 	set(_ok TRUE)
 	set(_key "")
 	set(_val "")
+
+	string(REPLACE "${_BM_OPT_SEMI}" ";" pair "${pair}")
 
 	if("${pair}" STREQUAL "")
 		set(_ok FALSE)
@@ -88,6 +183,90 @@ function(buildmaster_option_flag_enabled val out_bool)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_option_flag_enabled")
 endfunction()
 
+## @brief Parse `PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…}` from an options string.
+## @param[in]  options_string Same trailing string passed to create_*.
+## @param[out] out_present    TRUE if a `PC` key was seen (bare or `PC={…}`).
+## @param[out] out_enabled    TRUE if a `.pc` should be written.
+## @param[out] out_name       Inner `NAME` or empty (caller defaults to produced).
+## @param[out] out_version    Inner `VERSION` or empty.
+## @param[out] out_description Inner `DESCRIPTION` or empty (caller defaults to title).
+## @note The only valid generative form is `PC={…}`. Bare `PC` / `PC=ON` /
+##       `PC=OFF` without braces is FATAL (use `PC={ENABLED=FALSE}` to opt out
+##       while keeping the group).
+## @note Missing VERSION is FATAL only when enabled. `ENABLED=FALSE` does not
+##       require VERSION and does not write a file.
+## @note `PC={…}` on a meta is FATAL at create_meta_* (unbounded Requires).
+## @note If install already produced a `.pc` at the canonical path, writing
+##       one is FATAL (do not clobber an upstream file). That check lives in
+##       install_exec, not here.
+## @note Unknown inner keys → WARNING and ignored.
+function(buildmaster_parse_component_pc options_string out_present out_enabled
+										out_name out_version out_description)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_pc")
+	set(_present FALSE)
+	set(_enabled FALSE)
+	set(_name "")
+	set(_version "")
+	set(_description "")
+
+	if(NOT "${options_string}" STREQUAL "")
+		buildmaster_split_option_pairs("${options_string}" _pairs)
+		foreach(_pair IN LISTS _pairs)
+			if(_pair STREQUAL "")
+				continue()
+			endif()
+			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			if(NOT _ok)
+				continue()
+			endif()
+			if(NOT _key STREQUAL "PC")
+				continue()
+			endif()
+			set(_present TRUE)
+			buildmaster_unwrap_brace_group("${_val}" _inner _brace_ok)
+			if(NOT _brace_ok)
+				buildmaster_message(COMPONENT FATAL
+					"PC must be PC={VERSION=…;NAME=…;ENABLED=…} (got '${_val}')")
+			endif()
+			set(_enabled TRUE)
+			buildmaster_split_option_pairs("${_inner}" _inner_pairs)
+			foreach(_ip IN LISTS _inner_pairs)
+				if(_ip STREQUAL "")
+					continue()
+				endif()
+				buildmaster_option_pair_split("${_ip}" _ik _iv _iok)
+				if(NOT _iok)
+					continue()
+				endif()
+				if(_ik STREQUAL "VERSION")
+					set(_version "${_iv}")
+				elseif(_ik STREQUAL "NAME")
+					set(_name "${_iv}")
+				elseif(_ik STREQUAL "DESCRIPTION")
+					set(_description "${_iv}")
+				elseif(_ik STREQUAL "ENABLED")
+					buildmaster_option_flag_enabled("${_iv}" _enabled)
+				else()
+					buildmaster_message(COMPONENT WARNING
+						"Unknown PC sub-option '${_ik}' (ignored)")
+				endif()
+			endforeach()
+		endforeach()
+	endif()
+
+	if(_present AND _enabled AND "${_version}" STREQUAL "")
+		buildmaster_message(COMPONENT FATAL
+			"PC={…} with ENABLED=TRUE requires VERSION")
+	endif()
+
+	set(${out_present} "${_present}" PARENT_SCOPE)
+	set(${out_enabled} "${_enabled}" PARENT_SCOPE)
+	set(${out_name} "${_name}" PARENT_SCOPE)
+	set(${out_version} "${_version}" PARENT_SCOPE)
+	set(${out_description} "${_description}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_pc")
+endfunction()
+
 ## @brief Parse the optional `KEY=VALUE;…` options string used by create_*_component.
 ## @param[out] out_indent     Indent level (integer, default 0).
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
@@ -105,10 +284,14 @@ endfunction()
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
+##            `PC={…}` groups are allowed; `;` inside braces is not a pair break.
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
-##       `component_link()`. Values may contain `=` and spaces but not `;`.
-##       Extra positional arguments are not handled here (callers FATAL).
+##       `component_link()`. Values may contain `=` and spaces but not `;`
+##       outside `{…}`. Extra positional arguments are not handled here.
+## @note `PC` is recognized so it is not an “unknown key”. Generation details
+##       are in buildmaster_parse_component_pc(). Meta + PC is FATAL there /
+##       in create_meta_*.
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -121,8 +304,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(_stripres TRUE)
 
 	if(NOT "${options_string}" STREQUAL "")
-		string(REPLACE ";" "\n" _tmp "${options_string}")
-		string(REPLACE "\n" ";" _pairs "${_tmp}")
+		buildmaster_split_option_pairs("${options_string}" _pairs)
 
 		foreach(_pair IN LISTS _pairs)
 			if(_pair STREQUAL "")
@@ -154,6 +336,12 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 				buildmaster_option_flag_enabled("${_val}" _whole)
 			elseif(_key STREQUAL "STRIPRES")
 				buildmaster_option_flag_enabled("${_val}" _stripres)
+			elseif(_key STREQUAL "PC")
+				buildmaster_unwrap_brace_group("${_val}" _pc_inner _pc_ok)
+				if(NOT _pc_ok)
+					buildmaster_message(COMPONENT FATAL
+						"PC must be PC={VERSION=…;NAME=…;ENABLED=…} (got '${_val}')")
+				endif()
 			else()
 				buildmaster_message(COMPONENT WARNING
 					"Unknown component option '${_key}' (ignored)")

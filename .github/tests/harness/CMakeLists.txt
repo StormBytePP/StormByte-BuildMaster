@@ -69,6 +69,8 @@ add_custom_target(run_buildmaster_smoke
 		mtc-inherit_install mtc-pinned_install
 		# Order / link tests
 		link_component_test order_independent_link_test
+		# Pkg-config helper
+		pc-dep_install pc-lib_install pc_check_run
 		# Recursive
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test

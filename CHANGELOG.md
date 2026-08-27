@@ -18,12 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
 - **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
 - **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
-- **`STRIPRES` component option (flag, default ON):** after `RENAME` and the install contract, strip every archive member whose basename ends in `.res` (case-insensitive) from **static** MSVC / clang-cl `.lib` files.
-  - Source of truth is `lib.exe` / `llvm-lib` `/LIST`; no user-supplied member names.
-  - Applies to installable statics and to `BUILDONLY` statics (against the component build dir).
-  - Other toolchains: silent no-op. Shared / headers: **WARNING**, ignored. Meta: **WARNING** only if the key was written (`RENAME` same pattern).
-  - `STRIPRES=OFF` leaves resources in the archive.
-  - Runs in `install_exec` (CMake and Meson) so a later `component_repack` already sees clean inputs.
+- **`WHOLE` component / meta option:** whole-archive link of produced static archives (one linear group per consumer; ELF / Mach-O / MSVC).
+- **`STRIPRES` component option (flag, default ON):** after `RENAME`, strip `*.res` members from static MSVC / clang-cl archives via `lib` / `llvm-lib` `/LIST` + `/REMOVE`. Silent no-op on other toolchains; warning on shared / headers.
+- **`BUILDONLY` + `component_repack`:** build without publishing to the shared prefix; merge listed archives with the host archiver into one IMPORTED target.
+- **Helper `.pc` (`PC={…}`):** after install (RENAME + STRIPRES), write `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for **internal** consumers of this prefix — not a portable upstream package.
+  - Syntax: `PC={VERSION=1.2.3;NAME=foo;DESCRIPTION=…;ENABLED=TRUE}`. `;` inside `{…}` is not a pair break.
+  - `VERSION` is required when enabled. `ENABLED=FALSE` skips the file and does not require `VERSION`.
+  - `NAME` defaults to the first produced spec; `DESCRIPTION` defaults to the component title.
+  - `Requires` comes from direct `component_link` destinations that themselves have PC enabled (one hop, no metas).
+  - `Cflags` are component extras minus parent `CMAKE_C{,XX}_FLAGS`; include tokens (`-I` / `/I` / `-isystem`) are dropped (prefix include is already in the BM env).
+  - `Libs` is `-L${libdir}` plus `-l<produced>` for each produced spec. `prefix` / `libdir` / `includedir` are the BuildMaster install tree.
+  - **FATAL:** bare `PC` / `PC=ON` without `{…}`; enabled PC + `BUILDONLY`; `PC={…}` on a meta; destination path already exists (do not clobber an upstream `.pc`).
+  - Unknown inner keys warn and are ignored. Parser helper: `buildmaster_parse_component_pc()`.
+- **Meta `TOOLCHAIN` inheritance:** `create_meta_component(… "TOOLCHAIN=<profile>")` no longer ignores the key. After leaves are known and before cmake/meson materialize, the profile is copied onto members (nested metas included) and onto `component_dependency` / `component_link` dests from that meta that have no `TOOLCHAIN` yet. An explicit child `TOOLCHAIN` is kept. Two metas inheriting different profiles onto the same empty destination is fatal.
 - **Unified logging API** (`log.cmake`):
   - `buildmaster_message(<module> <level> "<text>" [<indent>])` — only public way to print from BuildMaster (and recommended for consumers).
   - Levels (ascending, quieter filter): `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
@@ -33,7 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Header is never indented; optional indent applies only to the body.
   - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
   - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up Opus" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
-- **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
+- **Harness:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, helper-`.pc` fixture (`Requires` check), and **meta-toolchain** (`meta-tc` pushes `TOOLCHAIN` onto `mtc-inherit`; `mtc-pinned` keeps an explicit host profile).
 
 ### Changed
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
@@ -46,7 +53,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed public `create_*_dependant_component` / `create_*_headers_dependant_component`; use `create_*` + `component_dependency`.
   - Removed `LINK_EXTRA` from the options string; use `component_link`.
   - `create_*_stages` are **internal** (not part of the supported public API).
-- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, flags `RENAME`, `BUILDONLY`, `WHOLE`, `STRIPRES`). Unknown keys warn; extra positionals are fatal.
+- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`, `PC={…}`). `;` inside `{…}` is not a pair break. Unknown keys warn; extra positionals are fatal.
 - **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
 - Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
 

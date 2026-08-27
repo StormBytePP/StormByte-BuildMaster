@@ -38,6 +38,10 @@
 ##       unset, defaults to `"1"`. After RENAME and the output contract,
 ##       `install_exec.cmake.in` strips `*.res` members from produced
 ##       `.lib` archives (MSVC / clang-cl only; other archivers no-op).
+## @note Reads `_BM_PC_ENABLED` and `_BM_PC_*` from the caller. If
+##       `_BM_PC_ENABLED` is unset, defaults to `"0"`. When `"1"`,
+##       `install_exec.cmake.in` writes a helper `.pc` after RENAME +
+##       STRIPRES (FATAL if the output path already exists).
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer dependant -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
@@ -73,6 +77,30 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	endif()
 	if(NOT DEFINED _BM_STRIPRES_ENABLED)
 		set(_BM_STRIPRES_ENABLED "1")
+	endif()
+	if(NOT DEFINED _BM_PC_ENABLED)
+		set(_BM_PC_ENABLED "0")
+	endif()
+	if(NOT DEFINED _BM_PC_NAME)
+		set(_BM_PC_NAME "")
+	endif()
+	if(NOT DEFINED _BM_PC_VERSION)
+		set(_BM_PC_VERSION "")
+	endif()
+	if(NOT DEFINED _BM_PC_DESCRIPTION)
+		set(_BM_PC_DESCRIPTION "")
+	endif()
+	if(NOT DEFINED _BM_PC_LIBS)
+		set(_BM_PC_LIBS "")
+	endif()
+	if(NOT DEFINED _BM_PC_REQUIRES)
+		set(_BM_PC_REQUIRES "")
+	endif()
+	if(NOT DEFINED _BM_PC_CFLAGS)
+		set(_BM_PC_CFLAGS "")
+	endif()
+	if(NOT DEFINED _BM_PC_OUT)
+		set(_BM_PC_OUT "")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")

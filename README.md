@@ -40,6 +40,7 @@ BuildMaster is that layer, written once:
 | `POST_BUILD` rename scripts per MSVC flavor | Optional `RENAME` on the component |
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** collection |
 | `LNK2005` / duplicate `.res` after `/WHOLEARCHIVE` | `STRIPRES` on static MSVC/clang-cl archives (default on) |
+| Hand-written `.pc` so the next Meson node finds this prefix | Optional helper `PC={…}` on the component |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
 
@@ -62,6 +63,7 @@ a product, not a build blog.
 - [Component options](#component-options)
 - [Whole-archive linking (`WHOLE`)](#whole-archive-linking-whole)
 - [Stripping `.res` members (`STRIPRES`)](#stripping-res-members-stripres)
+- [Helper pkg-config files (`PC`)](#helper-pkg-config-files-pc)
 - [Build-only components and repack](#build-only-components-and-repack)
 - [Subcomponent specs](#subcomponent-specs)
 - [Header-only components](#header-only-components)
@@ -138,6 +140,7 @@ larger library links as one `WHOLE` node.
 | Path-qualified subcomponents (`subdir/name`) | No | Manual | **Yes** |
 | Whole-archive static link on INTERFACE | Manual | Manual | **Optional (`WHOLE`)** |
 | Strip `.res` from static MSVC archives | Manual `/REMOVE` | Manual | **Default on static (`STRIPRES`)** |
+| Helper `.pc` for the shared prefix | Manual | Manual | **Optional (`PC={…}`)** |
 | Build-only + static repack | No | Manual | **Yes** |
 | Unified log API (`buildmaster_message`) | No | No | **Yes** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
@@ -187,7 +190,7 @@ create_cmake_component(
 	"${_opts}"
 	static
 	"mylib"
-	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE"
+	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;PC={VERSION=1.2.3;NAME=mylib}"
 )
 ```
 
@@ -289,6 +292,11 @@ destination is **FATAL**.
 when the key is actually written (there is nothing to install or strip).
 The default-on `STRIPRES` does not warn on a meta that never mentioned it.
 
+`PC={…}` on a meta is **FATAL**. A collection has no single library
+contract. Generating one `.pc` from an unbounded member set would invent
+`Requires` you did not choose and collide with upstream files. Put
+`PC={…}` on the leaf that owns the archive.
+
 ### Membership is not consumption
 
 | Call | Meaning |
@@ -346,17 +354,19 @@ Every `create_*_component` accepts **at most one** optional trailing
 argument:
 
 ```text
-KEY=value;KEY2=value with spaces
+KEY=value;KEY2=value with spaces;PC={VERSION=1.0.0;NAME=foo}
 ```
 
 | Rule | Detail |
 |------|--------|
-| Pair separator | `;` |
+| Pair separator | `;` outside `{…}` |
+| Brace group | `PC={…}` — `;` inside the braces is part of the group |
 | Key / value | Only the **first** `=` in a pair |
 | Keys | Case-insensitive, stored **UPPERCASE** |
 | Values | May contain spaces and extra `=` (`test==value` is fine) |
-| `;` inside a value | Not allowed |
-| Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` / `STRIPRES` ≡ `KEY=ON` |
+| `;` outside braces | Pair break. `;` inside `{…}` is allowed |
+| Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` / `STRIPRES` / `PC` ≡ `KEY=ON` |
+| Bare `PC` / `PC=ON` without `{…}` | **FATAL** — use `PC={VERSION=…}` or `PC={ENABLED=FALSE}` |
 | Unknown key | **WARNING**, ignored |
 | Extra positional arguments | **FATAL_ERROR** |
 
@@ -368,6 +378,7 @@ KEY=value;KEY2=value with spaces
 | `WHOLE` | Whole-archive link of produced **static** archives |
 | `BUILDONLY` | Do not install into the shared prefix |
 | `STRIPRES` | After `RENAME`, strip `.res` members from **static** MSVC / clang-cl archives (default **ON**) |
+| `PC={…}` | After install, write a **helper** `.pc` under the shared prefix (see below) |
 
 ---
 
@@ -457,6 +468,80 @@ create_cmake_component(
 
 ---
 
+## Helper pkg-config files (`PC`)
+
+This is **not** a replacement for a real upstream `.pc`. It exists so
+**later components in the same BuildMaster prefix** can find this library
+without you writing a `file(WRITE …)` after install.
+
+Typical pain: the archive lands under `BUILDMASTER_INSTALL_DIR`, Meson
+or another CMake node looks at `PKG_CONFIG_PATH`, and the project never
+shipped a `.pc` (or shipped one only for the system layout). You already
+know the name, the version you care about, and the `component_link` graph.
+BuildMaster can emit a small helper file from that.
+
+```cmake
+create_cmake_component(
+	ogg
+	"Ogg"
+	${OGG_SRC} ${OGG_BUILD}
+	"${OGG_OPTS}"
+	static
+	"ogg"
+	"PC={VERSION=1.3.5;NAME=ogg;DESCRIPTION=Ogg bitstream}"
+)
+
+create_cmake_component(
+	vorbis
+	"Vorbis"
+	${VORBIS_SRC} ${VORBIS_BUILD}
+	"${VORBIS_OPTS}"
+	static
+	"vorbis"
+	"PC={VERSION=1.3.7;NAME=vorbis}"
+)
+component_link(vorbis ogg)
+```
+
+After `ogg_install` / `vorbis_install`:
+
+```text
+${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/ogg.pc
+${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/vorbis.pc   # Requires: ogg
+```
+
+`prefix` / `libdir` / `includedir` are the **BuildMaster install tree**.
+That is enough for this project. A portable distro `.pc` is out of scope.
+
+| Inner key | Required | Default |
+|-----------|:--------:|---------|
+| `VERSION` | when enabled | — **FATAL** if missing |
+| `NAME` | no | First produced spec basename, else the component id |
+| `DESCRIPTION` | no | Component title |
+| `ENABLED` | no | `TRUE`. `ENABLED=FALSE` skips the file and does not require `VERSION` |
+
+| Field written | Source |
+|---------------|--------|
+| `Name` / `Version` / `Description` | Inner keys (or defaults above) |
+| `Libs` | `-L${libdir}` plus `-l<produced>` for each produced spec |
+| `Requires` | Direct `component_link` destinations that are registered components **with PC enabled** (not metas). One hop, not a full flatten |
+| `Cflags` | Extra flags from the component’s own configure options minus the parent `CMAKE_C{,XX}_FLAGS`. Include tokens (`-I`, `/I`, `-isystem`) are dropped — the prefix include dir is already in the BM environment |
+
+| Case | Behaviour |
+|------|-----------|
+| `PC={VERSION=…}` | Write after RENAME + STRIPRES |
+| `PC={ENABLED=FALSE}` | No file. Keep the group in the options string |
+| Bare `PC` / `PC=ON` | **FATAL** — braces are the contract |
+| File already exists at the canonical path | **FATAL** — do not clobber an upstream `.pc` |
+| `BUILDONLY` + enabled PC | **FATAL** — there is no shared prefix to publish into |
+| Meta + `PC={…}` | **FATAL** — unbounded membership, no single library |
+| Unknown inner key | **WARNING**, ignored |
+
+Keep `ENABLED=FALSE` when you are mid-port and do not want to delete the
+group. Turn it back on without rewriting the rest of the options string.
+
+---
+
 ## Build-only components and repack
 
 Some upstreams are not “the library you ship”. They are intermediate
@@ -470,6 +555,8 @@ an extra helper built from the same tree).
 - artifacts live in **that component’s build directory**
 - `RENAME` is allowed and runs against the build dir
 - `STRIPRES` is allowed and runs against the same build-dir archives
+- `PC={…}` with `ENABLED=TRUE` is **FATAL** (helper `.pc` files belong on
+  the shared prefix)
 - `component_link` *from a normal component to a BUILDONLY* is **FATAL**
   (you cannot link a tree that was never installed)
 
@@ -780,21 +867,20 @@ have.
 | Function | Role |
 |----------|------|
 | `file_download_cached` | Reuse the file when the hash matches; download only on miss or mismatch |
-| `file_download` | Always download, retry, verify hash |
-| `file_decompress` | `file(ARCHIVE_EXTRACT)` into a directory you choose |
-| `file_checksum_correct` | Hash helper used by the cached path |
+| `file_download` | Always fetch (progressive backoff) |
+| `file_decompress` | Unpack into a directory |
 
 ```cmake
 file_download_cached(my-data
-	"https://example.com/data.tar.gz"
+	"https://example.invalid/extra.tar.gz"
+	EXPECTED_HASH SHA256=${EXTRA_HASH}
 	TITLE "Example data"
-	EXPECTED_HASH "SHA256=${HASH}"
 )
 include(${my-data})
 
 file_decompress(my-unpack
-	"${BUILDMASTER_DOWNLOADSDIR}/data.tar.gz"
-	${UNPACK_DIR}
+	"${BUILDMASTER_DOWNLOADSDIR}/extra.tar.gz"
+	"${CMAKE_BINARY_DIR}/extra"
 	TITLE "Example data"
 )
 include(${my-unpack})
@@ -820,7 +906,7 @@ the graph with `component_prerequisite` or `component_dependency`.
 | Log | `buildmaster_message` |
 | Paths / import | `ensure_build_dir`, `library_import_hint`, `library_import_static_hint`, `sanitize_for_filename`, `buildmaster_parse_subcomponent` |
 | Toolchain | `buildmaster_validate_toolchain`, `buildmaster_load_toolchain_profile`, `buildmaster_find_archiver` |
-| Options | `buildmaster_parse_component_options` |
+| Options | `buildmaster_parse_component_options`, `buildmaster_parse_component_pc` |
 
 Stage generators (`create_cmake_stages` / `create_meson_stages`) are
 **internal**. The supported surface is `create_*_component`.

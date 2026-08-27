@@ -8,7 +8,8 @@
 ## @param[in] _component Registered component id.
 ## @note Sets parent-scope: `_LIBRARY_COMPONENT_NAMES`, `_LIBRARY_COMPONENT_FILES`,
 ##       `_LIBRARY_COMPONENT_DLL_FILES`, `_output_libraries`, `_BM_RENAME_ENABLED`,
-##       `_BM_BUILDONLY`, `_BM_STRIPRES_ENABLED`, `_indent_level`, `_toolchain`.
+##       `_BM_BUILDONLY`, `_BM_STRIPRES_ENABLED`, `_BM_PC_*`, `_indent_level`,
+##       `_toolchain`.
 ## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
 ## @note Extra `component_link` dests that are raw library specs (not components,
@@ -16,6 +17,9 @@
 ##       so install BYPRODUCTS stay complete.
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
+## @note `_BM_PC_*` comes from `_buildmaster_component_fill_pc_vars` (tools/pkgconfig).
+##       ENABLED is `1` only when `PC={…}` is on and not BUILDONLY (already FATAL
+##       at create_component).
 function(_buildmaster_component_collect_outputs _component)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -48,6 +52,8 @@ function(_buildmaster_component_collect_outputs _component)
 	else()
 		set(_BM_STRIPRES_ENABLED "0")
 	endif()
+
+	_buildmaster_component_fill_pc_vars("${_component}")
 
 	set(_LIBRARY_COMPONENT_NAMES "")
 	set(_LIBRARY_COMPONENT_FILES "")
@@ -117,6 +123,14 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_BM_RENAME_ENABLED "${_BM_RENAME_ENABLED}" PARENT_SCOPE)
 	set(_BM_BUILDONLY "${_BM_BUILDONLY}" PARENT_SCOPE)
 	set(_BM_STRIPRES_ENABLED "${_BM_STRIPRES_ENABLED}" PARENT_SCOPE)
+	set(_BM_PC_ENABLED "${_BM_PC_ENABLED}" PARENT_SCOPE)
+	set(_BM_PC_NAME "${_BM_PC_NAME}" PARENT_SCOPE)
+	set(_BM_PC_VERSION "${_BM_PC_VERSION}" PARENT_SCOPE)
+	set(_BM_PC_DESCRIPTION "${_BM_PC_DESCRIPTION}" PARENT_SCOPE)
+	set(_BM_PC_LIBS "${_BM_PC_LIBS}" PARENT_SCOPE)
+	set(_BM_PC_REQUIRES "${_BM_PC_REQUIRES}" PARENT_SCOPE)
+	set(_BM_PC_CFLAGS "${_BM_PC_CFLAGS}" PARENT_SCOPE)
+	set(_BM_PC_OUT "${_BM_PC_OUT}" PARENT_SCOPE)
 	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_collect_outputs")

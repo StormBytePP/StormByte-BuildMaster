@@ -65,6 +65,10 @@ endfunction()
 ## @note RENAME / BUILDONLY / STRIPRES → WARNING, ignored (meta produces no
 ##       archives). STRIPRES default is ON; the warning fires only when the
 ##       user actually wrote the key, same as RENAME.
+## @note `PC` / `PC={…}` is FATAL on a meta. A collection has no single library
+##       contract; flattening members into one `.pc` would invent an unbounded
+##       Requires list and collide with upstream `.pc` files the author did
+##       not choose. Put `PC={…}` on the concrete components you want.
 ## @note TOOLCHAIN does not compile the meta. Finalize copies it onto
 ##       `meta_component_add` members and onto `component_dependency` /
 ##       `component_link` dests from this meta when those dests have no
@@ -113,6 +117,12 @@ function(create_meta_component _id _title)
 
 	buildmaster_parse_component_options(
 		_indent _tc _rename _buildonly _whole _stripres "${_optstr}")
+	buildmaster_parse_component_pc(
+		"${_optstr}" _pc_present _pc_enabled _pc_name _pc_ver _pc_desc)
+	if(_pc_present)
+		buildmaster_message(COMPONENT FATAL
+			"create_meta_component('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
+	endif()
 	if(_buildonly)
 		buildmaster_message(COMPONENT WARNING
 			"create_meta_component('${_id}'): BUILDONLY ignored (meta does not install artifacts)")

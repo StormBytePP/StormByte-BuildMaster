@@ -24,6 +24,10 @@ meta-tc_install -> mtc-pinned_install
 second -> second_install
 second_configure -> first_install
 
+# pc
+pc-lib -> pc-lib_install
+pc-lib_configure -> pc-dep_install
+
 # prerequisite
 prereq-lib -> prereq-lib_install
 prereq-lib_configure -> prereq_touch
