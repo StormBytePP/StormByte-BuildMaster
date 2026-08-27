@@ -8,47 +8,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Declarative component graph:** components are registered at call time and materialized once at the end of the parent `CMAKE_SOURCE_DIR` scope via internal `cmake_language(DEFER)` (no public finalize).
-  - `component_dependency(source, dest)` — order-only edge (configure deferred when needed). Dest may be a component id, **meta** id, stage name, or existing target.
-  - `component_link(source, dest)` — link edge; records `component_dependency` only when `dest` is a graph node (component id, meta id, `*_install`/`*_configure`/`*_build`, or existing target), not for bare library specs.
-  - `component_prerequisite(name …)` — first-class custom target (`COMMAND` / `SCRIPT` / `DEPENDS`) usable as a dependency dest.
-  - `component_repack(id OUTPUT <name> INPUTS …)` — merge static archives into one canonical library under `BUILDMASTER_INSTALL_LIBDIR`; exposes `INTERFACE` `<id>` and graph anchor `<id>_install`.
-- **Meta components:** `create_meta_component(id, title [, options])` and `meta_component_add(meta, member…)`.
-  - No sources, no compile, no install artifacts of their own: `INTERFACE` + `<id>_install` (waits on member installs).
-  - `meta_component_add` may run **before** `create_meta_component` (lazy id; title defaults to id).
-  - Members may be components (static or shared) or other metas (recursive flatten). Cycles are **FATAL** and print the chain (`a → b → a`).
-  - **Membership** (`meta_component_add`) is not **consumption**. The collection is built only when something `component_link` / `component_dependency` / host `target_link_libraries` points at the meta.
-  - `WHOLE` on a meta: one closed whole-archive region over **leaf** static produced archives; shared/headers stay outside; a leaf that already has `WHOLE` is not wrapped twice.
-  - `TOOLCHAIN` / `RENAME` / `BUILDONLY` on a meta are ignored (WARNING). `BUILDONLY` members are **FATAL**.
-- **Orphan warning:** after finalize, one `WARNING` lists registered components/metas that are not consumed. Consumed means: dep/link source or dest, host/INTERFACE link, leaf of any meta, nested meta under a consumed meta, or input of a `component_repack` **only if that repack id is itself consumed**. Unused repack does not mark its inputs used. Configure still succeeds.
-- **Eager vs deferred configure:** components with no dependency edges configure at parent configure time; those with edges configure at build time under `<id>_configure` (same behaviour as the old dependant templates). Applies to `BUILDONLY` as well.
-- **Options:**
-  - `RENAME` flag (`RENAME` ≡ `RENAME=ON`) normalizes variant basenames to the produced name before the artifact contract check (default ON for library modes). Under `BUILDONLY`, rename runs in the component **BUILDDIR**.
-  - `BUILDONLY` flag (`BUILDONLY` ≡ `BUILDONLY=ON`) builds without installing into the shared prefix; produced paths and RENAME use that component’s BUILDDIR only. Non-BUILDONLY components must not depend on or `component_link` to BUILDONLY ids (FATAL).
-  - `WHOLE` flag (`WHOLE` ≡ `WHOLE=ON`) puts all produced **static** archives of the component on its INTERFACE inside one closed whole-archive region (ELF `--whole-archive` / `--no-whole-archive`, Apple `-force_load` per archive, MSVC `-WHOLEARCHIVE:` so Ninja does not treat the token as a path). Multiple WHOLE components emit **linear** closed regions (not nested). Other libraries linked alongside stay outside the region. On `shared` / `headers`: WARNING and ignored. Same flag on a **meta** flattens member statics into one region.
-- **Archiver resolution:** `buildmaster_find_archiver` (`CMAKE_AR`, then `ENV{AR}`, then platform tools: `llvm-lib`/`lib`, `llvm-ar`/`gcc-ar`/`ar`). Styles `msvc_lib` (`/OUT:`) and `gnu_ar` (MRI). Apple static merge uses `libtool -static` when MRI is unavailable. Used by static merge (`tools/bundle/merge_static_archives.cmake`).
-- **File helpers (declarative):** `file_download` / `file_download_cached` / `file_decompress` take a **target name** as first argument, generate scripts, and create `add_custom_target`s (no out-var, no `include()`). Wire with `component_dependency`.
-- **Git helpers (declarative):** `create_git_*` no longer return an out-var; they generate the script and `include()` it immediately, then register post-install reset by component id.
-- **Resolve policy** documented in-code for dependency/link destinations (component or meta → `_install`, stage names, existing targets, library specs / paths for link only).
-- **Harness** (`.github/tests/`): order-independent declaration, prerequisite, file-decompress + checksum, file-to-component, git-sandbox (local clone), link component-to-component, recursive cmake/meson, rename, **BUILDONLY** (prefix absence via `!` lines), **repack** (multi-phase static merge + link), **WHOLE** (positive whole-archive + negative plain link; second BM library kept outside the whole region), **meta** (lazy add before create, nested meta, WHOLE flatten of two ctor leaves, outside lib not in the region). Expected lists under `.github/tests/expected/`. Smoke summary reports `N expected absent` for intentional missing prefix paths.
+- **Declarative component graph:**
+  - `component_dependency(source, dest)` — order-only edges (component id, stage name, or existing CMake target).
+  - `component_link(source, dest)` — link plus order; `dest` may be a component (all produced libs), a library spec (`name` / `subdir/name`), a target, or an archive path.
+  - Library-spec link destinations are also listed on the source component’s install `OUTPUT` so Ninja has a production rule (replaces the old `LINK_EXTRA` role).
+- **Deferred materialization:** `create_*` only registers metadata; fragments and stage targets are created at the end of parent configure (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order does not matter.
+- **Eager vs deferred configure:** components without dependency edges still configure during parent configure; components with edges configure at build time under `<id>_configure` (same behaviour as the former dependant templates).
+- **Subcomponent libdir paths:** library specs may be `<name>` or `<subdir>/<name>` under `BUILDMASTER_INSTALL_LIBDIR`.
+  - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
+- **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
+- **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
+- **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
 
 ### Changed
-- **Windows env runners:** `runner_windows.bat.in` / `runner_windows_silent.bat.in`
-  replaced by `runner_windows.ps1.in` / `runner_windows_silent.ps1.in`.
-  CMake launches `powershell.exe -NoLogo -NoProfile -NonInteractive
-  -ExecutionPolicy Bypass -File <script.ps1> -- <command>…` (Bypass is
-  process-local). The silent runner now captures output and prints it
-  only on non-zero exit, matching Unix.
-- **Breaking:** `create_*_component` / headers wrappers no longer return a fragment path and must not be `include()`d by the user. Prefer `create_cmake_*` / `create_meson_*`; stages are **internal**.
-- **Breaking:** removed public `create_*_dependant_component` and public `create_*_stages`. Use `component_dependency` / `component_link` instead of dependant factories and `LINK_EXTRA`.
-- **Breaking:** `create_*` positional `indent_level` / `toolchain` replaced by optional trailing options string `KEY=value;…` (`INDENT`/`INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `BUILDONLY`, `WHOLE`). Flag-form keys listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` may omit `=`.
-- **Breaking:** `file_download` / `file_download_cached` / `file_decompress` first argument is the target name, not an out-var.
-- **Breaking:** `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` drop the out-var argument.
-- Subcomponent specs `<name>` or `<subdir>/<name>` unchanged; consumers should prefer `component_link` for extra archives instead of listing every transitive static on the outer `create_*` when edges express the graph (listing all produced specs on one component remains valid). Multi-phase static products that must not land in the prefix use `BUILDONLY` + `component_repack`. Plugin-style static consumers can set `WHOLE` on the component or on a **meta** instead of hand-rolled linker flags.
+- **Breaking — fully declarative `create_*` API:**
+  - No out-variable and no consumer `include()` of a generated fragment.
+  - Signature: `create_cmake_component(<id> <title> <srcdir> <builddir> <options> <mode> <produced> [options_string])` (and Meson / headers analogues).
+  - Removed public `create_*_dependant_component` / `create_*_headers_dependant_component`; use `create_*` + `component_dependency`.
+  - Removed `LINK_EXTRA` from the options string; use `component_link`.
+  - `create_*_stages` are **internal** (not part of the supported public API).
+- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`). Unknown keys warn; extra positionals are fatal.
+- **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
+- Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
 
-### Removed
-- Public dependant component API and public stage generators as supported surface.
-- `LINK_EXTRA` component option (use `component_link`).
+### Fixed
+- **`TOOLCHAIN=` in nested CMake:** `BUILDMASTER_KNOWN_TOOLCHAINS` coming from the toolchain dump could be a newline- or space-separated string. `list(FIND)` then rejected valid names (`gcc`, `clang`, …). Validation now normalizes that value to a CMake list; the dump exports a semicolon-separated list.
+- **Meson `--native-file`:** `create_meson_stages` always picks `native_<profile>.ini` for `TOOLCHAIN=<name>`, or the file for **this** process’s compiler family (`CMAKE_C_COMPILER_ID` / clang-cl) when `TOOLCHAIN` is omitted. It no longer keeps the outer job’s default native file across a swapped toolchain. Setup does not fall back to bare `CC=` when a native file exists, so ccache/sccache stay keyed to the compiler actually used.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 

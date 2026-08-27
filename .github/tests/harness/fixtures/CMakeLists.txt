@@ -9,6 +9,17 @@ if(NOT BM_TEST_REPO_ROOT)
 endif()
 
 # ---------------------------------------------------------------------------
+# BUILDONLY
+# ---------------------------------------------------------------------------
+add_subdirectory(buildonly)
+
+# ---------------------------------------------------------------------------
+# File helpers
+# ---------------------------------------------------------------------------
+add_subdirectory(file-decompress)
+add_subdirectory(file-to-component)
+
+# ---------------------------------------------------------------------------
 # Flat graph (base → dep, headers → loader)
 # ---------------------------------------------------------------------------
 add_subdirectory(base)
@@ -17,33 +28,21 @@ add_subdirectory(sdk-headers)
 add_subdirectory(sdkloader)
 
 # ---------------------------------------------------------------------------
-# Declaration order must not matter
+# Git sandbox (configure-time)
 # ---------------------------------------------------------------------------
-add_subdirectory(order-independent)
-
-# ---------------------------------------------------------------------------
-# Custom prerequisite / file / git / link
-# ---------------------------------------------------------------------------
-add_subdirectory(prerequisite)
-add_subdirectory(file-decompress)
-add_subdirectory(file-to-component)
 add_subdirectory(git-sandbox)
+
+# ---------------------------------------------------------------------------
+# Meta collections
+# ---------------------------------------------------------------------------
+add_subdirectory(meta)
+
+# ---------------------------------------------------------------------------
+# Order / link
+# ---------------------------------------------------------------------------
 add_subdirectory(link-component)
-
-# ---------------------------------------------------------------------------
-# Install archive rename (Meson zs.* → produced z.*)
-# ---------------------------------------------------------------------------
-add_subdirectory(rename)
-
-# ---------------------------------------------------------------------------
-# BUILDONLY (build + RENAME in BUILDDIR; nothing in install prefix)
-# ---------------------------------------------------------------------------
-add_subdirectory(buildonly)
-
-# ---------------------------------------------------------------------------
-# BUILDONLY phases + component_repack → prefix merge
-# ---------------------------------------------------------------------------
-add_subdirectory(repack)
+add_subdirectory(order-independent)
+add_subdirectory(prerequisite)
 
 # ---------------------------------------------------------------------------
 # Recursive nested BuildMaster
@@ -52,11 +51,21 @@ add_subdirectory(recursive/cmake)
 add_subdirectory(recursive/meson)
 
 # ---------------------------------------------------------------------------
-# WHOLE (static whole-archive INTERFACE for host target_link_libraries)
+# Install archive rename (Meson zs.* → produced z.*)
 # ---------------------------------------------------------------------------
-add_subdirectory(whole)
+add_subdirectory(rename)
 
 # ---------------------------------------------------------------------------
-# Meta collections (nested meta + WHOLE flatten)
+# Static archive repack
 # ---------------------------------------------------------------------------
-add_subdirectory(meta)
+add_subdirectory(repack)
+
+# ---------------------------------------------------------------------------
+# TOOLCHAIN swap (no-op if the alternate compiler is missing)
+# ---------------------------------------------------------------------------
+add_subdirectory(toolchain)
+
+# ---------------------------------------------------------------------------
+# WHOLE archive link
+# ---------------------------------------------------------------------------
+add_subdirectory(whole)

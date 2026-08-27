@@ -30,6 +30,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install alternate toolchain tools (Linux)
+        if: runner.os == 'Linux'
+        uses: stormbytepp/githubactions/.github/actions/install-cached@master
+        with:
+          packages: clang lld llvm
+          cache-key: apt-harness-alt-tc-v1
+          lists-cache-key: apt-lists
+          rotate-weekly: true
+
+      - name: Install GNU gcc (macOS)
+        if: runner.os == 'macOS'
+        uses: stormbytepp/githubactions/.github/actions/install-cached@master
+        with:
+          packages: gcc
+
       - name: Configure + smoke
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:

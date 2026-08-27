@@ -33,6 +33,8 @@
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer dependant -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
+## @note `_MESON_NATIVE_FILE` is the Meson `--native-file` for this component:
+##       `TOOLCHAIN=` profile file, or this process's compiler family.
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
@@ -62,6 +64,16 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")
+
+	# Profile native file when TOOLCHAIN= is set; otherwise this process's
+	# compiler family. Never keep the outer job default unless this process
+	# still uses that family.
+	if(COMMAND buildmaster_get_meson_native_file)
+		buildmaster_get_meson_native_file(_MESON_NATIVE_FILE
+			TOOLCHAIN "${_toolchain_name}")
+	else()
+		set(_MESON_NATIVE_FILE "")
+	endif()
 
 	if(NOT _toolchain_name STREQUAL "")
 		set(_MESON_TOOLCHAIN_SUFFIX " (with toolchain ${_toolchain_name})")

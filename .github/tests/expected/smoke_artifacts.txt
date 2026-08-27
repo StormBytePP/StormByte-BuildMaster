@@ -93,3 +93,17 @@
 !<lib>/libaextra.a|unix
 !<lib>/libalib.a|unix
 !<lib>/libblib.a|unix
+
+# TOOLCHAIN
+<include>/toolchain/tc_leaf_meson.h|all
+<include>/toolchain/tc_mid_cmake.h|all
+<include>/toolchain/tc_mid_meson.h|all
+<include>/toolchain/tc_nest.h|all
+<lib>/toolchain/libtcleafmeson.a|unix
+<lib>/toolchain/libtclib.a|unix
+<lib>/toolchain/libtcmidcmake.a|unix
+<lib>/toolchain/libtcmidmeson.a|unix
+<lib>/toolchain/tcleafmeson.lib|windows
+<lib>/toolchain/tclib.lib|windows
+<lib>/toolchain/tcmidcmake.lib|windows
+<lib>/toolchain/tcmidmeson.lib|windows

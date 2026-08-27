@@ -129,12 +129,34 @@ endfunction()
 
 ## @brief Resolve which native-file path a Meson component should use.
 ## @param[out] out_var Parent-scope variable receiving the path (may be empty).
-## @param[in] ARGN Optional `TOOLCHAIN <name>`; empty selects the default file.
+## @param[in] ARGN Optional `TOOLCHAIN <name>`. Empty = this process's compiler
+##            family (`CMAKE_C_COMPILER_ID` / clang-cl), then the default file.
 function(buildmaster_get_meson_native_file out_var)
 	cmake_parse_arguments(ARG "" "TOOLCHAIN" "" ${ARGN})
 	set(_path "")
+	set(_key "")
+
 	if(DEFINED ARG_TOOLCHAIN AND NOT ARG_TOOLCHAIN STREQUAL "")
 		string(TOLOWER "${ARG_TOOLCHAIN}" _key)
+	else()
+		if(WIN32)
+			if(CMAKE_C_COMPILER MATCHES "clang-cl" OR
+				(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND
+					CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+				set(_key "clang-cl")
+			elseif(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+				set(_key "msvc")
+			endif()
+		else()
+			if(CMAKE_C_COMPILER_ID STREQUAL "GNU")
+				set(_key "gcc")
+			elseif(CMAKE_C_COMPILER_ID STREQUAL "Clang")
+				set(_key "clang")
+			endif()
+		endif()
+	endif()
+
+	if(NOT _key STREQUAL "")
 		if(DEFINED BUILDMASTER_MESON_NATIVE_FILE_${_key}
 				AND NOT BUILDMASTER_MESON_NATIVE_FILE_${_key} STREQUAL "")
 			set(_path "${BUILDMASTER_MESON_NATIVE_FILE_${_key}}")

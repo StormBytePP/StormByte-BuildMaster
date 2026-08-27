@@ -5,6 +5,9 @@
 ## @note Empty input means “use the parent toolchain” and is not an error.
 ##       Unknown names or platform-incompatible names produce FATAL_ERROR and
 ##       list the known toolchains.
+## @note BUILDMASTER_KNOWN_TOOLCHAINS may arrive as a CMake list or as a
+##       newline/space-separated string from a nested toolchain dump. Both
+##       forms are accepted.
 function(buildmaster_validate_toolchain out_normalized input)
 	string(STRIP "${input}" _t)
 	string(TOLOWER "${_t}" _t)
@@ -14,21 +17,28 @@ function(buildmaster_validate_toolchain out_normalized input)
 		return()
 	endif()
 
-	list(FIND BUILDMASTER_KNOWN_TOOLCHAINS "${_t}" _idx)
+	set(_known "${BUILDMASTER_KNOWN_TOOLCHAINS}")
+	string(REPLACE "\r" "" _known "${_known}")
+	string(REPLACE "\n" ";" _known "${_known}")
+	string(REPLACE "," ";" _known "${_known}")
+	string(REPLACE " " ";" _known "${_known}")
+	list(FILTER _known EXCLUDE REGEX "^$")
+
+	list(FIND _known "${_t}" _idx)
 	if(_idx EQUAL -1)
-		list(JOIN BUILDMASTER_KNOWN_TOOLCHAINS ", " _known)
+		list(JOIN _known ", " _known_pretty)
 		message(FATAL_ERROR
 			"[BuildMaster] Unknown TOOLCHAIN '${input}'.\n"
-			"  Known toolchains: ${_known}"
+			"  Known toolchains: ${_known_pretty}"
 		)
 	endif()
 
 	if(_t STREQUAL "msvc" OR _t STREQUAL "clang-cl")
 		if(NOT WIN32)
-			list(JOIN BUILDMASTER_KNOWN_TOOLCHAINS ", " _known)
+			list(JOIN _known ", " _known_pretty)
 			message(FATAL_ERROR
 				"[BuildMaster] TOOLCHAIN '${_t}' is only valid on Windows.\n"
-				"  Known toolchains: ${_known}"
+				"  Known toolchains: ${_known_pretty}"
 			)
 		endif()
 	endif()
@@ -44,6 +54,7 @@ function(buildmaster_validate_toolchain out_normalized input)
 
 	set(${out_normalized} "${_t}" PARENT_SCOPE)
 endfunction()
+
 
 ## @brief Load a toolchain profile into BM_TC_* variables in the caller scope.
 ## @param[in] name Normalized toolchain name (from buildmaster_validate_toolchain).

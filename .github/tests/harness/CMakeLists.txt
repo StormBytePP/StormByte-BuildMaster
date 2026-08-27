@@ -18,7 +18,6 @@ get_filename_component(BM_TEST_REPO_ROOT
 	ABSOLUTE
 )
 
-# All synthetic components + recursive chains (+ rename if present)
 add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 
 # Materialize before contract checks.
@@ -77,6 +76,8 @@ add_custom_target(run_buildmaster_smoke
 		# Repack
 		repack-a_install repack-b_install repack-merged_install
 		repack_link_test
+		# TOOLCHAIN
+		nest-tc_install
 		# WHOLE
 		out-lib_install plain-lib_install whole-lib_install
 		whole_link_test_nowhole_run whole_link_test_run

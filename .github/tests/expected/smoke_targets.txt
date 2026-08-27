@@ -1,5 +1,5 @@
-# One target name per line (alphabetical within sections).
-# Used by harness smoke DEPENDS / contract lists.
+# cmake --build <harness-build> --target <name>
+# All targets required by run_buildmaster_smoke
 
 # BUILDONLY
 buildonly-lib_install
@@ -22,7 +22,6 @@ leaf-b_install
 meta-inner_install
 meta-out_install
 meta-plugins_install
-meta_link_test
 meta_link_test_run
 
 # Order / link tests
@@ -45,11 +44,12 @@ repack-b_install
 repack-merged_install
 repack_link_test
 
+# TOOLCHAIN
+nest-tc_install
+
 # WHOLE
 out-lib_install
 plain-lib_install
 whole-lib_install
-whole_link_test
-whole_link_test_nowhole
 whole_link_test_nowhole_run
 whole_link_test_run
