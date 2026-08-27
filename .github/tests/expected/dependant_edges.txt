@@ -1,6 +1,6 @@
 # dependent -> prerequisite  (sections and edges alphabetical)
 
-# dep (depends on base)
+# dep
 dep -> dep_install
 dep_configure -> base_install
 
@@ -11,6 +11,12 @@ payload-lib_configure -> payload_unpack
 # link-component
 link-b -> link-b_install
 link-b_configure -> link-a_install
+
+# meta
+meta-inner_install -> leaf-a_install
+meta-inner_install -> leaf-b_install
+meta-plugins_install -> leaf-a_install
+meta-plugins_install -> leaf-b_install
 
 # order-independent
 second -> second_install

@@ -2,7 +2,8 @@
 # component/helpers.cmake — registry, graph, shared fragment emit
 # =============================================================================
 # Public: create_component, component_dependency, component_link,
-#         component_prerequisite, component_repack (see repack.cmake).
+#         component_prerequisite, component_repack (see repack.cmake),
+#         create_meta_component / meta_component_add (see meta.cmake).
 # Backends (component/cmake, component/meson) own create_*_stages and
 # _buildmaster_materialize_{cmake,meson}.
 # Nested bootstrap that only include()s this file still loads the wrappers.
@@ -301,6 +302,12 @@ function(create_component _component _component_title _srcdir _builddir
 		endif()
 	endif()
 
+	_buildmaster_meta_is("${_component}" _is_meta)
+	if(_is_meta)
+		message(FATAL_ERROR
+			"[BuildMaster] create_component: '${_component}' is already a meta id")
+	endif()
+
 	set(_options_string "")
 	if(ARGC GREATER 8)
 		set(_options_string "${ARGV8}")
@@ -375,8 +382,8 @@ endfunction()
 
 ## @brief Declare an order-only edge (no link line).
 ## @param[in] source Component id or CMake target (resolved at finalize).
-## @param[in] dest   Component id (→ `<dest>_install`), existing target, or
-##            `<id>_install` / `<id>_configure` / `<id>_build`.
+## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
+##            or `<id>_install` / `<id>_configure` / `<id>_build`.
 ## @note A non-BUILDONLY component must not depend on a BUILDONLY component
 ##       (checked at materialize). BUILDONLY may depend on BUILDONLY or normal.
 function(component_dependency source dest)
@@ -402,8 +409,8 @@ endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE after finalize).
-## @param[in] dest   Registered component (all produced libs), library spec,
-##            existing target, or archive path.
+## @param[in] dest   Registered component or meta, library spec, existing target,
+##            or archive path.
 ## @note Linking to a BUILDONLY component is FATAL at materialize.
 ## @note component_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).
@@ -427,7 +434,9 @@ function(component_link source dest)
 		"${dest}")
 
 	_buildmaster_component_is_registered("${dest}" _dest_comp)
+	_buildmaster_meta_is("${dest}" _dest_meta)
 	if(_dest_comp
+			OR _dest_meta
 			OR TARGET "${dest}"
 			OR dest MATCHES "^(.+)_(install|configure|build)$")
 		component_dependency("${source}" "${dest}")
@@ -497,6 +506,9 @@ endfunction()
 # =============================================================================
 
 ## @brief Whether `id` was registered with create_component.
+## @param[in]  id      Component identifier.
+## @param[out] out_var Parent-scope TRUE/FALSE.
+## @note Meta ids are not included; use _buildmaster_meta_is().
 function(_buildmaster_component_is_registered id out_var)
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
@@ -533,9 +545,18 @@ function(_buildmaster_component_has_deferred_configure id out_var)
 endfunction()
 
 ## @brief Resolve one dependency dest to a CMake target name.
+## @param[in]  dest    Component id, meta id, stage name, or existing target.
+## @param[out] out_tgt Resolved target (e.g. `<id>_install`).
+## @param[out] out_ok  TRUE if dest resolved.
 function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
 	_buildmaster_component_is_registered("${dest}" _is_comp)
 	if(_is_comp)
+		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		set(${out_ok} TRUE PARENT_SCOPE)
+		return()
+	endif()
+	_buildmaster_meta_is("${dest}" _is_meta)
+	if(_is_meta)
 		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
 		return()
@@ -587,6 +608,7 @@ function(_buildmaster_component_dep_targets id out_var)
 				"[BuildMaster] component_dependency('${id}', '${_dst}'): "
 				"cannot resolve dest.\n"
 				"  Accepted: registered component id → <id>_install;\n"
+				"            meta id → <id>_install;\n"
 				"            <id>_install / _configure / _build;\n"
 				"            existing CMake target "
 				"(e.g. component_prerequisite / file_* target).")
@@ -664,7 +686,8 @@ function(_buildmaster_component_collect_outputs _component)
 						continue()
 					endif()
 					_buildmaster_component_is_registered("${_ldst}" _ldst_comp)
-					if(_ldst_comp)
+					_buildmaster_meta_is("${_ldst}" _ldst_meta)
+					if(_ldst_comp OR _ldst_meta)
 						continue()
 					endif()
 					if(TARGET "${_ldst}")
@@ -798,6 +821,14 @@ function(_buildmaster_apply_links)
 				"(missing create_*_component?)")
 		endif()
 
+		_buildmaster_meta_is("${_dst}" _dst_meta)
+		if(_dst_meta)
+			if(TARGET "${_dst}")
+				target_link_libraries(${_src} INTERFACE ${_dst})
+			endif()
+			continue()
+		endif()
+
 		_buildmaster_component_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
 			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
@@ -868,15 +899,19 @@ function(_buildmaster_apply_links)
 	endforeach()
 endfunction()
 
-## @brief Deferred materialize: components, then repacks, then apply links.
+## @brief Deferred materialize: metas, components, repacks, links, orphan warn.
 ## @note Idempotent. Scheduled by _buildmaster_component_defer_arm; not public.
 ##       Harness may call this before configure-time contract checks.
+##       Metas are created first so component_link/dependency can resolve them;
+##       their INTERFACE is wired after real components exist.
 function(_buildmaster_finalize_components)
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
 		return()
 	endif()
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
+
+	_buildmaster_materialize_metas()
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
@@ -894,9 +929,12 @@ function(_buildmaster_finalize_components)
 	endif()
 
 	_buildmaster_materialize_repacks()
+	_buildmaster_meta_wire()
 	_buildmaster_apply_links()
+	_buildmaster_warn_orphans()
 endfunction()
 
+include("${CMAKE_CURRENT_LIST_DIR}/meta.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/cmake/helpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/meson/helpers.cmake")

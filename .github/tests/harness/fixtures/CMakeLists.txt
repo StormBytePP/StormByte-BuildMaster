@@ -55,3 +55,8 @@ add_subdirectory(recursive/meson)
 # WHOLE (static whole-archive INTERFACE for host target_link_libraries)
 # ---------------------------------------------------------------------------
 add_subdirectory(whole)
+
+# ---------------------------------------------------------------------------
+# Meta collections (nested meta + WHOLE flatten)
+# ---------------------------------------------------------------------------
+add_subdirectory(meta)

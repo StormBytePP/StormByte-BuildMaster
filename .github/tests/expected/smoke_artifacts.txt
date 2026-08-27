@@ -3,6 +3,11 @@
 # A leading ! means the path must NOT exist under the install prefix.
 # Sections and paths alphabetical within each platform group.
 
+# BUILDONLY must not publish to the shared prefix
+!<include>/bolib.h|all
+!<lib>/bolib.lib|windows
+!<lib>/libbolib.a|unix
+
 # Flat libraries
 <lib>/alinklib.lib|windows
 <lib>/baselib.lib|windows
@@ -16,6 +21,9 @@
 <lib>/libfirstlib.a|unix
 <lib>/libloaderlib.a|unix
 <lib>/libmergedlib.a|unix
+<lib>/libmetaleafa.a|unix
+<lib>/libmetaleafb.a|unix
+<lib>/libmetaout.a|unix
 <lib>/liboutlib.a|unix
 <lib>/libpayloadlib.a|unix
 <lib>/libprereqlib.a|unix
@@ -24,6 +32,9 @@
 <lib>/libwlibplain.a|unix
 <lib>/loaderlib.lib|windows
 <lib>/mergedlib.lib|windows
+<lib>/metaleafa.lib|windows
+<lib>/metaleafb.lib|windows
+<lib>/metaout.lib|windows
 <lib>/outlib.lib|windows
 <lib>/payloadlib.lib|windows
 <lib>/prereqlib.lib|windows
@@ -37,7 +48,10 @@
 <include>/base.h|all
 <include>/dep.h|all
 <include>/first.h|all
+<include>/leaf_a.h|all
+<include>/leaf_b.h|all
 <include>/loader.h|all
+<include>/metaout.h|all
 <include>/outlib.h|all
 <include>/payload.h|all
 <include>/prereq.h|all
@@ -71,11 +85,6 @@
 <include>/z.h|all
 <lib>/libz.a|unix
 <lib>/z.lib|windows
-
-# BUILDONLY must not publish to the shared prefix
-!<include>/bolib.h|all
-!<lib>/bolib.lib|windows
-!<lib>/libbolib.a|unix
 
 # Repack phases must not publish; merge does
 !<lib>/aextra.lib|windows

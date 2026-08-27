@@ -11,8 +11,8 @@ A **declarative CMake DSL** that turns external **CMake** and **Meson**
 projects into first-class pieces of a parent tree: register components and
 edges in any order, one shared install prefix, header-only components,
 optional per-component toolchains, portable archive rename, optional
-whole-archive static linking, and failure behaviour that does not leave the
-parent compiling against a half-empty prefix.
+whole-archive static linking, **meta collections**, and failure behaviour
+that does not leave the parent compiling against a half-empty prefix.
 
 ## Table of contents
 
@@ -24,6 +24,8 @@ parent compiling against a half-empty prefix.
 - [Declarative model](#declarative-model)
 - [How a component works](#how-a-component-works)
 - [Dependencies and links](#dependencies-and-links)
+- [Meta components](#meta-components)
+- [Orphan warnings](#orphan-warnings)
 - [Prerequisites](#prerequisites)
 - [Component options string](#component-options-string)
 - [Whole-archive linking (WHOLE)](#whole-archive-linking-whole)
@@ -53,6 +55,8 @@ lines) runs **once** at the end of the parent `CMAKE_SOURCE_DIR` scope
 The parent can:
 
 - declare components and dependencies in **any order**
+- group components into **meta** collections (`create_meta_component` +
+  `meta_component_add`) with optional `WHOLE` on the collection
 - create deterministic **IMPORTED** (or **INTERFACE**) targets
 - share one install prefix and environment across a dependency tree
 - fail the parent when a required external stage fails
@@ -65,7 +69,8 @@ else that produces a source tree.
 
 Typical uses: bundled third-party libraries, multi-variant builds of the same
 tree, header-only SDK graphs, mixed CMake + Meson graphs on Linux, Windows,
-and macOS (including Apple Silicon).
+and macOS (including Apple Silicon), plugin packs that FFmpeg (or similar)
+links as one node.
 
 ---
 
@@ -90,7 +95,8 @@ component** to another toolchain.
 
 Static plugin-style archives (e.g. FFmpeg + codecs) often need
 **whole-archive** linkage so registration objects are not dropped by the
-linker. BuildMaster can attach that policy to a component’s INTERFACE.
+linker. BuildMaster can attach that policy to a component’s INTERFACE, or to
+a **meta** that collects many plugins.
 
 Generated stages look like this:
 
@@ -99,6 +105,9 @@ Generated stages look like this:
 <component>_build
 <component>_install
 ```
+
+A meta has the same names as anchors (`<meta>_install` waits on members) but
+does not compile or install artifacts of its own.
 
 ---
 
@@ -118,11 +127,13 @@ Generated stages look like this:
 | Compiler cache into child builds | Manual | Manual | **Yes** |
 | Per-component toolchain | No | Manual | **Optional** |
 | Header-only INTERFACE components | Manual | Manual | **Yes** |
+| Meta collections (no sources) | No | Manual INTERFACE | **Yes** |
 | Path-qualified subcomponents (`subdir/name`) | No | Manual | **Yes** |
 | Whole-archive static link on INTERFACE | Manual | Manual | **Optional (`WHOLE`)** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
 | Fail-fast after a stage failure | No | Manual | **Optional** |
 | INTERFACE depends on `_install` | No | Manual | **Yes** |
+| Orphan component / meta warning | No | No | **Yes** |
 | Git reset + reconfigure (`buildmaster_clean`) | No | Manual | **Optional** |
 | Per-repo post-install git reset | No | Manual | **Yes** |
 
@@ -137,15 +148,17 @@ Generated stages look like this:
 - Linux / Windows / macOS (x86_64 and arm64)
 - CMake and Meson behind the same component API
 - Header-only packages without fake archives or empty `OUTPUT` lists
+- Meta collections that only group graph + INTERFACE (optional `WHOLE`)
 - Optional per-component toolchains that never rewrite the parent toolchain
 - One initialization, one install root, even in nested trees
 - Quiet logs by default, full dump on failure
 - Predictable failure: a broken required component fails the parent graph
+- Configure **WARNING** listing unused (orphan) components and metas
 - Git ops bound to a component id (configure-time, then optional reset)
 - File helpers as build targets wired through the same dependency graph
 - Extensible options via one trailing `KEY=value;…` string
 - Library artifacts that can live in a **subdir** of the shared libdir
-- Optional whole-archive policy per static component (`WHOLE`)
+- Optional whole-archive policy per static component or meta (`WHOLE`)
 
 ---
 
@@ -200,13 +213,16 @@ create_cmake_component(
 
 1. **Register** components with `create_cmake_component` / `create_meson_component`
    (or the headers variants / low-level `create_component`).
-2. **Connect** them with `component_dependency` and/or `component_link`
+2. **Optional collections:** `create_meta_component` + `meta_component_add`
+   (`add` may happen before `create_meta_component`).
+3. **Connect** them with `component_dependency` and/or `component_link`
    (declaration order does not matter).
-3. **Optional** work before a component: `component_prerequisite`,
+4. **Optional** work before a component: `component_prerequisite`,
    `file_download` / `file_download_cached` / `file_decompress`, or
    configure-time `create_git_*`.
-4. At the end of `CMAKE_SOURCE_DIR`, BuildMaster **materializes** stages and
+5. At the end of `CMAKE_SOURCE_DIR`, BuildMaster **materializes** stages and
    applies links. Consumers never call finalize (it is internal).
+   Unused ids get a single **WARNING**.
 
 | Configure timing | When |
 |------------------|------|
@@ -243,21 +259,23 @@ status lines.
 Order-only edge. At materialize time, `dest` resolves as (first match):
 
 1. Registered component id → `<id>_install`
-2. Name matching `*_install` / `*_configure` / `*_build`
-3. Existing CMake target (e.g. `component_prerequisite`, `file_*` target)
+2. Registered **meta** id → `<id>_install`
+3. Name matching `*_install` / `*_configure` / `*_build`
+4. Existing CMake target (e.g. `component_prerequisite`, `file_*` target)
 
 Otherwise materialization fails with **FATAL_ERROR**.
 
 ### `component_link(source, dest)`
 
 Records a link from the component `INTERFACE`. When `dest` is a **graph
-node** (registered component, stage name, or existing target), it also
-records `component_dependency`. Pure library specs do **not** get an
+node** (registered component, **meta**, stage name, or existing target), it
+also records `component_dependency`. Pure library specs do **not** get an
 automatic dependency edge.
 
 | `dest` | Effect |
 |--------|--------|
 | Registered component | Link produced IMPORTED libs + that component’s INTERFACE; order on its install. If the dest has `WHOLE`, the INTERFACE already carries whole-archive items (do not also link plain IMPORTED names). |
+| Registered meta | Link the meta `INTERFACE` (already flattened / forwarded); order on `<meta>_install`. |
 | Existing target | `target_link_libraries(… INTERFACE …)` |
 | Existing non-directory path | Link that file |
 | Spec `name` or `subdir/name` | IMPORTED under install libdir; may extend install `OUTPUT` on **source** |
@@ -273,6 +291,77 @@ target_link_libraries(MyApp PRIVATE liba)
 
 Host application targets are **not** BuildMaster graph nodes: link them with
 ordinary `target_link_libraries(MyApp PRIVATE <component_id>)`.
+
+---
+
+## Meta components
+
+A **meta** is an `INTERFACE` + graph anchor. It has **no sources**, does not
+compile, and does not install its own artifacts. It collects members
+(components, other metas, static or shared) and forwards wait + link.
+
+### Membership vs consumption
+
+| Call | Meaning |
+|------|---------|
+| `meta_component_add(meta, member…)` | **Membership.** `member` belongs to `meta`. |
+| `component_link` / `component_dependency` / host `target_link_libraries` **to the meta** | **Consumption.** The collection is actually pulled into the build. |
+
+The container does **not** replace linking. If nothing consumes the meta, its
+members are not built just because they were added.
+
+`meta_component_add` may run **before** `create_meta_component` (lazy id;
+title defaults to the id, `WHOLE` off until create fills options). Duplicate
+`create_meta_component` for the same id is **FATAL**. A meta id and a
+`create_*_component` id must not collide.
+
+Cycles (`plugins → codecs → plugins`) are **FATAL** and print the chain.
+
+### Example
+
+```cmake
+meta_component_add(ffmpeg-plugins zlib)
+meta_component_add(ffmpeg-plugins png)
+meta_component_add(ffmpeg-plugins codecs)   # codecs may itself be a meta
+
+create_meta_component(ffmpeg-plugins "FFmpeg plugins" "INDENT=1;WHOLE")
+
+component_link(ffmpeg ffmpeg-plugins)
+# or the host:
+# target_link_libraries(MyApp PRIVATE ffmpeg-plugins)
+```
+
+### WHOLE on a meta
+
+If the meta has `WHOLE`, its INTERFACE is **one** closed whole-archive region
+containing the produced **static** archives of all **leaf** components
+(recursive flatten of nested metas). Shared / headers members stay on the
+INTERFACE **outside** that region. A leaf that already has `WHOLE` is linked
+as its own INTERFACE (no second wrap of the same `.a`).
+
+`TOOLCHAIN`, `RENAME`, and `BUILDONLY` on `create_meta_component` are
+ignored (**WARNING**). `BUILDONLY` components cannot be members (**FATAL**).
+
+---
+
+## Orphan warnings
+
+After materialize, BuildMaster emits **one** `WARNING` listing every
+registered component or meta that is not consumed.
+
+An id is consumed if it appears as:
+
+- source or dest of `component_link` / `component_dependency`, or
+- a host / INTERFACE `target_link_libraries` reference, or
+- a leaf of any meta, or
+- a nested meta that is a member of a **consumed** meta, or
+- an input of a `component_repack` **only when that repack id is consumed**.
+
+An unused repack does **not** mark its BUILDONLY (or other) inputs as used.
+Membership alone does **not** consume the meta.
+
+The configure still succeeds; unused nodes simply will not build unless
+something else asks for their targets by name.
 
 ---
 
@@ -319,10 +408,11 @@ trailing argument:
 | `INDENT` / `INDENT_LEVEL` | Tabs in hierarchical `STATUS` lines (non-negative integer) |
 | `TOOLCHAIN` | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`). Empty = inherit |
 | `RENAME` | Normalize variant install basenames to the produced name (default **ON** for library modes). Flag form: `RENAME` ≡ `RENAME=ON` |
-| `WHOLE` | Link all produced **static** archives of this component with whole-archive semantics on its INTERFACE (default **OFF**). Flag form: `WHOLE` ≡ `WHOLE=ON`. On `shared` / `headers`: **WARNING**, ignored |
+| `WHOLE` | Link all produced **static** archives of this component (or flatten of a meta) with whole-archive semantics on its INTERFACE (default **OFF**). Flag form: `WHOLE` ≡ `WHOLE=ON`. On `shared` / `headers`: **WARNING**, ignored |
+| `BUILDONLY` | Build without installing to the shared prefix |
 
 Flag-style keys are listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` (`RENAME`,
-`WHOLE`, …). `LINK_EXTRA` is removed; use `component_link`.
+`WHOLE`, `BUILDONLY`, …). `LINK_EXTRA` is removed; use `component_link`.
 
 ```cmake
 create_cmake_component(... "mylib")
@@ -330,6 +420,7 @@ create_cmake_component(... "mylib" "INDENT=2")
 create_cmake_component(... "mylib" "TOOLCHAIN=msvc;RENAME")
 create_cmake_component(... "mylib" "RENAME=OFF")
 create_cmake_component(... static "avutil;avcodec" "WHOLE")
+create_meta_component(plugins "Plugins" "WHOLE")
 ```
 
 ---
@@ -344,15 +435,17 @@ constructors, weakly referenced members).
 |----------|-----------------------------------------------|
 | ELF (GNU/LLVM ld) | `-Wl,--whole-archive` *paths* `-Wl,--no-whole-archive` |
 | Apple | `-Wl,-force_load,path` per archive |
-| MSVC | `/WHOLEARCHIVE:path` per archive |
+| MSVC | `-WHOLEARCHIVE:path` per archive (dash form so Ninja does not treat it as a path) |
 
 Rules:
 
-- **Only** the produced statics of that component sit inside the region.
+- **Only** the produced statics of that component sit inside the region
+  (or, on a WHOLE **meta**, the flattened leaf statics).
 - Several WHOLE components → **linear** closed regions (not nested).
 - Other libraries linked beside a WHOLE component stay **outside** the region.
 - Host apps: `target_link_libraries(App PRIVATE ffmpeg other)` — no need to
-  hand-roll whole-archive flags when `ffmpeg` was registered with `WHOLE`.
+  hand-roll whole-archive flags when `ffmpeg` (or a plugin meta) was
+  registered with `WHOLE`.
 
 ```cmake
 create_meson_component(
@@ -478,6 +571,9 @@ same basename, use path-qualified specs (`recursive/cmake/nestlib` vs
 
 Silent env runners dump captured logs on non-zero exit.
 
+Configure also prints a single orphan **WARNING** when registered ids are
+never consumed (see [Orphan warnings](#orphan-warnings)).
+
 ---
 
 ## Fail-fast
@@ -503,7 +599,7 @@ graph.
 
 - **Windows:** MSVC and clang-cl profiles; with `RENAME` on, variant basenames
   (`*-static`, debug suffixes, …) can be normalized to the produced name
-  before the install contract check. `WHOLE` uses `/WHOLEARCHIVE:`.
+  before the install contract check. `WHOLE` uses `-WHOLEARCHIVE:`.
 - **Unix:** archives under `lib` or `lib64` follow `GNUInstallDirs` /
   `CMAKE_INSTALL_LIBDIR`. `WHOLE` uses `--whole-archive` / `--no-whole-archive`.
 - **Apple Silicon:** Meson and CMake nests use the same shared prefix and env
@@ -561,11 +657,12 @@ basename. `file_checksum_correct` remains available for explicit hash checks.
 | Area | Commands |
 |------|----------|
 | Components | `create_component`, `create_cmake_component`, `create_meson_component`, `create_cmake_headers_component`, `create_meson_headers_component` |
-| Graph | `component_dependency`, `component_link`, `component_prerequisite` |
+| Meta | `create_meta_component`, `meta_component_add` |
+| Graph | `component_dependency`, `component_link`, `component_prerequisite`, `component_repack` |
 | File | `file_download`, `file_download_cached`, `file_decompress`, `file_checksum_correct` |
 | Git | `create_git_reset_file`, `create_git_patch_file`, `create_git_fetch`, `create_git_switch_branch`, `buildmaster_git_post_install_marker_for_srcdir` |
 | Paths / options | `library_import_hint`, `library_import_static_hint`, `buildmaster_parse_subcomponent`, `buildmaster_parse_component_options`, `ensure_build_dir`, `sanitize_for_filename` |
-| Toolchain | `buildmaster_load_toolchain_profile`, `buildmaster_validate_toolchain` |
+| Toolchain | `buildmaster_load_toolchain_profile`, `buildmaster_validate_toolchain`, `buildmaster_find_archiver` |
 
 Stage generators (`create_*_stages`) are **internal**. They are not part of
 the supported public surface.
@@ -587,9 +684,10 @@ cmake --build build/harness --target run_buildmaster_smoke
 Coverage includes flat graphs, order-independent declaration, prerequisites,
 file decompress and checksums, file-to-component wiring, a non-destructive
 git sandbox (local clone), component-to-component link, recursive CMake and
-Meson nests, install rename normalization, and **WHOLE** (positive
-whole-archive link + negative control without WHOLE, with a second library
-kept outside the whole region).
+Meson nests, install rename normalization, **WHOLE** (positive whole-archive
+link + negative control, second library outside the region), and **meta**
+collections (lazy `meta_component_add`, nested meta, WHOLE flatten, outside
+lib).
 
 ---
 

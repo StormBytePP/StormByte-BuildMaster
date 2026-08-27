@@ -10,6 +10,8 @@ create_cmake_headers_component
 create_component
 create_meson_component
 create_meson_headers_component
+create_meta_component
+meta_component_add
 
 # File helpers
 file_checksum_correct
