@@ -21,7 +21,7 @@
 ## @param[out] out_tc Parent-scope profile (empty if unset).
 function(_buildmaster_component_stored_toolchain id out_tc)
 	get_property(_optstr GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_OPTSTR)
-	buildmaster_parse_component_options(_i _tc _r _b _w "${_optstr}")
+	buildmaster_parse_component_options(_i _tc _r _b _w _sr "${_optstr}")
 	set(${out_tc} "${_tc}" PARENT_SCOPE)
 endfunction()
 

@@ -37,7 +37,9 @@ endfunction()
 ##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
 ##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
-##            BUILDONLY (flag), WHOLE (flag; static whole-archive link).
+##            BUILDONLY (flag), WHOLE (flag; static whole-archive link),
+##            STRIPRES (flag; default ON; strip `.res` members from static
+##            MSVC/clang-cl archives after RENAME).
 ## @note Does not return a fragment path and does not include() anything.
 ##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
@@ -80,7 +82,7 @@ function(create_component _component _component_title _srcdir _builddir
 	endif()
 
 	buildmaster_parse_component_options(
-		_reg_indent _reg_tc _reg_rename _reg_buildonly _reg_whole
+		_reg_indent _reg_tc _reg_rename _reg_buildonly _reg_whole _reg_stripres
 		"${_options_string}")
 
 	string(TOLOWER "${_library_mode}" _library_mode)
@@ -112,6 +114,11 @@ function(create_component _component _component_title _srcdir _builddir
 		endif()
 	endif()
 
+	if(_reg_stripres AND NOT _library_mode STREQUAL "static")
+		buildmaster_message(COMPONENT WARNING
+			"create_component('${_component}'): STRIPRES ignored (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
+	endif()
+
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_IDS "${_component}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_TITLE
 		"${_component_title}")
@@ -138,6 +145,11 @@ function(create_component _component _component_title _srcdir _builddir
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE TRUE)
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE FALSE)
+	endif()
+	if(_reg_stripres AND _library_mode STREQUAL "static")
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_STRIPRES TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_STRIPRES FALSE)
 	endif()
 
 	_buildmaster_component_defer_arm()

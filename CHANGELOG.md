@@ -18,7 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
 - **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
 - **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
-- **Meta `TOOLCHAIN` inheritance:** `create_meta_component(… "TOOLCHAIN=<profile>")` no longer ignores the key. After leaves are known and before cmake/meson materialize, the profile is copied onto members (nested metas included) and onto `component_dependency` / `component_link` dests from that meta that have no `TOOLCHAIN` yet. An explicit child `TOOLCHAIN` is kept. Two metas inheriting different profiles onto the same empty destination is fatal.
+- **`STRIPRES` component option (flag, default ON):** after `RENAME` and the install contract, strip every archive member whose basename ends in `.res` (case-insensitive) from **static** MSVC / clang-cl `.lib` files.
+  - Source of truth is `lib.exe` / `llvm-lib` `/LIST`; no user-supplied member names.
+  - Applies to installable statics and to `BUILDONLY` statics (against the component build dir).
+  - Other toolchains: silent no-op. Shared / headers: **WARNING**, ignored. Meta: **WARNING** only if the key was written (`RENAME` same pattern).
+  - `STRIPRES=OFF` leaves resources in the archive.
+  - Runs in `install_exec` (CMake and Meson) so a later `component_repack` already sees clean inputs.
 - **Unified logging API** (`log.cmake`):
   - `buildmaster_message(<module> <level> "<text>" [<indent>])` — only public way to print from BuildMaster (and recommended for consumers).
   - Levels (ascending, quieter filter): `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
@@ -28,7 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Header is never indented; optional indent applies only to the body.
   - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
   - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up Opus" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
-- **Harness:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, and **meta-toolchain** (`meta-tc` pushes `TOOLCHAIN` onto `mtc-inherit`; `mtc-pinned` keeps an explicit host profile).
+- **Harness:** recursive cmake/meson chains, Meson rename fixture, and an **order-independent** fixture (dependency and dependent declared before the prerequisite).
 
 ### Changed
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
@@ -41,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed public `create_*_dependant_component` / `create_*_headers_dependant_component`; use `create_*` + `component_dependency`.
   - Removed `LINK_EXTRA` from the options string; use `component_link`.
   - `create_*_stages` are **internal** (not part of the supported public API).
-- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`). Unknown keys warn; extra positionals are fatal.
+- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, flags `RENAME`, `BUILDONLY`, `WHOLE`, `STRIPRES`). Unknown keys warn; extra positionals are fatal.
 - **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
 - Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
 

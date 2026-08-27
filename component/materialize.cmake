@@ -8,12 +8,14 @@
 ## @param[in] _component Registered component id.
 ## @note Sets parent-scope: `_LIBRARY_COMPONENT_NAMES`, `_LIBRARY_COMPONENT_FILES`,
 ##       `_LIBRARY_COMPONENT_DLL_FILES`, `_output_libraries`, `_BM_RENAME_ENABLED`,
-##       `_BM_BUILDONLY`, `_indent_level`, `_toolchain`.
+##       `_BM_BUILDONLY`, `_BM_STRIPRES_ENABLED`, `_indent_level`, `_toolchain`.
 ## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
 ## @note Extra `component_link` dests that are raw library specs (not components,
 ##       metas, targets, or existing files) are appended to the produced lists
 ##       so install BYPRODUCTS stay complete.
+## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
+##       (default ON). Shared/headers never strip; install_exec is a no-op there.
 function(_buildmaster_component_collect_outputs _component)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -22,7 +24,7 @@ function(_buildmaster_component_collect_outputs _component)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 
 	buildmaster_parse_component_options(
-		_indent_level _toolchain _rename_on _buildonly _whole_ignored
+		_indent_level _toolchain _rename_on _buildonly _whole_ignored _stripres_on
 		"${_options_string}")
 
 	if(_buildonly)
@@ -39,6 +41,12 @@ function(_buildmaster_component_collect_outputs _component)
 		set(_BM_RENAME_ENABLED "1")
 	else()
 		set(_BM_RENAME_ENABLED "0")
+	endif()
+
+	if(_library_mode STREQUAL "static" AND _stripres_on)
+		set(_BM_STRIPRES_ENABLED "1")
+	else()
+		set(_BM_STRIPRES_ENABLED "0")
 	endif()
 
 	set(_LIBRARY_COMPONENT_NAMES "")
@@ -108,6 +116,7 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_output_libraries "${_output_libraries}" PARENT_SCOPE)
 	set(_BM_RENAME_ENABLED "${_BM_RENAME_ENABLED}" PARENT_SCOPE)
 	set(_BM_BUILDONLY "${_BM_BUILDONLY}" PARENT_SCOPE)
+	set(_BM_STRIPRES_ENABLED "${_BM_STRIPRES_ENABLED}" PARENT_SCOPE)
 	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_collect_outputs")
@@ -127,11 +136,16 @@ function(_buildmaster_component_write_fragment _component _deferred)
 
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
-	buildmaster_parse_component_options(_il _toolchain _rn _bo _wh "${_options_string}")
+	buildmaster_parse_component_options(_il _toolchain _rn _bo _wh _sr "${_options_string}")
 	if(_bo)
 		set(_BM_BUILDONLY "1")
 	else()
 		set(_BM_BUILDONLY "0")
+	endif()
+
+	if(_sr AND NOT _library_mode STREQUAL "static")
+		buildmaster_message(COMPONENT WARNING
+			"STRIPRES ignored for '${_component}' (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
 	endif()
 
 	if(DEFINED BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND)

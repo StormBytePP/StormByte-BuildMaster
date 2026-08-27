@@ -39,6 +39,7 @@ BuildMaster is that layer, written once:
 | Hand-rolled Meson `setup` that misses `.pc` files | Same prefix, `PKG_CONFIG_PATH`, compilers, cache launchers |
 | `POST_BUILD` rename scripts per MSVC flavor | Optional `RENAME` on the component |
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** collection |
+| `LNK2005` / duplicate `.res` after `/WHOLEARCHIVE` | `STRIPRES` on static MSVC/clang-cl archives (default on) |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
 
@@ -60,6 +61,7 @@ a product, not a build blog.
 - [Prerequisites](#prerequisites)
 - [Component options](#component-options)
 - [Whole-archive linking (`WHOLE`)](#whole-archive-linking-whole)
+- [Stripping `.res` members (`STRIPRES`)](#stripping-res-members-stripres)
 - [Build-only components and repack](#build-only-components-and-repack)
 - [Subcomponent specs](#subcomponent-specs)
 - [Header-only components](#header-only-components)
@@ -135,6 +137,7 @@ larger library links as one `WHOLE` node.
 | Meta collections (no sources) | No | Manual INTERFACE | **Yes** |
 | Path-qualified subcomponents (`subdir/name`) | No | Manual | **Yes** |
 | Whole-archive static link on INTERFACE | Manual | Manual | **Optional (`WHOLE`)** |
+| Strip `.res` from static MSVC archives | Manual `/REMOVE` | Manual | **Default on static (`STRIPRES`)** |
 | Build-only + static repack | No | Manual | **Yes** |
 | Unified log API (`buildmaster_message`) | No | No | **Yes** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
@@ -184,11 +187,13 @@ create_cmake_component(
 	"${_opts}"
 	static
 	"mylib"
-	"INDENT=2;TOOLCHAIN=clang;RENAME;WHOLE"
+	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE"
 )
 ```
 
-Meson is the same shape with `create_meson_component`.
+On a static MSVC / clang-cl archive, `STRIPRES` is already on. You only
+write it when you want it off (`STRIPRES=OFF`). Meson is the same shape
+with `create_meson_component`.
 
 ---
 
@@ -280,8 +285,9 @@ already have `TOOLCHAIN` set. An explicit `TOOLCHAIN` on the child is
 kept. Two metas inheriting **different** profiles onto the same empty
 destination is **FATAL**.
 
-`RENAME` and `BUILDONLY` on a meta are ignored with a warning (there is
-nothing to install).
+`RENAME`, `BUILDONLY` and `STRIPRES` on a meta are ignored with a warning
+when the key is actually written (there is nothing to install or strip).
+The default-on `STRIPRES` does not warn on a meta that never mentioned it.
 
 ### Membership is not consumption
 
@@ -350,7 +356,7 @@ KEY=value;KEY2=value with spaces
 | Keys | Case-insensitive, stored **UPPERCASE** |
 | Values | May contain spaces and extra `=` (`test==value` is fine) |
 | `;` inside a value | Not allowed |
-| Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` ≡ `KEY=ON` |
+| Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` / `STRIPRES` ≡ `KEY=ON` |
 | Unknown key | **WARNING**, ignored |
 | Extra positional arguments | **FATAL_ERROR** |
 
@@ -361,6 +367,7 @@ KEY=value;KEY2=value with spaces
 | `RENAME` | Normalize archives to the declared name (install prefix, or build dir if `BUILDONLY`) |
 | `WHOLE` | Whole-archive link of produced **static** archives |
 | `BUILDONLY` | Do not install into the shared prefix |
+| `STRIPRES` | After `RENAME`, strip `.res` members from **static** MSVC / clang-cl archives (default **ON**) |
 
 ---
 
@@ -375,11 +382,78 @@ One linear group per consumer (never nested `--whole-archive` sandwiches):
 ```text
 -Wl,--whole-archive  A  B  -Wl,--no-whole-archive     # ELF
 -Wl,-force_load,A  -Wl,-force_load,B                  # Mach-O
-/WHOLEARCHIVE:A.lib  /WHOLEARCHIVE:B.lib              # MSVC
+-WHOLEARCHIVE:A.lib  -WHOLEARCHIVE:B.lib              # MSVC (Ninja-safe spelling)
 ```
 
 On shared, headers, or `BUILDONLY`, `WHOLE` is **ignored with a warning**.
 A non-WHOLE library linked next to a WHOLE meta stays outside the group.
+
+`WHOLE` is why `STRIPRES` exists. Forcing every object out of two static
+`.lib` files also forces every `.res` those archives still carry. Two
+upstreams that both compiled a resource script suddenly share a symbol
+name the linker will not forgive. See the next section.
+
+---
+
+## Stripping `.res` members (`STRIPRES`)
+
+You already know this one if you have ever linked a **static** FFmpeg-style
+plugin pack on MSVC with `/WHOLEARCHIVE`.
+
+A `.res` is a Windows resource object. In a DLL it is useful. In a
+**static** `.lib` it is ballast: version info, manifests, icons nobody
+will load from an archive member. MSVC and clang-cl still stuff one into
+the library because that is what the toolchain does when a `.rc` is in
+the sources.
+
+Then you ask the linker for the whole archive — because otherwise the
+plugin objects vanish — and two otherwise unrelated `.lib` files both
+contribute `something.res`. The link dies with a duplicate resource
+symbol. The “fix” people reach for is a one-off `lib /REMOVE:….res`
+after staring at `lib /LIST` until they guess the member name. Next
+upstream, next filename, next `POST_BUILD`.
+
+BuildMaster does not ask you for the member name. After `RENAME` (so the
+canonical `.lib` already exists), install lists every member with
+`lib.exe` / `llvm-lib` `/LIST`, keeps only basenames that end in `.res`
+(case-insensitive), and `/REMOVE`s those. Anything else in the archive
+is left alone.
+
+| Case | Behaviour |
+|------|-----------|
+| Static + MSVC / clang-cl + `STRIPRES` on (default) | Strip after rename / contract |
+| Static + `BUILDONLY` | Same, against the component build dir |
+| Static + other toolchain | Silent no-op (no warning) |
+| Shared / headers | **WARNING**, ignored |
+| Meta | **WARNING** only if you wrote the `STRIPRES` key |
+| `STRIPRES=OFF` | Skip. Use this if you actually need the resources |
+
+You do not list members. You do not write a per-library script. If a
+repack consumes those statics, the inputs are already clean because
+strip ran on each component’s install (or BUILDONLY “install”) first.
+
+```cmake
+create_cmake_component(
+	plugin-a
+	"Plugin A"
+	${A_SRC} ${A_BUILD}
+	"${A_OPTS}"
+	static
+	"plugina"
+	"WHOLE"
+)
+
+# Opt out when the .res is load-bearing:
+create_cmake_component(
+	branded
+	"Branded static"
+	${B_SRC} ${B_BUILD}
+	"${B_OPTS}"
+	static
+	"branded"
+	"STRIPRES=OFF"
+)
+```
 
 ---
 
@@ -395,6 +469,7 @@ an extra helper built from the same tree).
   coherence target — it does not publish to the shared prefix)
 - artifacts live in **that component’s build directory**
 - `RENAME` is allowed and runs against the build dir
+- `STRIPRES` is allowed and runs against the same build-dir archives
 - `component_link` *from a normal component to a BUILDONLY* is **FATAL**
   (you cannot link a tree that was never installed)
 
@@ -524,7 +599,7 @@ Higher number = quieter filter threshold:
 |-------|------|
 | `LOWLEVEL` | Function enter/exit and path plumbing |
 | `DEBUG` | Useful when debugging BuildMaster or a consumer graph |
-| `INFO` | Optional progress (rename skip, unpack OK) |
+| `INFO` | Optional progress (rename skip, unpack OK, `.res` strip skip) |
 | `WARNING` | Shown at `INFO` or more verbose; hidden at `STATUS` and `FATAL` |
 | `STATUS` | Default. Stage titles (`Configuring` / `Compiling` / `Installing`) |
 | `FATAL` | Always printed. Stops configure/script. Never filtered |
@@ -570,7 +645,7 @@ Change the level and **re-run CMake** so generated `-P` scripts see it.
 
 | Key | Header | Typical owner |
 |-----|--------|---------------|
-| `ARCHIVE` | Archive | Static merge / archiver |
+| `ARCHIVE` | Archive | Static merge / archiver / `.res` strip |
 | `CMAKE` | CMake | CMake stages |
 | `COMPONENT` | Component | Factory / graph |
 | `CORE` | Core | Bootstrap, harness, helpers |
@@ -652,6 +727,7 @@ On Windows, launchers are **not** folded into `CC` / `CXX`.
 |-------|-------|---------|-------|
 | Env runner | `runner.sh` | PowerShell (`runner_silent.ps1`) | same as Linux |
 | Static merge | GNU `ar` / `llvm-ar` | `lib /OUT:` | `libtool -static` |
+| `.res` strip | no-op | `lib` / `llvm-lib` `/LIST` + `/REMOVE` | no-op |
 | Meson PDB | — | `/Z7` | — |
 | `TOOLCHAIN=clang` | LLD required | use `clang-cl` | LLD not forced |
 | `TOOLCHAIN=msvc` / `clang-cl` | invalid | supported | invalid |

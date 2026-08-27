@@ -62,7 +62,9 @@ endfunction()
 ## @param[in] _title           Human-readable title (STATUS only).
 ## @param[in] options_string   Optional "KEY=value;…". Keys: INDENT / INDENT_LEVEL,
 ##            WHOLE (flag), TOOLCHAIN (inherited by members without their own).
-## @note RENAME / BUILDONLY → WARNING, ignored (meta produces no archives).
+## @note RENAME / BUILDONLY / STRIPRES → WARNING, ignored (meta produces no
+##       archives). STRIPRES default is ON; the warning fires only when the
+##       user actually wrote the key, same as RENAME.
 ## @note TOOLCHAIN does not compile the meta. Finalize copies it onto
 ##       `meta_component_add` members and onto `component_dependency` /
 ##       `component_link` dests from this meta when those dests have no
@@ -110,15 +112,19 @@ function(create_meta_component _id _title)
 	endif()
 
 	buildmaster_parse_component_options(
-		_indent _tc _rename _buildonly _whole "${_optstr}")
+		_indent _tc _rename _buildonly _whole _stripres "${_optstr}")
 	if(_buildonly)
 		buildmaster_message(COMPONENT WARNING
 			"create_meta_component('${_id}'): BUILDONLY ignored (meta does not install artifacts)")
 	endif()
-	# RENAME default is ON; only warn when the user actually set the key.
+	# RENAME / STRIPRES default ON; only warn when the user actually set the key.
 	if("${_optstr}" MATCHES "[Rr][Ee][Nn][Aa][Mm][Ee]")
 		buildmaster_message(COMPONENT WARNING
 			"create_meta_component('${_id}'): RENAME ignored (meta has no produced archives)")
+	endif()
+	if("${_optstr}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
+		buildmaster_message(COMPONENT WARNING
+			"create_meta_component('${_id}'): STRIPRES ignored (meta has no produced archives)")
 	endif()
 
 	set(_disp "${_title}")

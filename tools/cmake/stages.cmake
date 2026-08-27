@@ -36,6 +36,11 @@
 ## @note Reads `_BM_BUILDONLY` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"0"`. When `"1"`, install_exec skips `cmake --install`
 ##       and only renames/checks outputs under the component BUILDDIR.
+## @note Reads `_BM_STRIPRES_ENABLED` from the caller (`"1"` / `"0"`). If
+##       unset, defaults to `"1"`. After RENAME and the output contract,
+##       `install_exec.cmake.in` strips `*.res` members from produced
+##       `.lib` archives (MSVC / clang-cl `lib` / `llvm-lib` only; other
+##       archivers are a no-op inside the strip script).
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_COMMAND,
 ##       BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND and
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
@@ -68,6 +73,9 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	endif()
 	if(NOT DEFINED _BM_BUILDONLY)
 		set(_BM_BUILDONLY "0")
+	endif()
+	if(NOT DEFINED _BM_STRIPRES_ENABLED)
+		set(_BM_STRIPRES_ENABLED "1")
 	endif()
 
 	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")

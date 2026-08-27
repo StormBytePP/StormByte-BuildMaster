@@ -4,10 +4,10 @@
 # Loaded from component/helpers.cmake. Does not include backends.
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, BUILDONLY and WHOLE accept `KEY`, `KEY=` and `KEY=ON|OFF`.
-##       Other keys require `KEY=value`. Keep this list in sync with
-##       buildmaster_parse_component_options().
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE")
+## @note RENAME, BUILDONLY, WHOLE and STRIPRES accept `KEY`, `KEY=` and
+##       `KEY=ON|OFF`. Other keys require `KEY=value`. Keep this list in
+##       sync with buildmaster_parse_component_options().
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES")
 
 ## @brief Split one options token into key and value.
 ## @param[in]  pair     Raw token (`KEY=value`, `KEY=`, or `KEY` for flags).
@@ -99,19 +99,26 @@ endfunction()
 ## @param[out] out_whole      TRUE/FALSE — link produced statics with whole-archive
 ##            semantics (default FALSE). Only meaningful for static mode;
 ##            shared/headers → WARNING and ignored at materialize.
+## @param[out] out_stripres   TRUE/FALSE — after RENAME, strip `.res` members from
+##            static MSVC/clang-cl archives via lib/llvm-lib `/LIST` + `/REMOVE`
+##            (default TRUE). Only meaningful for static mode; shared/headers
+##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
+##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `component_link()`. Values may contain `=` and spaces but not `;`.
 ##       Extra positional arguments are not handled here (callers FATAL).
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
-											out_buildonly out_whole options_string)
+											out_buildonly out_whole out_stripres
+											options_string)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_options")
 	set(_indent 0)
 	set(_toolchain "")
 	set(_rename TRUE)
 	set(_buildonly FALSE)
 	set(_whole FALSE)
+	set(_stripres TRUE)
 
 	if(NOT "${options_string}" STREQUAL "")
 		string(REPLACE ";" "\n" _tmp "${options_string}")
@@ -145,6 +152,8 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 				buildmaster_option_flag_enabled("${_val}" _buildonly)
 			elseif(_key STREQUAL "WHOLE")
 				buildmaster_option_flag_enabled("${_val}" _whole)
+			elseif(_key STREQUAL "STRIPRES")
+				buildmaster_option_flag_enabled("${_val}" _stripres)
 			else()
 				buildmaster_message(COMPONENT WARNING
 					"Unknown component option '${_key}' (ignored)")
@@ -157,6 +166,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(${out_rename} "${_rename}" PARENT_SCOPE)
 	set(${out_buildonly} "${_buildonly}" PARENT_SCOPE)
 	set(${out_whole} "${_whole}" PARENT_SCOPE)
+	set(${out_stripres} "${_stripres}" PARENT_SCOPE)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_options")
 endfunction()
 
