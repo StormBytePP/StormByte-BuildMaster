@@ -1,8 +1,8 @@
 ## @brief Update the bootstrap env runner script based on current global
 ##        properties.
-## @note Generates a platform-specific runner script: a Windows batch
-##       file on WIN32 or a shell script on other platforms. Ensures the
-##       generated Linux runner has execute permissions.
+## @note Generates a platform-specific runner: PowerShell on WIN32
+##       (`-ExecutionPolicy Bypass -File`, process-local only) or a shell
+##       script elsewhere. Ensures the generated Linux runner is executable.
 ##       Propagates CMAKE_C/CXX_COMPILER_LAUNCHER and CCACHE_DIR/SCCACHE_DIR
 ##       only when they are non-empty so child meson/cmake builds share
 ##       the same compiler cache as the parent job.
@@ -64,8 +64,8 @@ function(update_env_runner)
 
 	if(WIN32)
 		configure_file(
-			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"
-			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat"
+			"${BUILDMASTER_SRCDIR}/env/runner_windows.ps1.in"
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner.ps1"
 			@ONLY
 		)
 	else()
@@ -92,7 +92,7 @@ endfunction()
 ## @param[in] _command_list A CMake list (or the name of a variable
 ##            containing a list) representing the command and its
 ##            arguments. Examples: `/bin/sh;${SCRIPT}` or
-##            `cmd;/C;${SCRIPT}`.
+##            `powershell.exe;-NoLogo;...;-File;${SCRIPT};--`.
 ## @note Joins list elements with spaces then calls `separate_arguments`
 ##       with `WINDOWS_COMMAND` or `UNIX_COMMAND` depending on the
 ##       platform. Paths that already contain spaces must NOT be passed
@@ -113,7 +113,7 @@ endfunction()
 
 ## @brief Format a command token list for embedding in a generated `.cmake` script.
 ## @param[out] out_var Parent-scope variable receiving a single string such as
-##            `"cmd" "/C" "C:/path/runner.bat" "C:/Program Files/.../cmake.exe"`.
+##            `"powershell.exe" "-File" "C:/path/runner.ps1" "--" "C:/Program Files/.../cmake.exe"`.
 ## @param[in] ARGN Command tokens (already split; paths may contain spaces).
 ## @note Always normalizes backslashes to forward slashes so the generated
 ##       script does not hit invalid CMake escapes (`\S`, `\P`, …). Each
@@ -145,8 +145,9 @@ endfunction()
 ##       Requires BM_TC_* already set in the caller. Writes runner_<safe> and
 ##       runner_silent_<safe> under BUILDMASTER_SCRIPTS_ENVDIR. The silent
 ##       script invokes the matching component normal runner (not the global
-##       parent runner). Paths in CMake lists use forward slashes; the .bat
-##       body uses windows_path only for call "runner.bat".
+##       parent runner). On WIN32 the silent template receives ENV_RUNNER_CMD
+##       as the absolute path of that .ps1; CMake launches both via
+##       powershell -ExecutionPolicy Bypass -File (process-local).
 macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
 		message(FATAL_ERROR
@@ -217,27 +218,27 @@ macro(buildmaster_create_component_env_runners out_runner out_runner_silent comp
 	endif()
 
 	if(WIN32)
-		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.bat")
-		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.bat")
+		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.ps1")
+		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.ps1")
 		normalize_cmake_path(_bm_tc_runner_path_cmake "${_bm_tc_runner_path}")
 		normalize_cmake_path(_bm_tc_silent_path_cmake "${_bm_tc_silent_path}")
-		windows_path(_bm_tc_runner_path_win "${_bm_tc_runner_path}")
 
 		configure_file(
-			"${BUILDMASTER_SRCDIR}/env/runner_windows.bat.in"
+			"${BUILDMASTER_SRCDIR}/env/runner_windows.ps1.in"
 			"${_bm_tc_runner_path}"
 			@ONLY
 		)
-		# Direct call — no nested cmd /C.
-		set(ENV_RUNNER_CMD "\"${_bm_tc_runner_path_win}\"")
+		# Path only — silent .ps1 does powershell -File $runner
+		set(ENV_RUNNER_CMD "${_bm_tc_runner_path_cmake}")
 		configure_file(
-			"${BUILDMASTER_SRCDIR}/env/runner_windows_silent.bat.in"
+			"${BUILDMASTER_SRCDIR}/env/runner_windows_silent.ps1.in"
 			"${_bm_tc_silent_path}"
 			@ONLY
 		)
-		# Do not prepare_command: paths may contain spaces.
-		set(_bm_tc_runner_cmd cmd "/C" "${_bm_tc_runner_path_cmake}")
-		set(_bm_tc_silent_cmd cmd "/C" "${_bm_tc_silent_path_cmake}")
+		set(_bm_pwsh powershell.exe -NoLogo -NoProfile -NonInteractive
+			-ExecutionPolicy Bypass -File)
+		set(_bm_tc_runner_cmd ${_bm_pwsh} "${_bm_tc_runner_path_cmake}" --)
+		set(_bm_tc_silent_cmd ${_bm_pwsh} "${_bm_tc_silent_path_cmake}" --)
 	else()
 		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.sh")
 		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.sh")

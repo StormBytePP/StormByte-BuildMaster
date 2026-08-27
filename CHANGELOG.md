@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Harness** (`.github/tests/`): order-independent declaration, prerequisite, file-decompress + checksum, file-to-component, git-sandbox (local clone), link component-to-component, recursive cmake/meson, rename, **BUILDONLY** (prefix absence via `!` lines), **repack** (multi-phase static merge + link), **WHOLE** (positive whole-archive + negative plain link; second BM library kept outside the whole region), **meta** (lazy add before create, nested meta, WHOLE flatten of two ctor leaves, outside lib not in the region). Expected lists under `.github/tests/expected/`. Smoke summary reports `N expected absent` for intentional missing prefix paths.
 
 ### Changed
+- **Windows env runners:** `runner_windows.bat.in` / `runner_windows_silent.bat.in`
+  replaced by `runner_windows.ps1.in` / `runner_windows_silent.ps1.in`.
+  CMake launches `powershell.exe -NoLogo -NoProfile -NonInteractive
+  -ExecutionPolicy Bypass -File <script.ps1> -- <command>…` (Bypass is
+  process-local). The silent runner now captures output and prints it
+  only on non-zero exit, matching Unix.
 - **Breaking:** `create_*_component` / headers wrappers no longer return a fragment path and must not be `include()`d by the user. Prefer `create_cmake_*` / `create_meson_*`; stages are **internal**.
 - **Breaking:** removed public `create_*_dependant_component` and public `create_*_stages`. Use `component_dependency` / `component_link` instead of dependant factories and `LINK_EXTRA`.
 - **Breaking:** `create_*` positional `indent_level` / `toolchain` replaced by optional trailing options string `KEY=value;…` (`INDENT`/`INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `BUILDONLY`, `WHOLE`). Flag-form keys listed in `BUILDMASTER_COMPONENT_OPTION_FLAGS` may omit `=`.

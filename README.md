@@ -600,6 +600,11 @@ graph.
 - **Windows:** MSVC and clang-cl profiles; with `RENAME` on, variant basenames
   (`*-static`, debug suffixes, …) can be normalized to the produced name
   before the install contract check. `WHOLE` uses `-WHOLEARCHIVE:`.
+  Env runners are PowerShell (`powershell.exe -NoLogo -NoProfile
+  -NonInteractive -ExecutionPolicy Bypass -File <runner.ps1> -- …`).
+  Bypass is **process-local** and does not change machine ExecutionPolicy.
+  The silent runner captures stdout/stderr and dumps them only on failure
+  (same contract as the Unix silent runner).
 - **Unix:** archives under `lib` or `lib64` follow `GNUInstallDirs` /
   `CMAKE_INSTALL_LIBDIR`. `WHOLE` uses `--whole-archive` / `--no-whole-archive`.
 - **Apple Silicon:** Meson and CMake nests use the same shared prefix and env

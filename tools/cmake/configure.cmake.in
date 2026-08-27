@@ -5,9 +5,18 @@ if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt")
 		message(STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
 	endif()
 
-	# Pre-quoted tokens (paths with spaces / forward slashes only).
-	set(_bm_cfg_cmd @_CMAKE_CFG_CMD_PREFIX@)
-	list(APPEND _bm_cfg_cmd
+	# Prefix is ENV_CMAKE_*: runner tokens + cmake binary.
+	set(_bm_runner @_CMAKE_CFG_CMD_PREFIX@)
+	list(LENGTH _bm_runner _bm_n)
+	if(_bm_n LESS 1)
+		message(FATAL_ERROR "[BuildMaster] ENV_CMAKE command prefix is empty")
+	endif()
+	math(EXPR _bm_last "${_bm_n} - 1")
+	list(GET _bm_runner ${_bm_last} _bm_cmake_exe)
+	list(REMOVE_AT _bm_runner ${_bm_last})
+
+	set(_bm_cfg_cmd
+		"${_bm_cmake_exe}"
 		-Wno-dev
 		-S "@_CMAKE_SRCDIR@"
 		-B "@_CMAKE_BUILD_DIR@"
@@ -48,13 +57,29 @@ if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt")
 		@_CMAKE_OPTIONS@
 	)
 
-	execute_process(
-		COMMAND ${_bm_cfg_cmd}
-		WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
-		RESULT_VARIABLE CMAKE_RESULT
-		OUTPUT_VARIABLE CMAKE_OUT
-		ERROR_VARIABLE CMAKE_ERROR
-	)
+	if(WIN32)
+		set(_bm_argfile "@_CMAKE_BUILD_DIR@/.bm_configure_argv.txt")
+		file(WRITE "${_bm_argfile}" "")
+		foreach(_bm_tok IN LISTS _bm_cfg_cmd)
+			file(APPEND "${_bm_argfile}" "${_bm_tok}\n")
+		endforeach()
+		execute_process(
+			COMMAND ${_bm_runner} --argfile "${_bm_argfile}"
+			WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
+			RESULT_VARIABLE CMAKE_RESULT
+			OUTPUT_VARIABLE CMAKE_OUT
+			ERROR_VARIABLE CMAKE_ERROR
+		)
+	else()
+		execute_process(
+			COMMAND ${_bm_runner} ${_bm_cfg_cmd}
+			WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
+			RESULT_VARIABLE CMAKE_RESULT
+			OUTPUT_VARIABLE CMAKE_OUT
+			ERROR_VARIABLE CMAKE_ERROR
+		)
+	endif()
+
 	if(NOT CMAKE_RESULT EQUAL 0)
 		message(FATAL_ERROR
 			"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT})\n"

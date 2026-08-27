@@ -1,0 +1,94 @@
+# Silent runner: same env, capture streams, dump on failure.
+# Payload: leftover argv after --, or --argfile <path>.
+
+$ErrorActionPreference = 'Continue'
+
+function Set-IfNonEmpty([string]$Name, [string]$Value) {
+	if ($null -ne $Value -and $Value -ne '') {
+		Set-Item -Path "Env:$Name" -Value $Value
+	}
+}
+
+function Prepend-IfNonEmpty([string]$Name, [string]$Prefix, [string]$Sep) {
+	if ($null -eq $Prefix -or $Prefix -eq '') { return }
+	$cur = [Environment]::GetEnvironmentVariable($Name, 'Process')
+	if ($null -ne $cur -and $cur -ne '') {
+		Set-Item -Path "Env:$Name" -Value ($Prefix + $Sep + $cur)
+	} else {
+		Set-Item -Path "Env:$Name" -Value $Prefix
+	}
+}
+
+Set-IfNonEmpty 'PKG_CONFIG' '@PKG_CONFIG@'
+Prepend-IfNonEmpty 'PKG_CONFIG_PATH' '@PKG_CONFIG_PATH@' ';'
+Prepend-IfNonEmpty 'LIB' '@LIB@' ';'
+Prepend-IfNonEmpty 'INCLUDE' '@INCLUDE@' ';'
+Prepend-IfNonEmpty 'PATH' '@PATH@' ';'
+Set-IfNonEmpty 'CMAKE_BUILD_PARALLEL_LEVEL' '@NPROC@'
+Set-IfNonEmpty 'CCACHE_DIR' '@CCACHE_DIR@'
+Set-IfNonEmpty 'SCCACHE_DIR' '@SCCACHE_DIR@'
+Set-IfNonEmpty 'CC' '@CMAKE_C_COMPILER@'
+Set-IfNonEmpty 'CXX' '@CMAKE_CXX_COMPILER@'
+Set-IfNonEmpty 'CMAKE_C_COMPILER_LAUNCHER' '@CMAKE_C_COMPILER_LAUNCHER@'
+Set-IfNonEmpty 'CMAKE_CXX_COMPILER_LAUNCHER' '@CMAKE_CXX_COMPILER_LAUNCHER@'
+Set-IfNonEmpty 'AR' '@AR@'
+Set-IfNonEmpty 'RANLIB' '@RANLIB@'
+Set-IfNonEmpty 'NM' '@NM@'
+
+$failMarker = '@BUILDMASTER_FAIL_MARKER@'
+if ($failMarker -ne '' -and (Test-Path -LiteralPath $failMarker)) {
+	[Console]::Error.WriteLine('Skipped due to previous errors')
+	exit 1
+}
+
+$argv = @($args)
+if ($argv.Count -gt 0 -and $argv[0] -eq '--') {
+	if ($argv.Count -gt 1) { $argv = $argv[1..($argv.Count - 1)] } else { $argv = @() }
+}
+
+$payload = @()
+if ($argv.Count -ge 2 -and $argv[0] -eq '--argfile') {
+	$path = [string]$argv[1]
+	if (-not (Test-Path -LiteralPath $path)) {
+		[Console]::Error.WriteLine("BuildMaster silent runner: argfile not found: $path")
+		exit 1
+	}
+	$payload = @(Get-Content -LiteralPath $path -Encoding UTF8)
+} else {
+	$payload = @($argv)
+}
+
+if ($payload.Count -lt 1) {
+	[Console]::Error.WriteLine('Usage: runner_silent.ps1 -- <command> [args...]')
+	[Console]::Error.WriteLine('   or: runner_silent.ps1 -- --argfile <path>')
+	exit 1
+}
+
+$cmd = $payload[0]
+$cmdArgs = @()
+if ($payload.Count -gt 1) {
+	$cmdArgs = $payload[1..($payload.Count - 1)]
+}
+
+$log = Join-Path $env:TEMP ('buildmaster.' + [guid]::NewGuid().ToString('N') + '.log')
+$rc = 0
+try {
+	& $cmd @cmdArgs *> $log
+	$rc = $LASTEXITCODE
+	if ($null -eq $rc) { $rc = 0 }
+} catch {
+	$rc = 1
+	$_ | Out-File -FilePath $log -Append -Encoding utf8
+}
+
+if ($rc -ne 0) {
+	if (Test-Path -LiteralPath $log) {
+		Get-Content -LiteralPath $log -ErrorAction SilentlyContinue |
+			ForEach-Object { [Console]::Error.WriteLine($_) }
+	}
+	Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+	exit $rc
+}
+
+Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+exit 0

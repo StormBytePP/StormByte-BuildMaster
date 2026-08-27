@@ -2,13 +2,24 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(BUILDMASTER_ENV_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 	set(BUILDMASTER_SCRIPTS_ENVDIR "${BUILDMASTER_BINDIR}/scripts/env")
 	if(WIN32)
-		set(ENV_RUNNER cmd "/C" "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat")
-		set(ENV_RUNNER_SILENT cmd "/C" "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat")
-		set(ENV_RUNNER_CMD "cmd /C ${BUILDMASTER_SCRIPTS_ENVDIR}/runner.bat")
-		set(ENV_RUNNER_SILENT_CMD "cmd /C ${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat")
+		# Bypass applies only to this powershell.exe process (does not
+		# change machine/user ExecutionPolicy). -File avoids -Command.
+		set(_bm_pwsh powershell.exe -NoLogo -NoProfile -NonInteractive
+			-ExecutionPolicy Bypass -File)
+		set(ENV_RUNNER
+			${_bm_pwsh}
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner.ps1"
+			--)
+		set(ENV_RUNNER_SILENT
+			${_bm_pwsh}
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.ps1"
+			--)
+		# Path only: the silent .ps1 launches this file with -File.
+		set(ENV_RUNNER_CMD "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.ps1")
+		set(ENV_RUNNER_SILENT_CMD "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.ps1")
 		configure_file(
-			"${BUILDMASTER_ENV_SRCDIR}/runner_windows_silent.bat.in"
-			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.bat"
+			"${BUILDMASTER_ENV_SRCDIR}/runner_windows_silent.ps1.in"
+			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.ps1"
 			@ONLY
 		)
 	else()

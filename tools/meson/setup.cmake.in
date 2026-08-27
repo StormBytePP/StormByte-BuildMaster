@@ -58,40 +58,57 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 		list(APPEND _MESON_NATIVE_ARGS "--native-file=${_bm_native}")
 	endif()
 
-	# @_MESON_CMD_PREFIX@ is pre-quoted (paths with spaces safe on Windows).
+	# Prefix is ENV_MESON_COMMAND: runner tokens + meson binary.
+	set(_bm_runner @_MESON_CMD_PREFIX@)
+	list(LENGTH _bm_runner _bm_n)
+	if(_bm_n LESS 1)
+		message(FATAL_ERROR "[BuildMaster] ENV_MESON_COMMAND is empty")
+	endif()
+	math(EXPR _bm_last "${_bm_n} - 1")
+	list(GET _bm_runner ${_bm_last} _bm_meson_exe)
+	list(REMOVE_AT _bm_runner ${_bm_last})
+
+	set(_bm_meson_cmd
+		"${_bm_meson_exe}"
+		setup
+		"@_MESON_BUILD_DIR@"
+		"@_MESON_SRCDIR@"
+		${_MESON_NATIVE_ARGS}
+		"-Dc_args=@_MESON_C_ARGS@"
+		"-Dcpp_args=@_MESON_CXX_ARGS@"
+		"-Dc_link_args=@_MESON_LINK_ARGS@"
+		"-Dcpp_link_args=@_MESON_LINK_ARGS@"
+		"-Dbuildtype=@MESON_BUILD_TYPE@"
+		"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
+		"--prefix=@BUILDMASTER_INSTALL_DIR@"
+		"--libdir=@CMAKE_INSTALL_LIBDIR@"
+		"-Db_lto=@LTO_ENABLED@"
+		@_MESON_OPTIONS@
+	)
+
+	if(WIN32)
+		file(MAKE_DIRECTORY "@_MESON_BUILD_DIR@")
+		set(_bm_argfile "@_MESON_BUILD_DIR@/.bm_meson_setup_argv.txt")
+		file(WRITE "${_bm_argfile}" "")
+		foreach(_bm_tok IN LISTS _bm_meson_cmd)
+			file(APPEND "${_bm_argfile}" "${_bm_tok}\n")
+		endforeach()
+		set(_bm_meson_invoke ${_bm_runner} --argfile "${_bm_argfile}")
+	else()
+		set(_bm_meson_invoke ${_bm_runner} ${_bm_meson_cmd})
+	endif()
+
 	if(_MESON_SETUP_ENV_ARGS)
 		execute_process(
 			COMMAND ${CMAKE_COMMAND} -E env ${_MESON_SETUP_ENV_ARGS}
-				@_MESON_CMD_PREFIX@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
-				${_MESON_NATIVE_ARGS}
-				"-Dc_args=@_MESON_C_ARGS@"
-				"-Dcpp_args=@_MESON_CXX_ARGS@"
-				"-Dc_link_args=@_MESON_LINK_ARGS@"
-				"-Dcpp_link_args=@_MESON_LINK_ARGS@"
-				"-Dbuildtype=@MESON_BUILD_TYPE@"
-				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
-				"--prefix=@BUILDMASTER_INSTALL_DIR@"
-				"--libdir=@CMAKE_INSTALL_LIBDIR@"
-				"-Db_lto=@LTO_ENABLED@"
-				@_MESON_OPTIONS@
+				${_bm_meson_invoke}
 			RESULT_VARIABLE MESON_SETUP_RESULT
 			OUTPUT_VARIABLE MESON_SETUP_OUT
 			ERROR_VARIABLE MESON_SETUP_ERR
 		)
 	else()
 		execute_process(
-			COMMAND @_MESON_CMD_PREFIX@ setup "@_MESON_BUILD_DIR@" "@_MESON_SRCDIR@"
-				${_MESON_NATIVE_ARGS}
-				"-Dc_args=@_MESON_C_ARGS@"
-				"-Dcpp_args=@_MESON_CXX_ARGS@"
-				"-Dc_link_args=@_MESON_LINK_ARGS@"
-				"-Dcpp_link_args=@_MESON_LINK_ARGS@"
-				"-Dbuildtype=@MESON_BUILD_TYPE@"
-				"-Ddefault_library=@_MESON_LIBRARY_TYPE@"
-				"--prefix=@BUILDMASTER_INSTALL_DIR@"
-				"--libdir=@CMAKE_INSTALL_LIBDIR@"
-				"-Db_lto=@LTO_ENABLED@"
-				@_MESON_OPTIONS@
+			COMMAND ${_bm_meson_invoke}
 			RESULT_VARIABLE MESON_SETUP_RESULT
 			OUTPUT_VARIABLE MESON_SETUP_OUT
 			ERROR_VARIABLE MESON_SETUP_ERR
