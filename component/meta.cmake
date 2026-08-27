@@ -374,7 +374,10 @@ endfunction()
 ##       - component_repack *inputs* are consumed only if that repack id
 ##         itself is consumed; an unused repack orphans both itself and
 ##         inputs that nothing else consumes;
-##       - host target_link_libraries to a component/meta id counts.
+##       - host target_link_libraries to a component/meta id counts;
+##       - host add_dependencies / custom-target DEPENDS on <id>,
+##         <id>_install, <id>_build or <id>_configure counts (smoke,
+##         BUILDONLY stages that never enter a link line).
 function(_buildmaster_warn_orphans)
 	get_property(_comps GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -390,7 +393,7 @@ function(_buildmaster_warn_orphans)
 		endif()
 	endforeach()
 
-	# Host / INTERFACE links in this CMake tree
+	# Host / INTERFACE links and graph edges in this CMake tree
 	set(_dirs "${CMAKE_SOURCE_DIR}")
 	set(_seen_dirs "${CMAKE_SOURCE_DIR}")
 	while(_dirs)
@@ -403,10 +406,24 @@ function(_buildmaster_warn_orphans)
 			endif()
 			get_property(_ll TARGET "${_t}" PROPERTY LINK_LIBRARIES)
 			get_property(_il TARGET "${_t}" PROPERTY INTERFACE_LINK_LIBRARIES)
-			foreach(_u IN LISTS _ll _il)
-				if(NOT "${_u}" STREQUAL "")
-					list(APPEND _mentioned "${_u}")
+			get_property(_md TARGET "${_t}" PROPERTY MANUALLY_ADDED_DEPENDENCIES)
+			foreach(_u IN LISTS _ll _il _md)
+				if("${_u}" STREQUAL "")
+					continue()
 				endif()
+				list(APPEND _mentioned "${_u}")
+				foreach(_sfx IN ITEMS _install _build _configure)
+					string(LENGTH "${_sfx}" _sl)
+					string(LENGTH "${_u}" _ul)
+					if(_ul GREATER _sl)
+						math(EXPR _cut "${_ul} - ${_sl}")
+						string(SUBSTRING "${_u}" ${_cut} ${_sl} _end)
+						if(_end STREQUAL "${_sfx}")
+							string(SUBSTRING "${_u}" 0 ${_cut} _stem)
+							list(APPEND _mentioned "${_stem}")
+						endif()
+					endif()
+				endforeach()
 			endforeach()
 		endforeach()
 		get_property(_subs DIRECTORY "${_dir}" PROPERTY SUBDIRECTORIES)
@@ -522,6 +539,7 @@ function(_buildmaster_warn_orphans)
 		string(REPLACE ";" ", " _list "${_orphans}")
 		message(WARNING
 			"[BuildMaster] orphan component(s) / meta(s) (not consumed by "
-			"component_link / component_dependency / host link / used repack): ${_list}")
+			"component_link / component_dependency / host link / host DEPENDS "
+			"/ used repack): ${_list}")
 	endif()
 endfunction()
