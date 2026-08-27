@@ -1,28 +1,25 @@
-# cmake --build <harness-build> --target <name>
-# All targets required by run_buildmaster_smoke
+# One target name per line (alphabetical within sections).
+# Used by harness smoke DEPENDS / contract lists.
 
-# Flat components
+# Core / flat
 base_install
 dep_install
-sdk-headers_install
-sdkloader_install
-
-# Order-independent declaration
 first_install
-order_independent_link_test
-second_install
-
-# Custom prerequisite
-prereq-lib_install
-
-# File helpers
-file_decompress_check
-payload-lib_install
-
-# Link component-to-component
 link-a_install
 link-b_install
+loader_install
+payload-lib_install
+prereq-lib_install
+sdk-headers_install
+second_install
+
+# Order / link tests
 link_component_test
+order_independent_link_test
+
+# Rename
+rename-variant_install
+rename_variant_link_test
 
 # BUILDONLY
 buildonly-lib_install
@@ -33,12 +30,17 @@ repack-b_install
 repack-merged_install
 repack_link_test
 
-# Recursive chains
+# Recursive
 nest-cmake_install
 nest-meson_install
 recursion_cmake_link_test
 recursion_meson_link_test
 
-# Rename normalize (Meson zs to produced z)
-rename-variant_install
-rename_variant_link_test
+# WHOLE
+out-lib_install
+plain-lib_install
+whole-lib_install
+whole_link_test
+whole_link_test_nowhole
+whole_link_test_nowhole_run
+whole_link_test_run

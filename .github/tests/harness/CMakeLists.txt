@@ -50,24 +50,30 @@ add_custom_target(run_buildmaster_checks
 # ---------------------------------------------------------------------------
 
 add_custom_target(run_buildmaster_smoke
-	DEPENDS
-		base_install dep_install sdk-headers_install sdkloader_install
-		first_install second_install order_independent_link_test
-		prereq-lib_install
-		file_decompress_check
-		payload-lib_install
-		link-a_install link-b_install link_component_test
-		buildonly-lib_install
-		repack-a_install repack-b_install repack-merged_install
-		repack_link_test
-		nest-cmake_install nest-meson_install
-		recursion_cmake_link_test recursion_meson_link_test
-		rename-variant_install rename_variant_link_test
 	COMMAND ${CMAKE_COMMAND}
 		-DBUILDMASTER_INSTALL_DIR=${BUILDMASTER_INSTALL_DIR}
-		-DBM_TEST_EXPECTED_DIR=${BM_TEST_EXPECTED_DIR}
+		-DBM_TEST_EXPECTED_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../expected
 		-DBM_INSTALL_LIBDIR=${CMAKE_INSTALL_LIBDIR}
 		-DBM_INSTALL_INCLUDEDIR=${CMAKE_INSTALL_INCLUDEDIR}
-		-P "${CMAKE_CURRENT_SOURCE_DIR}/check_smoke_artifacts.cmake"
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/check_smoke_artifacts.cmake
+	COMMENT "BuildMaster smoke: install stages + artifact contract"
+	DEPENDS
+		# Core / flat
+		base_install dep_install first_install link-a_install link-b_install
+		sdkloader_install payload-lib_install prereq-lib_install sdk-headers_install second_install
+		# Order / link tests
+		link_component_test order_independent_link_test
+		# Rename
+		rename-variant_install rename_variant_link_test
+		# BUILDONLY
+		buildonly-lib_install
+		# Repack
+		repack-a_install repack-b_install repack-merged_install repack_link_test
+		# Recursive
+		nest-cmake_install nest-meson_install recursion_cmake_link_test recursion_meson_link_test
+		# WHOLE
+		out-lib_install plain-lib_install whole-lib_install
+		whole_link_test_run whole_link_test_nowhole_run
 	VERBATIM
 )
+

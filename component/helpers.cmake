@@ -8,7 +8,7 @@
 # Nested bootstrap that only include()s this file still loads the wrappers.
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY")
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE")
 
 ## @brief Split one options token into key and value.
 ## @param[in]  pair     Raw token (KEY=value, KEY=, or KEY for flags).
@@ -86,15 +86,19 @@ endfunction()
 ## @param[out] out_buildonly  TRUE/FALSE — build without installing to the shared
 ##            prefix (default FALSE). Artifacts live under the component BUILDDIR
 ##            only; RENAME runs in that tree after build.
+## @param[out] out_whole      TRUE/FALSE — link produced statics with whole-archive
+##            semantics (default FALSE). Only meaningful for static mode;
+##            shared/headers → WARNING and ignored at materialize.
 ## @param[in]  options_string Optional "KEY=value;KEY2=…" string.
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit '='.
 ##       Unknown keys → WARNING. LINK_EXTRA is removed; use component_link().
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
-											out_buildonly options_string)
+											out_buildonly out_whole options_string)
 	set(_indent 0)
 	set(_toolchain "")
 	set(_rename TRUE)
 	set(_buildonly FALSE)
+	set(_whole FALSE)
 
 	if(NOT "${options_string}" STREQUAL "")
 		string(REPLACE ";" "\n" _tmp "${options_string}")
@@ -126,6 +130,8 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 				buildmaster_option_flag_enabled("${_val}" _rename)
 			elseif(_key STREQUAL "BUILDONLY")
 				buildmaster_option_flag_enabled("${_val}" _buildonly)
+			elseif(_key STREQUAL "WHOLE")
+				buildmaster_option_flag_enabled("${_val}" _whole)
 			else()
 				message(WARNING
 					"[BuildMaster] Unknown component option '${_key}' (ignored)")
@@ -137,6 +143,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(${out_toolchain} "${_toolchain}" PARENT_SCOPE)
 	set(${out_rename} "${_rename}" PARENT_SCOPE)
 	set(${out_buildonly} "${_buildonly}" PARENT_SCOPE)
+	set(${out_whole} "${_whole}" PARENT_SCOPE)
 endfunction()
 
 ## @brief Split a library spec into CMake target, library basename and libdir subdir.
@@ -200,6 +207,38 @@ macro(buildmaster_append_library_spec library_mode spec base_libdir
 	endif()
 endmacro()
 
+## @brief Build whole-archive linker items for a list of static archive paths.
+## @param[out] _out_var Name of the parent-scope variable to receive the item list.
+## @param[in]  ARGN     Absolute (or install-relative) static archive paths.
+##
+## One closed region per component on ELF; per-archive force_load / WHOLEARCHIVE
+## on Apple / MSVC. MSVC uses -WHOLEARCHIVE: so CMake/Ninja do not treat the
+## token as a filesystem path (leading /WHOLEARCHIVE: is parsed as a file).
+function(_buildmaster_whole_archive_link_items _out_var)
+	set(_paths ${ARGN})
+	set(_items "")
+	if(NOT _paths)
+		set(${_out_var} "" PARENT_SCOPE)
+		return()
+	endif()
+	if(MSVC)
+		foreach(_p IN LISTS _paths)
+			list(APPEND _items "-WHOLEARCHIVE:${_p}")
+		endforeach()
+	elseif(APPLE)
+		foreach(_p IN LISTS _paths)
+			list(APPEND _items "-Wl,-force_load,${_p}")
+		endforeach()
+	else()
+		list(APPEND _items "-Wl,--whole-archive")
+		foreach(_p IN LISTS _paths)
+			list(APPEND _items "${_p}")
+		endforeach()
+		list(APPEND _items "-Wl,--no-whole-archive")
+	endif()
+	set(${_out_var} "${_items}" PARENT_SCOPE)
+endfunction()
+
 # =============================================================================
 # Registry and declarative graph
 # =============================================================================
@@ -230,8 +269,7 @@ endfunction()
 ##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
 ##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
-##            BUILDONLY (flag). BUILDONLY: no install into the shared prefix;
-##            artifacts and RENAME use this component's BUILDDIR only.
+##            BUILDONLY (flag), WHOLE (flag; static whole-archive link).
 ## @note Does not return a fragment path and does not include() anything.
 ##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
@@ -269,7 +307,8 @@ function(create_component _component _component_title _srcdir _builddir
 	endif()
 
 	buildmaster_parse_component_options(
-		_reg_indent _reg_tc _reg_rename _reg_buildonly "${_options_string}")
+		_reg_indent _reg_tc _reg_rename _reg_buildonly _reg_whole
+		"${_options_string}")
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -325,6 +364,11 @@ function(create_component _component _component_title _srcdir _builddir
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY FALSE)
 	endif()
+	if(_reg_whole)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE FALSE)
+	endif()
 
 	_buildmaster_component_defer_arm()
 endfunction()
@@ -361,6 +405,8 @@ endfunction()
 ## @param[in] dest   Registered component (all produced libs), library spec,
 ##            existing target, or archive path.
 ## @note Linking to a BUILDONLY component is FATAL at materialize.
+## @note component_link only participates in the BuildMaster graph; host app
+##       targets use target_link_libraries(… PRIVATE <component_id>).
 function(component_link source dest)
 	if(ARGC GREATER 2)
 		message(FATAL_ERROR
@@ -562,7 +608,8 @@ function(_buildmaster_component_collect_outputs _component)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 
 	buildmaster_parse_component_options(
-		_indent_level _toolchain _rename_on _buildonly "${_options_string}")
+		_indent_level _toolchain _rename_on _buildonly _whole_ignored
+		"${_options_string}")
 
 	if(_buildonly)
 		set(_BM_BUILDONLY "1")
@@ -652,9 +699,12 @@ endfunction()
 
 ## @brief configure_file + include the shared component fragment template.
 function(_buildmaster_component_write_fragment _component _deferred)
+	# Collect in this scope: materialize locals are not visible here.
+	_buildmaster_component_collect_outputs("${_component}")
+
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
-	buildmaster_parse_component_options(_il _toolchain _rn _bo "${_options_string}")
+	buildmaster_parse_component_options(_il _toolchain _rn _bo _wh "${_options_string}")
 	if(_bo)
 		set(_BM_BUILDONLY "1")
 	else()
@@ -676,6 +726,23 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		set(_LIBRARY_TOOLCHAIN_SUFFIX " (with toolchain ${_toolchain})")
 	else()
 		set(_LIBRARY_TOOLCHAIN_SUFFIX "")
+	endif()
+
+	# WHOLE → one closed whole-archive region for all produced static paths
+	set(_BM_WHOLE "0")
+	set(_BM_WHOLE_LINK_ITEMS "")
+	get_property(_whole_prop GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE)
+	if(_whole_prop)
+		if(NOT _library_mode STREQUAL "static")
+			message(WARNING
+				"[BuildMaster] WHOLE ignored for '${_component}' "
+				"(mode '${_library_mode}'; only static is supported)")
+		elseif(_LIBRARY_COMPONENT_FILES)
+			set(_BM_WHOLE "1")
+			_buildmaster_whole_archive_link_items(_whole_list
+				${_LIBRARY_COMPONENT_FILES})
+			string(REPLACE ";" " " _BM_WHOLE_LINK_ITEMS "${_whole_list}")
+		endif()
 	endif()
 
 	if(_deferred)
@@ -740,14 +807,23 @@ function(_buildmaster_apply_links)
 					"component '${_dst}' (order only via component_dependency "
 					"between BUILDONLY phases, or component_repack to publish)")
 			endif()
-			get_property(_names GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_NAMES)
-			foreach(_lib IN LISTS _names)
-				if(TARGET "${_lib}")
-					target_link_libraries(${_src} INTERFACE ${_lib})
+			# WHOLE dest: INTERFACE already carries whole-archive items; do not
+			# also link plain IMPORTED names (would drop whole or double-link).
+			get_property(_dst_whole GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_WHOLE)
+			if(_dst_whole)
+				if(TARGET "${_dst}")
+					target_link_libraries(${_src} INTERFACE ${_dst})
 				endif()
-			endforeach()
-			if(TARGET "${_dst}")
-				target_link_libraries(${_src} INTERFACE ${_dst})
+			else()
+				get_property(_names GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_NAMES)
+				foreach(_lib IN LISTS _names)
+					if(TARGET "${_lib}")
+						target_link_libraries(${_src} INTERFACE ${_lib})
+					endif()
+				endforeach()
+				if(TARGET "${_dst}")
+					target_link_libraries(${_src} INTERFACE ${_dst})
+				endif()
 			endif()
 			continue()
 		endif()

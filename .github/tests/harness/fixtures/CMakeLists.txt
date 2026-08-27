@@ -50,3 +50,8 @@ add_subdirectory(repack)
 # ---------------------------------------------------------------------------
 add_subdirectory(recursive/cmake)
 add_subdirectory(recursive/meson)
+
+# ---------------------------------------------------------------------------
+# WHOLE (static whole-archive INTERFACE for host target_link_libraries)
+# ---------------------------------------------------------------------------
+add_subdirectory(whole)

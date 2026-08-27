@@ -16,14 +16,20 @@
 <lib>/libfirstlib.a|unix
 <lib>/libloaderlib.a|unix
 <lib>/libmergedlib.a|unix
+<lib>/liboutlib.a|unix
 <lib>/libpayloadlib.a|unix
 <lib>/libprereqlib.a|unix
 <lib>/libsecondlib.a|unix
+<lib>/libwlib.a|unix
+<lib>/libwlibplain.a|unix
 <lib>/loaderlib.lib|windows
 <lib>/mergedlib.lib|windows
+<lib>/outlib.lib|windows
 <lib>/payloadlib.lib|windows
 <lib>/prereqlib.lib|windows
 <lib>/secondlib.lib|windows
+<lib>/wlib.lib|windows
+<lib>/wlibplain.lib|windows
 
 # Headers
 <include>/a.h|all
@@ -32,10 +38,12 @@
 <include>/dep.h|all
 <include>/first.h|all
 <include>/loader.h|all
+<include>/outlib.h|all
 <include>/payload.h|all
 <include>/prereq.h|all
 <include>/sdk.h|all
 <include>/second.h|all
+<include>/wlib.h|all
 
 # Recursive cmake
 <include>/recursive/cmake/leaf.h|all
