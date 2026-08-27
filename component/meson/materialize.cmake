@@ -7,6 +7,12 @@
 ## @note Called only from `_buildmaster_finalize_components`. Uses
 ##       `create_meson_stages` (not part of the public API) and shared
 ##       collect/write helpers from `component/materialize.cmake`.
+## @note Eager components print `Configuring …` from the generated
+##       setup script (parent include). Deferred components
+##       (`component_dependency` sources) print
+##       `Setting up <title> for build-time configure` here so parent
+##       configure is not silent about them; the real Meson setup
+##       still runs under `<id>_configure` at build time.
 function(_buildmaster_materialize_meson _component)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_meson")
 	get_property(_component_title GLOBAL PROPERTY
@@ -24,6 +30,13 @@ function(_buildmaster_materialize_meson _component)
 	_buildmaster_component_has_deferred_configure("${_component}" _deferred)
 	if(_deferred)
 		set(_via_target "1")
+		set(_tc_suffix "")
+		if(NOT _toolchain STREQUAL "")
+			set(_tc_suffix " (with toolchain ${_toolchain})")
+		endif()
+		buildmaster_message(MESON STATUS
+			"Setting up ${_component_title} for build-time configure${_tc_suffix}"
+			"${_indent_level}")
 	else()
 		set(_via_target "0")
 	endif()
