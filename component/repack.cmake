@@ -144,8 +144,14 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		"component_repack: cannot resolve INPUT '${token}' (expected component id, CMake target, or archive path)")
 endfunction()
 
-## @brief Materialize all registered component_repack entries (internal).
-## @note Called from _buildmaster_finalize_components after components.
+## @brief Create merge commands, IMPORTED archives, and `<id>_install` for every
+##        registered `component_repack`.
+## @note Called from `_buildmaster_finalize_components` after real components
+##       exist so INPUT component ids already have `_install` / `_build`.
+## @note OUTPUT path is `library_import_static_hint` under
+##       BUILDMASTER_INSTALL_LIBDIR. Merge runs `merge_static_archives.cmake`
+##       with CMAKE_AR when set. Empty INPUT file list is FATAL.
+## @note Marks BUILDMASTER_REPACK_<id>_FILE for orphan / consumption checks.
 function(_buildmaster_materialize_repacks)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_repacks")
 	get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)

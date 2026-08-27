@@ -333,8 +333,11 @@ endfunction()
 # =============================================================================
 
 ## @brief Clear the in-memory toolchain export registry.
-## @note Call once at the start of a BuildMaster bootstrap before any
-##       buildmaster_toolchain_export* calls. Safe to call more than once.
+## @note Empties the GLOBAL property BUILDMASTER_TOOLCHAIN_LINES.
+## @note Call once at the start of a primary BuildMaster bootstrap, before any
+##       buildmaster_toolchain_export / export_raw. Nested bootstraps with
+##       BUILDMASTER_CONFIGURED must not call this (they would wipe the parent
+##       dump). Safe to call more than once in the primary path.
 function(buildmaster_toolchain_reset)
 	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")

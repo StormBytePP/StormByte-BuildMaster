@@ -24,6 +24,14 @@ set(_indent         "@_FILE_INDENT@")
 # ---------------------------------------------------------------------------
 # Local helpers
 # ---------------------------------------------------------------------------
+
+## @brief Compare `_file` against `_hash` after a successful download.
+## @param[out] _out_var Parent-scope TRUE if the hash matches or `_hash` is empty.
+## @param[in]  _file    Local path written by file(DOWNLOAD).
+## @param[in]  _hash    `ALGO=hex` (e.g. SHA256=…) or a bare hex (treated as SHA256).
+## @note Missing file or mismatch → FALSE. Does not delete the file.
+## @note Called only after file(DOWNLOAD) reports success so CMake is not
+##       asked to hash a failed transfer.
 function(_file_dl_checksum_ok _out_var _file _hash)
 	if("${_hash}" STREQUAL "")
 		set(${_out_var} TRUE PARENT_SCOPE)
@@ -58,6 +66,11 @@ function(_file_dl_checksum_ok _out_var _file _hash)
 	endif()
 endfunction()
 
+## @brief Whether a file(DOWNLOAD) error should not be retried.
+## @param[out] _out_var Parent-scope TRUE for permanent failures.
+## @param[in]  _msg     Status text from file(DOWNLOAD) (second STATUS list item).
+## @note Treats HTTP 404 and “Not Found” as permanent. Timeouts and other
+##       network errors stay retryable up to @_FILE_MAX_RETRIES@.
 function(_file_dl_is_permanent_error _out_var _msg)
 	if("${_msg}" MATCHES "404" OR "${_msg}" MATCHES "[Nn]ot [Ff]ound")
 		set(${_out_var} TRUE PARENT_SCOPE)

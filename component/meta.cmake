@@ -7,9 +7,12 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 
-## @brief Ensure `id` exists in the meta registry (lazy; title defaults to id).
-## @param[in] id Meta component identifier.
-## @note Does not create CMake targets. Safe before create_meta_component().
+## @brief Ensure `id` exists in the meta registry (lazy create).
+## @param[in] id Meta component identifier (non-empty).
+## @note Does not create CMake targets. Safe before `create_meta_component()`.
+## @note First call appends to BUILDMASTER_META_IDS and sets TITLE=id,
+##       WHOLE=FALSE, CREATED=FALSE, INDENT=0. Later calls are no-ops.
+## @note Empty id is FATAL.
 function(_buildmaster_meta_ensure id)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_ensure")
 	if("${id}" STREQUAL "")
@@ -33,8 +36,10 @@ function(_buildmaster_meta_ensure id)
 endfunction()
 
 ## @brief Whether `id` is a registered meta (including lazy-only adds).
-## @param[in]  id      Identifier.
-## @param[out] out_var Parent-scope TRUE/FALSE.
+## @param[in]  id      Identifier to look up in BUILDMASTER_META_IDS.
+## @param[out] out_var Parent-scope TRUE if present, else FALSE.
+## @note Does not require `create_meta_component()`; `meta_component_add`
+##       alone is enough for this to return TRUE.
 function(_buildmaster_meta_is id out_var)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_is")
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -251,9 +256,13 @@ function(_buildmaster_meta_collect_leaves id stack out_var)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
 endfunction()
 
-## @brief Create meta INTERFACE + _install anchors and record expanded leaves.
-## @note Called at the start of finalize, before create_* materialize.
-##       Does not link yet (leaf targets do not exist).
+## @brief Create meta INTERFACE + stage anchors and record expanded leaves.
+## @note Runs at the start of finalize, before `create_*` materialize, so
+##       `component_link` / `component_dependency` can resolve meta ids.
+## @note DFS via `_buildmaster_meta_collect_leaves` (cycles FATAL). Each leaf
+##       must be a registered non-BUILDONLY component. Creates `<id>`
+##       INTERFACE plus empty `<id>_install` / `_build` / `_configure`.
+## @note Does not wire link lines yet (leaf IMPORTED targets do not exist).
 function(_buildmaster_materialize_metas)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_metas")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -299,7 +308,13 @@ function(_buildmaster_materialize_metas)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_metas")
 endfunction()
 
-## @brief After real components exist: wire meta_install + INTERFACE (+ WHOLE).
+## @brief After real components exist: wire `<meta>_install` and INTERFACE.
+## @note For each leaf, `add_dependencies(<meta>_install <leaf>_install)`.
+## @note If the meta has WHOLE: flatten static produced files into one linear
+##       whole-archive group; already-WHOLE children keep their own INTERFACE
+##       region; shared/headers children are linked as INTERFACE only.
+## @note Without WHOLE: `target_link_libraries(<meta> INTERFACE <leaf>)`.
+## @note WHOLE with no static produced archives among members → WARNING.
 function(_buildmaster_meta_wire)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_wire")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)

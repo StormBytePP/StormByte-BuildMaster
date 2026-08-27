@@ -13,9 +13,12 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
 # Internal helpers
 # -----------------------------------------------------------------------------
 
-## @brief Validate that a path does not contain path-traversal sequences.
-## @param[in] _path Path to validate.
-## @note Emits FATAL_ERROR if the path contains ".." anywhere.
+## @brief Reject paths that contain `..` anywhere in the string.
+## @param[in] _path Path, URL basename, or destination directory to check.
+## @note FATAL if `".."` matches. Used before writing under
+##       BUILDMASTER_DOWNLOADSDIR or extracting archives so a crafted name
+##       cannot escape the downloads / out dir. Not a full canonicalization;
+##       it is a cheap deny-list for helper inputs.
 function(_file_validate_no_traversal _path)
 	buildmaster_message(FILE LOWLEVEL "Entering _file_validate_no_traversal")
 	if("${_path}" MATCHES "\\.\\.")

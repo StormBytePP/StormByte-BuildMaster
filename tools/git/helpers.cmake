@@ -9,7 +9,11 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../log.cmake")
 
-## @brief Ensure the aggregate buildmaster_clean target exists.
+## @brief Create the aggregate `buildmaster_clean` target if it is missing.
+## @note Idempotent. Child targets (`buildmaster_clean_git_<id>`) attach later
+##       via add_dependencies. The target itself has no commands; it only
+##       groups per-repo reset + stamp removal when BUILDMASTER_CLEAN_RESET_REPOS
+##       is ON.
 function(_buildmaster_ensure_clean_target)
 	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_ensure_clean_target")
 	if(NOT TARGET buildmaster_clean)
@@ -21,8 +25,11 @@ function(_buildmaster_ensure_clean_target)
 endfunction()
 
 ## @brief Resolve the git toplevel for a path (or the path itself).
-## @param[out] _out  Parent-scope absolute toplevel or path.
-## @param[in]  _path Repository path or worktree path.
+## @param[out] _out  Parent-scope absolute toplevel, or `_path` if git fails.
+## @param[in]  _path Repository path or any worktree path inside it.
+## @note Uses `git -C … rev-parse --show-toplevel`. If GIT_EXECUTABLE is unset
+##       or the command fails, `_path` (absolute) is returned so callers still
+##       have a stable key for markers.
 function(_buildmaster_git_toplevel _out _path)
 	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_toplevel")
 	get_filename_component(_abs "${_path}" ABSOLUTE)
@@ -46,9 +53,11 @@ function(_buildmaster_git_toplevel _out _path)
 	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_toplevel")
 endfunction()
 
-## @brief Path of the post-install reset script for a git root.
-## @param[out] _out       Parent-scope marker path.
-## @param[in]  _git_root  Absolute git toplevel.
+## @brief Path of the post-install reset `-P` script for one git root.
+## @param[out] _out       Parent-scope marker path under BUILDMASTER_SCRIPTS_GIT_DIR.
+## @param[in]  _git_root  Absolute git toplevel (used as SHA1 key).
+## @note The file may not exist yet; this only computes the path. Writing is
+##       `_buildmaster_register_post_install_reset`.
 function(_buildmaster_git_marker_path _out _git_root)
 	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_marker_path")
 	string(SHA1 _hash "${_git_root}")
@@ -57,8 +66,12 @@ function(_buildmaster_git_marker_path _out _git_root)
 	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_marker_path")
 endfunction()
 
-## @brief Write the post-install reset -P script for one git root.
+## @brief Write the post-install reset `-P` script for one git root.
 ## @param[in] _git_root Absolute git toplevel.
+## @note Overwrites the marker each time a git op registers that root.
+##       The generated script runs `reset --hard` then `clean -fd` through
+##       ENV_GIT_SILENT_COMMAND. Failures are WARNING, not FATAL (install
+##       already succeeded).
 function(_buildmaster_register_post_install_reset _git_root)
 	_buildmaster_git_marker_path(_marker "${_git_root}")
 	set(_git_cmd_line "")
@@ -89,9 +102,13 @@ endif()
 endfunction()
 
 
-## @brief Register a component id with a git root for clean / post-install.
-## @param[in] _component_id Component identifier (filesystem-sanitized key).
-## @param[in] _git_repo_dir Repository or worktree path.
+## @brief Bind a component id to a git root for clean and post-install reset.
+## @param[in] _component_id Component identifier (sanitized for target names).
+## @param[in] _git_repo_dir Repository or worktree path (resolved to toplevel).
+## @note Stores BUILDMASTER_GIT_ROOT_<id>. Writes the post-install marker.
+##       When BUILDMASTER_CLEAN_RESET_REPOS is ON, adds
+##       `buildmaster_clean_git_<id>` under `buildmaster_clean` (reset, clean,
+##       delete the git configure stamp so the next build re-runs configure).
 function(_buildmaster_git_register_op _component_id _git_repo_dir)
 	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_register_op")
 	sanitize_for_filename(_cid "${_component_id}")
@@ -126,9 +143,12 @@ function(_buildmaster_git_register_op _component_id _git_repo_dir)
 	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_register_op")
 endfunction()
 
-## @brief Resolve post-install reset script path for a source directory.
-## @param[out] _out     Parent-scope path, or empty if none registered.
+## @brief Resolve the post-install reset script for a source directory.
+## @param[out] _out     Parent-scope path, or empty if no marker exists yet.
 ## @param[in]  _srcdir  Component source directory (any path inside the repo).
+## @note Resolves toplevel then the SHA1 marker path. Install stages call this
+##       to `cmake -P` the marker after a successful install. Empty means no
+##       create_git_* ran for that tree.
 function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
 	buildmaster_message(GIT LOWLEVEL "Entering buildmaster_git_post_install_marker_for_srcdir")
 	_buildmaster_git_toplevel(_git_root "${_srcdir}")

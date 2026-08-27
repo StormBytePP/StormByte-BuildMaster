@@ -15,7 +15,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 
 ## @brief Quote a filesystem path for a Meson native-file string list entry.
 ## @param[out] out_var Parent-scope variable receiving a single-quoted path.
-## @param[in] path Path to quote (backslashes normalized to '/').
+## @param[in]  path    Path to quote (backslashes become `/`).
+## @note Escapes embedded single quotes as `\'`. Result looks like
+##       `'C:/Program Files/ccache/ccache'`. Used inside `[binaries]` lists.
 function(buildmaster_meson_native_quote out_var path)
 	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_quote")
 	string(REPLACE "\\" "/" path "${path}")

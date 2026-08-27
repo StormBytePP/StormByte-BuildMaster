@@ -51,6 +51,7 @@ endforeach()
 ## @param[out] _out   Parent-scope padded string.
 ## @param[in]  _text  Source text.
 ## @param[in]  _width Target width in characters.
+## @note Used so [LEVEL] and [BuildMaster/Module] columns stay aligned.
 function(_buildmaster_log_pad _out _text _width)
 	set(_t "${_text}")
 	string(LENGTH "${_t}" _n)
@@ -65,8 +66,13 @@ function(_buildmaster_log_pad _out _text _width)
 endfunction()
 
 ## @brief Resolve a level name or 0-5 integer to a canonical uppercase name.
-## @param[out] _out Parent-scope canonical level (LOWLEVEL…FATAL).
-## @param[in]  _raw Name or integer as provided by cache/env/caller.
+## @param[out] _out Parent-scope canonical level (LOWLEVEL, DEBUG, INFO,
+##                  WARNING, STATUS, or FATAL).
+## @param[in]  _raw Name or integer as provided by cache, env, or caller.
+## @note Accepts the six names (any case) or the integers 0–5. Anything else
+##       is FATAL and lists the accepted names. Used both for
+##       BUILDMASTER_LOGLEVEL and for the level argument of
+##       buildmaster_message().
 function(_buildmaster_log_parse_level _out _raw)
 	set(_v "${_raw}")
 	string(TOUPPER "${_v}" _v)
@@ -93,8 +99,12 @@ function(_buildmaster_log_parse_level _out _raw)
 	set(${_out} "${_v}" PARENT_SCOPE)
 endfunction()
 
-## @brief Read cache/env, validate, set BUILDMASTER_LOGLEVEL (default STATUS).
-## @note BUILDMASTER_DEBUG is ignored.
+## @brief Read cache/env, validate, and set BUILDMASTER_LOGLEVEL in the caller.
+## @note Precedence: CMake cache/variable BUILDMASTER_LOGLEVEL, then
+##       ENV{BUILDMASTER_LOGLEVEL}, then STATUS. Empty values are ignored.
+## @note BUILDMASTER_DEBUG (cache and env) is ignored; it is not a log level.
+## @note Must run in -P scripts after include(log.cmake) so generated stages
+##       see the same filter as parent configure. Writes PARENT_SCOPE only.
 function(buildmaster_loglevel_init)
 	set(_raw "")
 	if(DEFINED BUILDMASTER_LOGLEVEL AND NOT "${BUILDMASTER_LOGLEVEL}" STREQUAL "")
@@ -113,6 +123,8 @@ endfunction()
 ## @param[out] _out    Parent-scope string `[BuildMaster/<Mod>]: <text>`
 ## @param[in]  _module Uppercase module key (CMAKE, MESON, USER, …).
 ## @param[in]  _text   Comment body.
+## @note Matches the STATUS layout of buildmaster_message() so configure
+##       lines and ninja progress share one column. Unknown modules FATAL.
 function(buildmaster_log_comment _out _module _text)
 	string(TOUPPER "${_module}" _mod)
 	list(FIND _BM_LOG_MODULES "${_mod}" _midx)
@@ -133,6 +145,7 @@ endfunction()
 ## @param[in] _indent Optional tab count after the header (default 0).
 ## @note FATAL is never filtered. WARNING is hidden when current > INFO.
 ##       STATUS lines have no [LEVEL] tag. Header is never indented.
+## @note This file is the only BuildMaster source allowed to call message().
 function(buildmaster_message _module _level _message)
 	if(ARGC LESS 3 OR ARGC GREATER 4)
 		message(FATAL_ERROR
