@@ -2,65 +2,125 @@
 
 @section uf_overview Overview
 
-Short reference for BuildMaster helper modules. Full signatures and
-implementation details live in the linked sources.
+Short reference for BuildMaster helper modules. Full signatures live in the
+linked sources. Every `helpers.cmake` is an **include stub**; the
+implementation sits in one file per oficio next to it.
 
-@section uf_tools Modules
+Logging is `buildmaster_message(<MODULE> <LEVEL> …)`. Configure
+`BUILDMASTER_LOGLEVEL` (`FATAL`, `WARNING`, `STATUS`, `INFO`, `DEBUG`,
+`LOWLEVEL`). `BUILDMASTER_DEBUG` is ignored. Prefer this API over
+`message()` in projects that use BuildMaster.
 
-@subsection uf_component component/helpers.cmake
+@section uf_layout Layout
 
-High-level component API:
+| Stub | Oficio files |
+|------|----------------|
+| `helpers.cmake` | `paths.cmake`, `library_hints.cmake`, `lists.cmake` — then includes toolchain / env / tools / component trees |
+| `component/helpers.cmake` | `options.cmake`, `graph.cmake`, `materialize.cmake` (+ `meta.cmake`, `repack.cmake`; backends `component/{cmake,meson}/`) |
+| `env/helpers.cmake` | `runner.cmake`, `command.cmake` |
+| `toolchain/helpers.cmake` | `validate.cmake`, `profile.cmake`, `flags.cmake`, `msvc.cmake`, `export.cmake` |
+| `tools/helpers.cmake` | `add_tool.cmake`, `extra_tools.cmake` |
+| `tools/cmake/helpers.cmake` | `stages.cmake` |
+| `tools/meson/helpers.cmake` | `stages.cmake` |
+| `tools/file/helpers.cmake` | `checksum.cmake`, `download.cmake`, `decompress.cmake` |
+| `tools/git/helpers.cmake` | `git_internal.cmake`, `reset.cmake`, `patch.cmake`, `fetch.cmake`, `switch.cmake` |
+| `tools/archive/helpers.cmake` | `find_archiver.cmake` |
 
-- `create_component()` — core factory (CMake or Meson, static/shared)
+@section uf_modules Modules
+
+@subsection uf_component component/
+
+Declarative component API (order of declaration does not matter; materialize
+is deferred to the end of `CMAKE_SOURCE_DIR`):
+
+- `create_component()` — core factory
 - `create_cmake_component()` / `create_meson_component()`
-- `create_cmake_dependant_component()` / `create_meson_dependant_component()`
-- `library_import_hint()`, `library_import_static_hint()`, `library_dll_hint()`
-- `rename_static_library()`, `create_bundle_static_libraries()`
+- `create_cmake_headers_component()` / `create_meson_headers_component()`
+- `component_dependency()`, `component_link()`, `component_prerequisite()`
+- `component_repack()` — merge static archives after inputs' `_build`
+- `meta_component()` / `meta_component_add()` — INTERFACE collections
 
-Generates per-component fragments under `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`
-and wires `<component>_build` / `<component>_install` plus IMPORTED targets.
+Trailing options string (`KEY=value;FLAG`): `INDENT`, `TOOLCHAIN`, `RENAME`,
+`BUILDONLY`, `WHOLE`. Unknown keys warn. Extra positional arguments are fatal.
 
-@subsection uf_tools_cmake tools/cmake/helpers.cmake
+Generated fragments live under `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`. Stage
+targets are `<id>_configure` / `<id>_build` / `<id>_install` plus IMPORTED
+or INTERFACE libraries.
 
-`create_cmake_stages()` — writes configure/build/install scripts into
+@subsection uf_tools_cmake tools/cmake/
+
+`create_cmake_stages()` — writes configure / build / install scripts into
 `${BUILDMASTER_SCRIPTS_CMAKEDIR}` from `tools/cmake/*.cmake.in`.
 
-@subsection uf_tools_meson tools/meson/helpers.cmake
+@subsection uf_tools_meson tools/meson/
 
-`create_meson_stages()` — same pattern for Meson (`setup` / `compile` /
-`install` templates). Handles static vs shared and MSVC `/Z7` for parallel
-builds when applicable.
+`create_meson_stages()` — same pattern (`setup` / `compile` / `install`).
+Always pass a Meson native file when a toolchain profile is active so
+compiler caches stay valid.
 
-@subsection uf_tools_git tools/git/helpers.cmake
+@subsection uf_tools_file tools/file/
 
-Generators for bootstrap Git fragments:
+- `file_download()` / `file_download_cached()` — hash-verified download;
+  cache under `BUILDMASTER_DOWNLOADSDIR` (override with env / `-D`)
+- `file_decompress()` — `file(ARCHIVE_EXTRACT …)`
+
+@subsection uf_tools_git tools/git/
+
+Bootstrap Git fragments:
 
 - `create_git_fetch()`
 - `create_git_reset_file()`
 - `create_git_patch_file()`
 - `create_git_switch_branch()`
 
-@subsection uf_env env/helpers.cmake
+Post-install reset is registered automatically when a component id is bound
+to a git root.
 
-- `update_env_runner()` — regenerate platform runner scripts
-- `prepare_command()` — tokenize a command list for `execute_process(COMMAND …)`
+@subsection uf_tools_archive tools/archive/
 
-@subsection uf_tools_core tools/helpers.cmake
+`buildmaster_find_archiver(out_path out_style [hint])` — `CMAKE_AR`,
+`ENV{AR}`, then platform fallbacks. Style is `msvc_lib` or `gnu_ar`.
 
-Tool registration macros: `add_tool`, `configure_extra_tool`,
-`ensure_extra_tool_is_available`, propagation helpers for extra plugins
-(e.g. pkgconf).
+@subsection uf_env env/
+
+- `update_env_runner()` — regenerate the parent platform runner
+- `buildmaster_create_component_env_runners()` — per-component runners
+  after a toolchain profile load
+- `prepare_command()` — tokenize for `execute_process(COMMAND …)`
+- `buildmaster_quote_cmd_list_for_script()` — quote tokens for generated `-P` scripts
+
+@subsection uf_toolchain toolchain/
+
+- `buildmaster_validate_toolchain()` / `buildmaster_load_toolchain_profile()`
+- `buildmaster_clean_cflags()` / `buildmaster_clean_ldflags()`
+- `buildmaster_fuse_ld_flag()`
+- `buildmaster_resolve_msvc_tool()`
+- `buildmaster_toolchain_reset()` / `export()` / `export_raw()` / `write()` /
+  `write_component()`
+
+Profiles: `gcc`, `clang`, `clang-cl`, `msvc` under `toolchain/profiles/`.
+
+@subsection uf_tools_core tools/
+
+Tool registration: `add_tool`, `configure_extra_tool`,
+`ensure_extra_tool_is_available`, extra-plugin propagation (e.g. pkgconf).
 
 @subsection uf_global helpers.cmake
 
-Shared utilities:
+Shared utilities (loaded first):
 
-- `sanitize_for_filename()` — safe ids for generated script names
-- `list_join()` — join lists while respecting quoted segments
-- `windows_path()`, library filename hints
-- Includes env/cmake/git/meson/component helper trees
+- `windows_path()`, `normalize_cmake_path()`, `sanitize_for_filename()`,
+  `ensure_build_dir()`
+- `library_import_hint()`, `library_import_static_hint()`
+- `toggle_bool()`, `list_join()`
+- Then includes toolchain, env, cmake/file/git/meson/archive, component
 
-@section uf_debug Debug output
+@section uf_log Logging
 
-Set environment variable `BUILDMASTER_DEBUG=1` before configuring to
-propagate full configure/build tool logs through BuildMaster stages.
+`buildmaster_message(<MODULE> <LEVEL> <text> [<indent>])`
+
+Modules include `CORE`, `CMAKE`, `MESON`, `ENV`, `TOOLCHAIN`, `TOOLS`,
+`FILE`, `GIT`, `ARCHIVE`, `RENAME`, `COMPONENT`, `USER`.
+
+`FATAL` is never filtered. `WARNING` is shown at `WARNING` and above.
+Default level is `STATUS`.
