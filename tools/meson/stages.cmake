@@ -52,6 +52,10 @@
 ##       `_MESON_CXX_ARGS` / `_MESON_LINK_ARGS` include the shared prefix
 ##       (`-I`/`-L` or `/I`/`/LIBPATH:`). Per-component runners also get
 ##       Windows `INCLUDE`/`LIB` when TOOLCHAIN= is set.
+## @note `MESON_BUILD_TYPE` is derived from `CMAKE_BUILD_TYPE` (`Debug` →
+##       `debug`, `RelWithDebInfo` → `debugoptimized`, `MinSizeRel` →
+##       `minsize`, `Release` or empty/multi-config → `release`). Meson
+##       rejects an empty `-Dbuildtype=` (reports Value ".").
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	buildmaster_message(MESON LOWLEVEL "Entering create_meson_stages")
 	if(ARGC GREATER 10)
@@ -341,6 +345,19 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(LTO_ENABLED "false")
 	endif()
 
+	# Meson -Dbuildtype= must be a concrete choice. Empty CMAKE_BUILD_TYPE
+	# (or multi-config generators) used to substitute nothing and Meson
+	# reported Value "." is not one of the choices.
+	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+		set(MESON_BUILD_TYPE "debug")
+	elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		set(MESON_BUILD_TYPE "debugoptimized")
+	elseif(CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+		set(MESON_BUILD_TYPE "minsize")
+	else()
+		set(MESON_BUILD_TYPE "release")
+	endif()
+
 	if(BUILDMASTER_VERBOSE)
 		set(_MESON_COMPILE_VERBOSE_ARGS "-v")
 	else()
@@ -466,6 +483,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(${_file_setup} "${_MESON_SETUP_FILE}" PARENT_SCOPE)
 	set(${_file_compile} "${_MESON_COMPILE_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_MESON_INSTALL_FILE}" PARENT_SCOPE)
-	buildmaster_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE}")
+	buildmaster_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE} buildtype=${MESON_BUILD_TYPE}")
 	buildmaster_message(MESON LOWLEVEL "Exiting create_meson_stages")
 endfunction()
