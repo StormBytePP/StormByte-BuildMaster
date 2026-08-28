@@ -1,6 +1,11 @@
 # cmake -DOUTPUTS="path1;path2" -DBINDIR=... -DBUILDMASTER_SRCDIR=... -P normalize_install_outputs.cmake
 # Rename upstream variant archives to the canonical produced paths.
 # Does not read RENAME=; the caller (install_exec) decides whether to run this.
+#
+# Each OUTPUT is renamed in its own directory:
+#   static / Unix shared  → LIBDIR only
+#   MSVC shared           → LIBDIR (.lib) and BINDIR (.dll) as two OUTPUTS
+# Stem case is taken from the produced basename (StormByte.dll → StormByte).
 
 if(NOT DEFINED OUTPUTS OR OUTPUTS STREQUAL "")
 	return()
@@ -28,32 +33,29 @@ endif()
 ## @brief Split an archive / import / shared filename into stem and suffix.
 ## @param[in]  _filename   Basename or path (only the filename is used).
 ## @param[out] _out_stem   Parent-scope stem without a leading `lib` prefix
-##                         (e.g. `z` from `libz.a` or `z.lib`). Empty if the
-##                         name is not a recognised library filename.
+##                         (e.g. `z` from `libz.a` or `StormByte` from
+##                         `StormByte.dll`). Empty if the name is not a
+##                         recognised library filename.
 ## @param[out] _out_suffix Parent-scope suffix including the dot: `.a`,
 ##                         `.lib`, `.dll`, `.so`, or `.dylib`. Empty when
 ##                         the stem is empty.
-## @note Matching is case-insensitive. A trailing SONAME suffix after `.so`
-##       (e.g. `.so.1.2`) is treated as `.so`. PDB files are not parsed here.
+## @note Suffix detection is case-insensitive. The stem is sliced from the
+##       original basename so produced case is preserved (`StormByte`, not
+##       `stormbyte`). A trailing SONAME after `.so` (e.g. `.so.1.2`) is
+##       treated as `.so`. PDB files are not parsed here.
 function(_bm_rename_split_name _filename _out_stem _out_suffix)
 	get_filename_component(_bn "${_filename}" NAME)
 	string(TOLOWER "${_bn}" _bn_l)
 
-	# dll / so / dylib / a / lib
-	if(_bn_l MATCHES "^(.*)\\.(dll)$")
-		set(_stem_part "${CMAKE_MATCH_1}")
+	if(_bn_l MATCHES "\\.dll$")
 		set(_suf ".dll")
-	elseif(_bn_l MATCHES "^(.*)\\.(dylib)$")
-		set(_stem_part "${CMAKE_MATCH_1}")
+	elseif(_bn_l MATCHES "\\.dylib$")
 		set(_suf ".dylib")
-	elseif(_bn_l MATCHES "^(.*)\\.(so)(\\..*)?$")
-		set(_stem_part "${CMAKE_MATCH_1}")
+	elseif(_bn_l MATCHES "\\.so(\\..*)?$")
 		set(_suf ".so")
-	elseif(_bn_l MATCHES "^(.*)\\.(lib)$")
-		set(_stem_part "${CMAKE_MATCH_1}")
+	elseif(_bn_l MATCHES "\\.lib$")
 		set(_suf ".lib")
-	elseif(_bn_l MATCHES "^(.*)\\.(a)$")
-		set(_stem_part "${CMAKE_MATCH_1}")
+	elseif(_bn_l MATCHES "\\.a$")
 		set(_suf ".a")
 	else()
 		set(${_out_stem} "" PARENT_SCOPE)
@@ -61,7 +63,19 @@ function(_bm_rename_split_name _filename _out_stem _out_suffix)
 		return()
 	endif()
 
-	# Drop optional lib prefix for matching (libz.a / z.lib → stem z)
+	# Stem from the original basename — do not take CMAKE_MATCH from the
+	# lowercased copy.
+	string(LENGTH "${_bn}" _bnlen)
+	if(_bn_l MATCHES "\\.so\\..+$")
+		string(TOLOWER "${_bn}" _tmp)
+		string(FIND "${_tmp}" ".so" _so_pos)
+		string(SUBSTRING "${_bn}" 0 ${_so_pos} _stem_part)
+	else()
+		string(LENGTH "${_suf}" _suflen)
+		math(EXPR _stemlen "${_bnlen} - ${_suflen}")
+		string(SUBSTRING "${_bn}" 0 ${_stemlen} _stem_part)
+	endif()
+
 	if(_stem_part MATCHES "^[Ll][Ii][Bb](.+)$")
 		set(_stem_part "${CMAKE_MATCH_1}")
 	endif()
@@ -157,6 +171,9 @@ function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
 endfunction()
 
 # ---- main ----
+#
+# One OUTPUT = one file in one directory. MSVC shared therefore lists two
+# paths (LIBDIR/*.lib and BINDIR/*.dll); static lists only LIBDIR.
 
 foreach(_out IN LISTS OUTPUTS)
 	if(_out STREQUAL "")
@@ -187,7 +204,9 @@ foreach(_out IN LISTS OUTPUTS)
 	file(RENAME "${_src}" "${_out}")
 	buildmaster_message(RENAME INFO "rename: ${_src} → ${_out}")
 
-	# Windows shared: pair DLL with same variant token
+	# Fallback if only the import .lib was listed: still pair the DLL in BINDIR
+	# with the same variant token. When both paths are in OUTPUTS this is a
+	# no-op (the .dll iteration already handled BINDIR).
 	if(_suffix STREQUAL ".lib" AND NOT BINDIR STREQUAL "")
 		set(_dll_dst "${BINDIR}/${_stem}.dll")
 		if(NOT EXISTS "${_dll_dst}")

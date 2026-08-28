@@ -396,11 +396,17 @@ endfunction()
 ## @brief Resolve one library spec into IMPORTED name + file path (+ MSVC DLL).
 ## @param[in]  library_mode `static` or `shared`.
 ## @param[in]  spec         Library spec (`<name>` or `<subdir>/<name>`).
-## @param[in]  base_libdir  Root for archives (`BUILDMASTER_INSTALL_LIBDIR`, or the
-##            component BUILDDIR when BUILDONLY).
+## @param[in]  base_libdir  Root for archives / import libs
+##            (`BUILDMASTER_INSTALL_LIBDIR`, or the component BUILDDIR when
+##            BUILDONLY).
 ## @param[out] names_var    List variable receiving the imported target name.
-## @param[out] files_var    List variable receiving the archive/import path.
-## @param[out] dlls_var     List variable receiving the MSVC DLL path (shared only).
+## @param[out] files_var    List variable receiving the archive/import path
+##            under `base_libdir` (GNUInstallDirs ARCHIVE → LIBDIR).
+## @param[out] dlls_var     List variable receiving the MSVC DLL path (shared
+##            only). On an install prefix that is RUNTIME → BINDIR; BUILDONLY
+##            keeps the DLL next to the other artifacts in BUILDDIR.
+## @note Produced basenames keep the case of `spec` (`StormByte`, not
+##       `stormbyte`).
 ## @note BUILDONLY must pass the component's own BUILDDIR — never the parent
 ##       install prefix or another component's build tree.
 ##       This is a macro so the caller's list variables are appended in place.
@@ -418,8 +424,18 @@ macro(buildmaster_append_library_spec library_mode spec base_libdir
 			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 		if(MSVC)
+			# GNUInstallDirs: RUNTIME (DLL) → BINDIR, ARCHIVE (import .lib) → LIBDIR.
+			# BUILDONLY keeps both artifacts under the component BUILDDIR.
+			if("${base_libdir}" STREQUAL "${BUILDMASTER_INSTALL_LIBDIR}")
+				set(_bm_as_dll_dir "${BUILDMASTER_INSTALL_BINDIR}")
+			else()
+				set(_bm_as_dll_dir "${base_libdir}")
+			endif()
+			if(NOT "${_bm_as_subdir}" STREQUAL "")
+				set(_bm_as_dll_dir "${_bm_as_dll_dir}/${_bm_as_subdir}")
+			endif()
 			list(APPEND ${dlls_var}
-				"${base_libdir}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+				"${_bm_as_dll_dir}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 		endif()
 	endif()
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_append_library_spec")
