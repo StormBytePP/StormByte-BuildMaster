@@ -44,6 +44,24 @@ add_custom_target(run_buildmaster_checks
 	VERBATIM
 )
 
+# Isolated consumer project (Logger pattern: add_subdirectory(BM) + include
+# helpers, no explicit finalize). Own CMAKE_SOURCE_DIR on purpose.
+set(_BM_CONSUMER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../consumer")
+set(_BM_CONSUMER_BIN "${CMAKE_CURRENT_BINARY_DIR}/consumer_nested")
+set(_BM_CONSUMER_EXE "${_BM_CONSUMER_BIN}/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
+
+add_custom_target(run_buildmaster_consumer
+	COMMAND ${CMAKE_COMMAND}
+		-S "${_BM_CONSUMER_SRC}"
+		-B "${_BM_CONSUMER_BIN}"
+		-G "${CMAKE_GENERATOR}"
+		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+	COMMAND ${CMAKE_COMMAND} --build "${_BM_CONSUMER_BIN}" --target consumer_host
+	COMMAND "${_BM_CONSUMER_EXE}"
+	COMMENT "[BuildMaster/Core     ]: consumer add_subdirectory + DEFER finalize"
+	VERBATIM
+)
+
 # ---------------------------------------------------------------------------
 # Smoke
 # ---------------------------------------------------------------------------
@@ -59,6 +77,8 @@ add_custom_target(run_buildmaster_smoke
 	DEPENDS
 		# BUILDONLY
 		buildonly-lib_install
+		# Consumer (own source dir / DEFER)
+		run_buildmaster_consumer
 		# Core / flat
 		base_install dep_install first_install link-a_install link-b_install
 		payload-lib_install prereq-lib_install sdk-headers_install

@@ -1,17 +1,14 @@
 # -----------------------------------------------------------------------------
-# CMake floor — cmake_language(DEFER DIRECTORY … CALL …) is 3.19+;
-# documented / used surface is 3.20 (cmake_path, policies).
-# A parent with a lower cmake_minimum_required() fails here on purpose.
-# -----------------------------------------------------------------------------
-cmake_minimum_required(VERSION 3.20)
-
-# -----------------------------------------------------------------------------
 # Version
 # -----------------------------------------------------------------------------
 set(BUILDMASTER_VERSION "2.0.0")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
-include("${CMAKE_CURRENT_LIST_DIR}/log.cmake")
+# -----------------------------------------------------------------------------
+# 0. Log API (init_vars and helpers may call buildmaster_loglevel_init)
+# -----------------------------------------------------------------------------
+include(log.cmake)
+buildmaster_loglevel_init()
 
 # -----------------------------------------------------------------------------
 # 1. Core directory variables
@@ -41,12 +38,11 @@ include(init_vars.cmake)
 # modules. Nested hosts still need helpers.cmake so create_* APIs remain
 # available; then we propagate and stop.
 if(BUILDMASTER_CONFIGURED)
-	# Root helpers do not pull tools/helpers.cmake; that file is normally
-	# loaded by add_subdirectory(tools). Nested bootstrap skips subdirs but
-	# still runs tools/propagate_vars.cmake → need the extra-tools macros.
 	include(helpers.cmake)
 	include("${BUILDMASTER_SRCDIR}/tools/helpers.cmake")
 	include(propagate_vars.cmake)
+	include(persist.cmake)
+	buildmaster_persist_bootstrap()
 	return()
 endif()
 
@@ -108,3 +104,11 @@ buildmaster_toolchain_write("${BUILDMASTER_TOOLCHAIN_FILE}")
 # 9. Final propagation to the parent scope
 # -----------------------------------------------------------------------------
 include(propagate_vars.cmake)
+
+# -----------------------------------------------------------------------------
+# 10. Persist bootstrap vars for DEFER at CMAKE_SOURCE_DIR
+# -----------------------------------------------------------------------------
+# Hosts that add_subdirectory(thirdparty/buildmaster) only receive PARENT_SCOPE
+# one directory up (thirdparty). Finalize runs in the host root.
+include(persist.cmake)
+buildmaster_persist_bootstrap()

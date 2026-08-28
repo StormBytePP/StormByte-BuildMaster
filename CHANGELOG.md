@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`STRIPRES` component option (flag, default ON):** after `RENAME`, strip `*.res` members from static MSVC / clang-cl archives via `lib` / `llvm-lib` `/LIST` + `/REMOVE`. Silent no-op on other toolchains; warning on shared / headers.
 - **`BUILDONLY` + `component_repack`:** build without publishing to the shared prefix; merge listed archives with the host archiver into one IMPORTED target.
 - **Helper `.pc` (`PC={…}`):** after install (RENAME + STRIPRES), write `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for **internal** consumers of this prefix — not a portable upstream package.
-  - Syntax: `PC={VERSION=1.2.3;NAME=foo;DESCRIPTION=…;ENABLED=TRUE}`. `;` inside `{…}` is not a pair break.
-  - `VERSION` is required when enabled. `ENABLED=FALSE` skips the file and does not require `VERSION`.
+  - Syntax: `PC={VERSION=1.2.3;NAME=foo;DESCRIPTION=…;ENABLED=ON}`. `;` inside `{…}` is not a pair break.
+  - `VERSION` is required when enabled. `ENABLED=OFF` skips the file and does not require `VERSION`.
   - `NAME` defaults to the first produced spec; `DESCRIPTION` defaults to the component title.
   - `Requires` comes from direct `component_link` destinations that themselves have PC enabled (one hop, no metas).
   - `Cflags` are component extras minus parent `CMAKE_C{,XX}_FLAGS`; include tokens (`-I` / `/I` / `-isystem`) are dropped (prefix include is already in the BM env).
@@ -43,8 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Format: `[BuildMaster/<Module>]: …` for `STATUS`; `[<LEVEL>][BuildMaster/<Module>]: …` otherwise (no space between brackets; level and module labels padded).
   - Header is never indented; optional indent applies only to the body.
   - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
-  - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up Opus" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
-- **Harness:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, helper-`.pc` fixture (`Requires` check), and **meta-toolchain** (`meta-tc` pushes `TOOLCHAIN` onto `mtc-inherit`; `mtc-pinned` keeps an explicit host profile).
+  - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up the library" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
+- **Harness + consumer tests:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, helper-`.pc` fixture (`Requires` check), meta-toolchain, and a Logger-style consumer (`add_subdirectory(buildmaster)` + sibling library, no extra includes).
+- **Documented layout contract:** BuildMaster and every DSL-driven dependency must be **sibling directories** under the same parent. Registration `CMakeLists.txt` is not the nested `srcdir`.
 
 ### Changed
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
@@ -60,12 +61,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`, `PC={…}`). `;` inside `{…}` is not a pair break. Unknown keys warn; extra positionals are fatal.
 - **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
 - Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
+- Root `CMakeLists.txt` includes `helpers.cmake` (and thus `log.cmake`) before `init_vars.cmake`, so `add_subdirectory(buildmaster)` alone is a valid consumer bootstrap — no extra `include(…/helpers.cmake)` required after the subdirectory.
+- Root configure includes `GNUInstallDirs` so `CMAKE_INSTALL_LIBDIR` / `INCLUDEDIR` exist even when the host forgot them; `BUILDMASTER_INSTALL_LIBDIR` is no longer an empty path with a doubled slash.
 
 ### Fixed
 - **`TOOLCHAIN=` in nested CMake:** `BUILDMASTER_KNOWN_TOOLCHAINS` coming from the toolchain dump could be a newline- or space-separated string. `list(FIND)` then rejected valid names (`gcc`, `clang`, …). Validation now normalizes that value to a CMake list; the dump exports a semicolon-separated list.
 - **Meson `--native-file`:** `create_meson_stages` always picks `native_<profile>.ini` for `TOOLCHAIN=<name>`, or the file for **this** process’s compiler family (`CMAKE_C_COMPILER_ID` / clang-cl) when `TOOLCHAIN` is omitted. It no longer keeps the outer job’s default native file across a swapped toolchain. Setup does not fall back to bare `CC=` when a native file exists, so ccache/sccache stay keyed to the compiler actually used.
+- **Consumer bootstrap / log modules:** `buildmaster_message(COMPONENT …)` during deferred finalize no longer dies with `unknown log module 'COMPONENT'. Accepted:` (empty list). Modules are registered when `log.cmake` is loaded from the root `CMakeLists.txt`, not only when a harness included helpers first.
+- **Install prefix without `GNUInstallDirs`:** produced paths were `${prefix}//libfoo.a` and `RENAME` looked in the prefix root instead of `lib/` / `lib64/`. BuildMaster now loads `GNUInstallDirs` itself.
+- **Stage templates after sibling `add_subdirectory`:** `BUILDMASTER_TOOLS_CMAKE_SRCDIR` (and friends) resolve to the checkout, so `configure.cmake.in` is found instead of `/configure.cmake.in`.
 
-[2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...2.0.0
+[2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
 ## [1.0.1] - 2026-08-26
 

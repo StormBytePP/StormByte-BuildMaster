@@ -1,0 +1,2 @@
+# Relative symlink (mode 120000). Do not apply text/eol conversion.
+.github/tests/consumer/thirdparty/buildmaster -text
