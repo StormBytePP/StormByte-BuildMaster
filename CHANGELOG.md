@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Git patch applied twice at configure:** `create_git_patch_file` then `create_git_reset_file` flushed on every register, so the log was apply → `reset --hard` → apply again. Patch is only queued; flush runs reset then patch once (on reset, or DEFER at end of `CMAKE_SOURCE_DIR` when there is no reset). A second flush for the same root is a no-op.
+
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
 ## [2.0.0] - 2026-08-28

@@ -4,9 +4,14 @@
 
 ## @brief Run queued reset scripts then queued patch scripts for one git root.
 ## @param[in] _git_repo_dir Repository or worktree path.
-## @note Resets always run first. Safe to call more than once for the same root.
+## @note Resets always run first. A second flush for the same root is a no-op
+##       so configure does not apply the same patch twice.
 function(_buildmaster_git_flush_repo _git_repo_dir)
 	_buildmaster_git_toplevel(_root "${_git_repo_dir}")
+	get_property(_done GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root})
+	if(_done)
+		return()
+	endif()
 	get_property(_resets GLOBAL PROPERTY BUILDMASTER_GIT_RESET_SCRIPTS_${_root})
 	get_property(_patches GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_SCRIPTS_${_root})
 	foreach(_s IN LISTS _resets)
@@ -19,6 +24,7 @@ function(_buildmaster_git_flush_repo _git_repo_dir)
 			include("${_s}")
 		endif()
 	endforeach()
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} TRUE)
 endfunction()
 
 ## @brief git reset --hard + clean -fd at parent configure; register post-install.
@@ -26,7 +32,7 @@ endfunction()
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @note Generates the script and queues it. Flush runs every reset for the
-##       repo, then every patch, so call order of create_git_* does not matter.
+##       repo, then every patch. Call order of create_git_* does not matter.
 ##       Call as: `create_git_reset_file(<id> <title> <repo>)`.
 function(create_git_reset_file _component_id _title _git_repo_dir)
 	buildmaster_message(GIT LOWLEVEL "Entering create_git_reset_file")
@@ -43,6 +49,7 @@ function(create_git_reset_file _component_id _title _git_repo_dir)
 	list(APPEND _resets "${_GIT_RESET_FILE}")
 	list(REMOVE_DUPLICATES _resets)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_RESET_SCRIPTS_${_root} "${_resets}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 	_buildmaster_git_flush_repo("${_git_repo_dir}")
 	buildmaster_message(GIT DEBUG "Reset git repo for ${_component_id}")

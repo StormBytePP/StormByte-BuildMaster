@@ -24,6 +24,9 @@ if(NOT EXISTS "${_sandbox}/.git")
 	if(NOT _clone_rc EQUAL 0)
 		message(FATAL_ERROR "git-sandbox: clone failed: ${_clone_err}")
 	endif()
+	if(NOT _clone_out STREQUAL "")
+		buildmaster_message(GIT INFO "${_clone_out}")
+	endif()
 endif()
 
 # --- reset ---
@@ -60,11 +63,19 @@ endif()
 execute_process(
 	COMMAND ${GIT_EXECUTABLE} -C "${_sandbox}" reset --hard
 	RESULT_VARIABLE _rh_rc
-	OUTPUT_QUIET
-	ERROR_QUIET
+	OUTPUT_VARIABLE _rh_out
+	ERROR_VARIABLE _rh_err
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _rh_rc EQUAL 0)
 	message(FATAL_ERROR "git-sandbox: git reset --hard before patch apply failed")
+endif()
+if(NOT _rh_out STREQUAL "")
+	buildmaster_message(GIT STATUS "${_rh_out}")
+endif()
+if(NOT _rh_err STREQUAL "")
+	buildmaster_message(GIT DEBUG "${_rh_err}")
 endif()
 if(EXISTS "${_sandbox}/.bm_harness_patched")
 	message(FATAL_ERROR "git-sandbox: expected clean tree before create_git_patch_file")
@@ -76,6 +87,8 @@ create_git_patch_file(
 	"${_sandbox}"
 	"${_patch}"
 )
+# Patch is queued; flush runs reset then apply (same order as consumers).
+_buildmaster_git_flush_repo("${_sandbox}")
 if(NOT EXISTS "${_sandbox}/.bm_harness_patched")
 	message(FATAL_ERROR "git-sandbox: patch did not create .bm_harness_patched")
 endif()
