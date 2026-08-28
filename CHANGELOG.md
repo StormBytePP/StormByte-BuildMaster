@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documented layout contract:** BuildMaster and every DSL-driven dependency must be **sibling directories** under the same parent. Registration `CMakeLists.txt` is not the nested `srcdir`.
 
 ### Changed
+- Stage `COMMENT` headers: **configure** stays `[BuildMaster/CMake]` / `[BuildMaster/Meson]`; **compile and install** use `[BuildMaster/Ninja]` (Ninja is the driver for those targets). Git post-install reset stays `[BuildMaster/Git]`.
 - Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
 - **Breaking — logging:**
   - `BUILDMASTER_DEBUG` (cache and env) is removed and ignored. Use `BUILDMASTER_LOGLEVEL` (`LOWLEVEL` / `DEBUG` / `INFO` / `STATUS` / `WARNING` / `FATAL`).
