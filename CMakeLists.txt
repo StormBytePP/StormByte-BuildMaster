@@ -1,7 +1,14 @@
 # -----------------------------------------------------------------------------
+# CMake floor — cmake_language(DEFER DIRECTORY … CALL …) is 3.19+;
+# documented / used surface is 3.20 (cmake_path, policies).
+# A parent with a lower cmake_minimum_required() fails here on purpose.
+# -----------------------------------------------------------------------------
+cmake_minimum_required(VERSION 3.20)
+
+# -----------------------------------------------------------------------------
 # Version
 # -----------------------------------------------------------------------------
-set(BUILDMASTER_VERSION "1.1.0")
+set(BUILDMASTER_VERSION "2.0.0")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
 include("${CMAKE_CURRENT_LIST_DIR}/log.cmake")

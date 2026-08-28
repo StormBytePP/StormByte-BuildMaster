@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
+
+## [2.0.0] - 2026-08-28
+
 ### Added
 - **Declarative component graph:**
   - `component_dependency(source, dest)` — order-only edges (component id, stage name, or existing CMake target).
@@ -61,7 +65,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TOOLCHAIN=` in nested CMake:** `BUILDMASTER_KNOWN_TOOLCHAINS` coming from the toolchain dump could be a newline- or space-separated string. `list(FIND)` then rejected valid names (`gcc`, `clang`, …). Validation now normalizes that value to a CMake list; the dump exports a semicolon-separated list.
 - **Meson `--native-file`:** `create_meson_stages` always picks `native_<profile>.ini` for `TOOLCHAIN=<name>`, or the file for **this** process’s compiler family (`CMAKE_C_COMPILER_ID` / clang-cl) when `TOOLCHAIN` is omitted. It no longer keeps the outer job’s default native file across a swapped toolchain. Setup does not fall back to bare `CC=` when a native file exists, so ccache/sccache stay keyed to the compiler actually used.
 
-[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
+[2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...2.0.0
 
 ## [1.0.1] - 2026-08-26
 
