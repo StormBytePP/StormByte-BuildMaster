@@ -5,9 +5,13 @@
 ##       where cmake_language(DEFER) runs after add_subdirectory(buildmaster).
 ##       This function is idempotent and is the single source of the tables.
 function(_buildmaster_log_ensure_registry)
-	get_property(_have GLOBAL PROPERTY BUILDMASTER_LOG_MODULES)
+	get_property(_have GLOBAL PROPERTY BUILDMASTER_LOG_MODULES SET)
 	if(_have)
-		return()
+		get_property(_mods GLOBAL PROPERTY BUILDMASTER_LOG_MODULES)
+		list(FIND _mods "COMPONENT" _idx)
+		if(NOT _idx EQUAL -1)
+			return()
+		endif()
 	endif()
 
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_LEVELS
