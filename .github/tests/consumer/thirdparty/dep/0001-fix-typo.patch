@@ -1,0 +1,12 @@
+diff --git a/consumerdep.c b/consumerdep.c
+index 1111111..2222222 100644
+--- a/consumerdep.c
++++ b/consumerdep.c
+@@ -1,5 +1,5 @@
+ #include "consumerdep.h"
+ 
+ int consumerdep_value(void) {
+-	retrun 7;
++	return 7;
+ }
+ 
