@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Git patch applied twice at configure:** `create_git_patch_file` then `create_git_reset_file` flushed on every register, so the log was apply → `reset --hard` → apply again. Patch is only queued; flush runs reset then patch once (on reset, or DEFER at end of `CMAKE_SOURCE_DIR` when there is no reset). A second flush for the same root is a no-op.
+- **Cached download under `cmake -P`:** `file_download_cached.cmake.in` called `file_checksum_correct`, which does not exist in a script-mode process. The cache hit path now uses `file(<ALGO>)` only. Configure of a consumer that already has the tarball on disk (SQLite amalgamation) no longer dies with `Unknown CMake command "file_checksum_correct"`.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
