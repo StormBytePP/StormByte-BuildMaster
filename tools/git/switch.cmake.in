@@ -9,6 +9,8 @@ execute_process(
 	RESULT_VARIABLE GIT_RESULT
 	OUTPUT_VARIABLE GIT_OUT
 	ERROR_VARIABLE GIT_ERROR
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_STRIP_TRAILING_WHITESPACE
 )
 
 if(NOT GIT_RESULT EQUAL 0)
@@ -16,6 +18,7 @@ if(NOT GIT_RESULT EQUAL 0)
 		"Git switch failed (exit ${GIT_RESULT}) branch=@GIT_BRANCH@ repo=@GIT_REPO@\n--- stdout ---\n${GIT_OUT}\n--- stderr ---\n${GIT_ERROR}")
 endif()
 
+buildmaster_message(GIT STATUS "Switched to @GIT_BRANCH@")
 if(GIT_OUT)
 	buildmaster_message(GIT DEBUG "git switch stdout:\n${GIT_OUT}")
 endif()

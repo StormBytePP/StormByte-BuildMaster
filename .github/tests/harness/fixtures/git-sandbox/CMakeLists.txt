@@ -16,7 +16,10 @@ if(NOT EXISTS "${_sandbox}/.git")
 		COMMAND ${GIT_EXECUTABLE} clone --local --no-hardlinks
 			"${_src_repo}" "${_sandbox}"
 		RESULT_VARIABLE _clone_rc
+		OUTPUT_VARIABLE _clone_out
 		ERROR_VARIABLE _clone_err
+		OUTPUT_STRIP_TRAILING_WHITESPACE
+		ERROR_STRIP_TRAILING_WHITESPACE
 	)
 	if(NOT _clone_rc EQUAL 0)
 		message(FATAL_ERROR "git-sandbox: clone failed: ${_clone_err}")
@@ -39,6 +42,8 @@ file(WRITE "${_sandbox}/.bm_harness_patched" "patched-by-buildmaster-harness\n")
 execute_process(
 	COMMAND ${GIT_EXECUTABLE} -C "${_sandbox}" add -A -- ".bm_harness_patched"
 	RESULT_VARIABLE _add_rc
+	OUTPUT_QUIET
+	ERROR_QUIET
 )
 if(NOT _add_rc EQUAL 0)
 	message(FATAL_ERROR "git-sandbox: git add failed")
@@ -55,6 +60,8 @@ endif()
 execute_process(
 	COMMAND ${GIT_EXECUTABLE} -C "${_sandbox}" reset --hard
 	RESULT_VARIABLE _rh_rc
+	OUTPUT_QUIET
+	ERROR_QUIET
 )
 if(NOT _rh_rc EQUAL 0)
 	message(FATAL_ERROR "git-sandbox: git reset --hard before patch apply failed")

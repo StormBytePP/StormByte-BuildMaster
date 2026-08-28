@@ -6,12 +6,16 @@
 ## @param[in] _component_id Component identifier (ties to install reset / clean).
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
-## @param[in] _git_patches  List of patch files (joined for the apply command).
+## @param[in] _git_patches  List of patch files (joined with spaces for apply).
 ## @note Generates the script and include()s it immediately. No out-variable.
+##       Paths are written without extra quote wrapping (`list_join` would
+##       nest quotes inside the STATUS string and break CMake parse).
 function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
 	buildmaster_message(GIT LOWLEVEL "Entering create_git_patch_file")
 	set(GIT_REPO "${_git_repo_dir}")
-	list_join(GIT_PATCHES "${_git_patches}" " ")
+	set(_patches "${_git_patches}")
+	string(REPLACE ";" " " GIT_PATCHES "${_patches}")
+	string(REPLACE ";" ", " GIT_PATCHES_DISPLAY "${_patches}")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_safe}.cmake")
 	configure_file(
