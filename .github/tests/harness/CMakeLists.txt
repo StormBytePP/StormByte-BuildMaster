@@ -44,11 +44,11 @@ add_custom_target(run_buildmaster_checks
 	VERBATIM
 )
 
-# Isolated consumer project (Logger pattern: add_subdirectory(BM) + include
-# helpers, no explicit finalize). Own CMAKE_SOURCE_DIR on purpose.
+# Isolated consumer project (Logger pattern: lib/ first, then thirdparty/BM).
+# Own CMAKE_SOURCE_DIR on purpose. Host binary lives under lib/.
 set(_BM_CONSUMER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../consumer")
 set(_BM_CONSUMER_BIN "${CMAKE_CURRENT_BINARY_DIR}/consumer_nested")
-set(_BM_CONSUMER_EXE "${_BM_CONSUMER_BIN}/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
+set(_BM_CONSUMER_EXE "${_BM_CONSUMER_BIN}/lib/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
 
 add_custom_target(run_buildmaster_consumer
 	COMMAND ${CMAKE_COMMAND}
