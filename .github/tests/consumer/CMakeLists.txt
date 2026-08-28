@@ -1,7 +1,9 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.12)
+set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
+
 project(BuildMasterConsumer LANGUAGES C)
 
-add_subdirectory(thirdparty)
+cmake_policy(SET CMP0079 NEW)
 
-add_executable(consumer_host "${CMAKE_CURRENT_SOURCE_DIR}/host.c")
-target_link_libraries(consumer_host PRIVATE consumer-dep)
+add_subdirectory(lib)
+add_subdirectory(thirdparty)

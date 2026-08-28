@@ -1,0 +1,1 @@
+add_executable(consumer_host "${CMAKE_CURRENT_SOURCE_DIR}/host.c")
