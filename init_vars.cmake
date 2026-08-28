@@ -85,10 +85,15 @@ if(NOT BUILDMASTER_CONFIGURED)
 		"${BUILDMASTER_GIT_CONFIGURE_STAMP}")
 
 	if(NOT TARGET buildmaster_build_init)
+		if(COMMAND buildmaster_log_comment)
+			buildmaster_log_comment(_bm_init_cmt CORE "reset fail markers")
+		else()
+			set(_bm_init_cmt "[BuildMaster/Core     ]: reset fail markers")
+		endif()
 		add_custom_target(buildmaster_build_init
 			COMMAND ${CMAKE_COMMAND} -E rm -rf "${BUILDMASTER_MARKERS_DIR}"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILDMASTER_MARKERS_DIR}"
-			COMMENT "BuildMaster: reset fail markers"
+			COMMENT "${_bm_init_cmt}"
 			VERBATIM
 		)
 	endif()
