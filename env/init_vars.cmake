@@ -42,6 +42,10 @@ if(NOT BUILDMASTER_CONFIGURED)
 
 	include(ProcessorCount)
 	ProcessorCount(NPROC)
+	if(NOT NPROC OR NPROC STREQUAL "0")
+		set(NPROC 1)
+	endif()
+	set(NPROC "${NPROC}" CACHE INTERNAL "BuildMaster persisted job count")
 
 	# Compiler launchers: CMake does not load these from the environment by itself.
 	# Prefer already-set CMake vars (-D from CI); else take ENV from the job.

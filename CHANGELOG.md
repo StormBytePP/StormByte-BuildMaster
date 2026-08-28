@@ -84,6 +84,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Consumer test layout:** `.github/tests/consumer` matches the real Logger/Buffer contract: sibling `thirdparty/`, `cmake_policy(SET CMP0079 NEW)`, `add_subdirectory(thirdparty)` then `add_library(Consumer::Dep ALIAS …)` with **no** `if(NOT TARGET)` guard and **no** DEFER workaround.
 - **Nested CMake configure skip:** `configure.cmake.in` treated `CMakeCache.txt` as “already configured”. An interrupted first run left cache + `CMakeScratch` and no `build.ninja`; the next parent configure skipped the stage and Ninja failed with `loading 'build.ninja'`. Skip now requires both the cache and `build.ninja` (same idea as Meson setup).
 - **Meson `-Dbuildtype=`:** `create_meson_stages` now maps `CMAKE_BUILD_TYPE` to a concrete Meson choice (`Debug` → `debug`, `RelWithDebInfo` → `debugoptimized`, `MinSizeRel` → `minsize`, `Release` or empty/multi-config → `release`). An empty `@MESON_BUILD_TYPE@` made Meson reject `Value "."` and abort setup (e.g. PostgreSQL).
+- **Meson/CMake `--jobs` / `--parallel`:** `NPROC` from `ProcessorCount()` lived only in the BuildMaster subdirectory. `PARENT_SCOPE` stops at `thirdparty/` and `persist.cmake` only cached `BUILDMASTER_*` / `ENV_*`, so `@NPROC@` was empty at DEFER and Meson aborted with `argument -j/--jobs: expected one argument`. `NPROC` is now a cache INTERNAL (minimum 1).
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
