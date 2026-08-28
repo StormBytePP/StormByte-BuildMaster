@@ -49,3 +49,9 @@ endforeach()
 if("@_BM_WHOLE@" STREQUAL "1")
 	target_link_libraries(@_LIBRARY_NAME@ INTERFACE @_BM_WHOLE_LINK_ITEMS@)
 endif()
+
+# LINK: raw linker names (syslibs), INTERFACE so they propagate to the final artefact.
+set(_bm_link "@_BM_LINK_ITEMS@")
+if(NOT _bm_link STREQUAL "")
+	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_link})
+endif()

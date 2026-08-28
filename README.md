@@ -40,6 +40,7 @@ BuildMaster is that layer, written once:
 | `POST_BUILD` rename scripts per MSVC flavor | Optional `RENAME` on the component |
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** collection |
 | `LNK2005` / duplicate `.res` after `/WHOLEARCHIVE` | `STRIPRES` on static MSVC/clang-cl archives (default on) |
+| `shlwapi` on every consumer because a static `.lib` does not record it | Optional `LINK={…}` on the producer (or the meta) |
 | Hand-written `.pc` so the next Meson node finds this prefix | Optional helper `PC={…}` on the component |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
@@ -57,6 +58,7 @@ a product, not a build blog.
 - [Declarative model](#declarative-model)
 - [How a component works](#how-a-component-works)
 - [Dependencies and links](#dependencies-and-links)
+- [Raw system libraries (`LINK`)](#raw-system-libraries-link)
 - [Meta components](#meta-components)
 - [Orphan warnings](#orphan-warnings)
 - [Prerequisites](#prerequisites)
@@ -141,6 +143,7 @@ larger library links as one `WHOLE` node.
 | Path-qualified subcomponents (`subdir/name`) | No | Manual | **Yes** |
 | Whole-archive static link on INTERFACE | Manual | Manual | **Optional (`WHOLE`)** |
 | Strip `.res` from static MSVC archives | Manual `/REMOVE` | Manual | **Default on static (`STRIPRES`)** |
+| Raw system libs on the INTERFACE | Manual on every consumer | Manual | **Optional (`LINK={…}`)** |
 | Helper `.pc` for the shared prefix | Manual | Manual | **Optional (`PC={…}`)** |
 | Build-only + static repack | No | Manual | **Yes** |
 | Unified log API (`buildmaster_message`) | No | No | **Yes** |
@@ -191,7 +194,7 @@ create_cmake_component(
     "${_opts}"
     static
     "mylib"
-    "INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;PC={VERSION=1.2.3;NAME=mylib}"
+    "INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib}"
 )
 ```
 
@@ -272,9 +275,15 @@ a download that is not a library, a host target that writes files).
 
 Records a link on the component `INTERFACE`.
 
-If `dest` is a graph node (component, meta, stage, or existing target),
-BuildMaster also records `component_dependency`. A raw library spec
-(`foo`, `vendor/foo`) does **not** get an automatic wait edge.
+`dest` is a **BuildMaster graph node**: another component, a meta, an
+existing CMake target, or an archive that already exists on disk. If it
+is a graph node, BuildMaster also records `component_dependency`.
+
+It is **not** where you list `shlwapi`. A dest that matches none of the
+kinds above is **FATAL** — that name belongs in `LINK=` on the producer
+(see the next section). 2.0 used to treat an unknown dest as a produced
+spec under the install prefix. That was the wrong model for a system
+library, and it is gone.
 
 Host binaries are not graph nodes. Link them the ordinary way:
 
@@ -285,12 +294,70 @@ target_link_libraries(MyApp PRIVATE plugins)  # a meta
 
 ---
 
+## Raw system libraries (`LINK`)
+
+A static `mariadbclient.lib` does not “contain” `shlwapi`. The `.obj`
+files inside it have `__declspec(dllimport) PathRemoveFileSpecA`, and
+the linker of **your** DLL is the one that has to see `shlwapi.lib`.
+Repeating that on every consumer is how the line rots.
+
+`LINK` is the declaration on the **producer** (or on a meta that groups
+producers): whoever links this `INTERFACE` also links these names.
+
+```cmake
+create_cmake_component(
+    MariaDB-ConnectorC
+    "MariaDB Connector C"
+    ${MARIADB_C_SRCDIR}
+    ${MARIADB_C_BUILDDIR}
+    "${MARIADB_C_OPTIONS}"
+    static
+    "mariadbclient"
+    "INDENT=1;LINK={shlwapi;ws2_32;advapi32}"
+)
+
+target_link_libraries(StormByte-Database PRIVATE MariaDB-ConnectorC)
+```
+
+CMake then carries `shlwapi` through the chain to `StormByte-Database.dll`.
+You did not repair Connector-C’s own CMake. You told the BM target the
+truth about what a consumer of that target must pass to the linker.
+
+| Form | Meaning |
+|------|---------|
+| omitted | nothing extra |
+| `LINK=shlwapi` | one raw linker name |
+| `LINK={shlwapi;ws2_32}` | several — `;` inside `{…}` is not a pair break |
+| `LINK=` / bare `LINK` | **FATAL** |
+| several items without braces | **FATAL** |
+
+Items are **external to BuildMaster**. They go to the linker as written
+(`shlwapi`, `ws2_32`). They are not component ids, not metas, not CMake
+targets, and not specs under the install prefix. A name that collides
+with an existing `TARGET` may be resolved by CMake as that target — do
+not pick colliding names.
+
+This does **not** fix a program that links the third-party archive
+without going through the BM `INTERFACE`. If someone runs
+`lld-link … mariadbclient.lib` by hand, `LINK` does not exist. That is
+the point of the contract, not a bug.
+
+Headers mode has no link line: `LINK` is **WARNING**, ignored.
+A meta **accepts** `LINK` and puts the names on the collection
+`INTERFACE`, so you declare the syslibs once instead of on every member.
+
+`LINK_EXTRA` from 1.x is gone. Same idea, shorter name, no graph
+confusion.
+
+---
+
 ## Meta components
 
 A **meta** is an `INTERFACE` plus a graph anchor. No sources, no compile,
 no artifacts of its own. It collects members (components, other metas,
 static or shared) and forwards wait + link. It may set `WHOLE` on the
-collection even if members did not.
+collection even if members did not. It may set `LINK` on the collection
+even if members did not.
 
 `TOOLCHAIN` on a meta does **not** compile the meta. At materialize time
 that profile is copied onto members (and onto `component_dependency` /
@@ -324,13 +391,14 @@ silently compile half the tree.
 
 ```cmake
 meta_component_add(plugins zlib png)
-create_meta_component(plugins "Plugin pack" "INDENT=1;WHOLE;TOOLCHAIN=clang")
+create_meta_component(plugins "Plugin pack" "INDENT=1;WHOLE;TOOLCHAIN=clang;LINK={m}")
 component_link(engine plugins)
 target_link_libraries(MyApp PRIVATE engine)
 ```
 
 `zlib` and `png` compile as `clang` unless they already declared their
-own `TOOLCHAIN`.
+own `TOOLCHAIN`. `LINK={m}` rides on `plugins` and therefore on `engine`
+and `MyApp`.
 
 ---
 
@@ -367,19 +435,20 @@ Every `create_*_component` accepts **at most one** optional trailing
 argument:
 
 ```text
-KEY=value;KEY2=value with spaces;PC={VERSION=1.0.0;NAME=foo}
+KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};PC={VERSION=1.0.0;NAME=foo}
 ```
 
 | Rule | Detail |
 |------|--------|
 | Pair separator | `;` outside `{…}` |
-| Brace group | `PC={…}` — `;` inside the braces is part of the group |
+| Brace group | `PC={…}` and `LINK={…}` — `;` inside the braces is part of the group |
 | Key / value | Only the **first** `=` in a pair |
 | Keys | Case-insensitive, stored **UPPERCASE** |
 | Values | May contain spaces and extra `=` (`test==value` is fine) |
 | `;` outside braces | Pair break. `;` inside `{…}` is allowed |
 | Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` / `STRIPRES` / `PC` ≡ `KEY=ON` |
 | Bare `PC` / `PC=ON` without `{…}` | **FATAL** — use `PC={VERSION=…}` or `PC={ENABLED=FALSE}` |
+| Bare `LINK` / `LINK=` | **FATAL** — use `LINK=name` or `LINK={a;b}` |
 | Unknown key | **WARNING**, ignored |
 | Extra positional arguments | **FATAL_ERROR** |
 
@@ -391,7 +460,10 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.0.0;NAME=foo}
 | `WHOLE` | Whole-archive link of produced **static** archives |
 | `BUILDONLY` | Do not install into the shared prefix |
 | `STRIPRES` | After `RENAME`, strip `.res` members from **static** MSVC / clang-cl archives (default **ON**) |
+| `LINK=` / `LINK={…}` | Raw system linker names on the component or meta `INTERFACE` |
 | `PC={…}` | After install, write a **helper** `.pc` under the shared prefix (see below) |
+
+`LINK_EXTRA` is not a key. It warns and is ignored.
 
 ---
 
@@ -610,6 +682,7 @@ spec on the outermost component, or `component_link` them.
 - no IMPORTED archive
 - install stamp under the include tree
 - `INTERFACE` + `SYSTEM` include of `BUILDMASTER_INSTALL_INCLUDEDIR`
+- `LINK` is **WARNING**, ignored — there is nothing to hang a link line on
 
 Useful for SDKs and for graphs that only need headers before a later
 compile.
@@ -879,7 +952,7 @@ create_cmake_component(
 | Log | `buildmaster_message` |
 | Paths / import | `ensure_build_dir`, `library_import_hint`, `library_import_static_hint`, `sanitize_for_filename`, `buildmaster_parse_subcomponent` |
 | Toolchain | `buildmaster_validate_toolchain`, `buildmaster_load_toolchain_profile`, `buildmaster_find_archiver` |
-| Options | `buildmaster_parse_component_options`, `buildmaster_parse_component_pc` |
+| Options | `buildmaster_parse_component_options`, `buildmaster_parse_component_pc`, `buildmaster_parse_component_link` |
 
 Stage generators (`create_cmake_stages` / `create_meson_stages`) are
 **internal**. The supported surface is `create_*_component`.

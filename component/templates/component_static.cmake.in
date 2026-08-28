@@ -31,8 +31,14 @@ foreach(lib lib_file IN ZIP_LISTS libs lib_files)
 	endif()
 endforeach()
 
-# WHOLE: one closed whole-archive region for all produced statics.
+# WHOLE: one closed whole-archive region for all produced statics (FFmpeg-style).
 # Non-WHOLE: link IMPORTED targets normally (done in the loop above).
 if("@_BM_WHOLE@" STREQUAL "1")
 	target_link_libraries(@_LIBRARY_NAME@ INTERFACE @_BM_WHOLE_LINK_ITEMS@)
+endif()
+
+# LINK: raw linker names (syslibs), INTERFACE so they propagate to the final artefact.
+set(_bm_link "@_BM_LINK_ITEMS@")
+if(NOT _bm_link STREQUAL "")
+	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_link})
 endif()

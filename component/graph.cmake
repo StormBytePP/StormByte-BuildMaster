@@ -25,7 +25,7 @@ function(_buildmaster_component_defer_arm)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
 endfunction()
 
-## @brief Register a component.
+## @brief Register a component. Targets are created at deferred finalize.
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -40,14 +40,20 @@ endfunction()
 ##            BUILDONLY (flag), WHOLE (flag; static whole-archive link),
 ##            STRIPRES (flag; default ON; strip `.res` members from static
 ##            MSVC/clang-cl archives after RENAME),
+##            LINK=<name> / LINK={name;name2} (raw linker names on the
+##            component INTERFACE; see below),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
-## @note Creates the INTERFACE target immediately (empty). Stage scripts,
-##       IMPORTED artifacts, include dirs and link lines are attached at
-##       deferred finalize. Consumers may `add_library(… ALIAS …)` and
-##       `target_link_libraries(…)` right after `create_*`.
-## @note Fragments must reuse this INTERFACE; they must not wrap wiring in
-##       `if(NOT TARGET)` or call `add_library(<id> INTERFACE)` again.
+## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
+##       target_* in the same CMakeLists (before DEFER) see the target.
+##       Fragments only attach includes, IMPORTED archives, WHOLE and LINK.
+##       A second create_* for the same id is FATAL in the registry.
+## @note `LINK` items are external to BuildMaster (system / SDK libraries).
+##       They are applied `INTERFACE` on `<id>` and propagate through CMake
+##       `target_link_libraries` to the final artefact that consumes that id.
+##       They do not repair a third-party archive that was linked without
+##       going through this INTERFACE. Not a substitute for `component_link()`.
+## @note Headers mode: `LINK` is WARNING and ignored.
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
 ##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
 ##       FATAL (no shared prefix). An upstream `.pc` already at the canonical
@@ -89,11 +95,6 @@ function(create_component _component _component_title _srcdir _builddir
 			"create_component: '${_component}' is already a meta id")
 	endif()
 
-	if(TARGET "${_component}")
-		buildmaster_message(COMPONENT FATAL
-			"create_component: target '${_component}' already exists")
-	endif()
-
 	set(_options_string "")
 	if(ARGC GREATER 8)
 		set(_options_string "${ARGV8}")
@@ -105,6 +106,7 @@ function(create_component _component _component_title _srcdir _builddir
 	buildmaster_parse_component_pc(
 		"${_options_string}"
 		_pc_present _pc_enabled _pc_name _pc_version _pc_description)
+	buildmaster_parse_component_link("${_options_string}" _reg_link)
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -138,6 +140,12 @@ function(create_component _component _component_title _srcdir _builddir
 	if(_reg_stripres AND NOT _library_mode STREQUAL "static")
 		buildmaster_message(COMPONENT WARNING
 			"create_component('${_component}'): STRIPRES ignored (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
+	endif()
+
+	if(_library_mode STREQUAL "headers" AND _reg_link)
+		buildmaster_message(COMPONENT WARNING
+			"create_component('${_component}'): LINK ignored (headers mode has no link line)")
+		set(_reg_link "")
 	endif()
 
 	if(_pc_enabled AND _reg_buildonly)
@@ -180,6 +188,8 @@ function(create_component _component _component_title _srcdir _builddir
 		"${_produced}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR
 		"${_options_string}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINK
+		"${_reg_link}")
 	if(_reg_buildonly)
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
 	else()
@@ -207,7 +217,7 @@ function(create_component _component _component_title _srcdir _builddir
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_DESCRIPTION
 		"${_pc_description}")
 
-	# Empty INTERFACE now; finalize attaches includes / IMPORTED / deps.
+	# Empty INTERFACE now; finalize attaches includes / IMPORTED / WHOLE / LINK.
 	add_library("${_component}" INTERFACE)
 
 	_buildmaster_component_defer_arm()
@@ -248,9 +258,12 @@ function(component_dependency source dest)
 endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
-## @param[in] source Registered component id (INTERFACE after create_*).
-## @param[in] dest   Registered component or meta, library spec, existing target,
-##            or archive path.
+## @param[in] source Registered component id (INTERFACE after finalize).
+## @param[in] dest   Registered component or meta, existing CMake target,
+##            or an on-disk archive path.
+## @note Dest that is none of the above is FATAL at materialize. Raw system
+##       linker names (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}`
+##       on the producer, not here.
 ## @note Linking to a BUILDONLY component is FATAL at materialize.
 ## @note component_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).

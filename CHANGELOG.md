@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **`LINK=` / `LINK={…}`:** raw system linker names (`shlwapi`, `ws2_32`) on the component or meta INTERFACE. They propagate to whoever links that id, including the final `.dll` / `.so`. Not BM nodes and not a fix for a third-party link done outside this INTERFACE. Revives the 1.x `LINK_EXTRA` idea under a shorter name; `component_link` stays the graph (unknown dest is now fatal instead of inventing a prefix spec).
+
 ### Fixed
 - **Git patch applied twice at configure:** `create_git_patch_file` then `create_git_reset_file` flushed on every register, so the log was apply → `reset --hard` → apply again. Patch is only queued; flush runs reset then patch once (on reset, or DEFER at end of `CMAKE_SOURCE_DIR` when there is no reset). A second flush for the same root is a no-op.
 - **Cached download under `cmake -P`:** generated `file_download_cached.cmake.in` / `file_download.cmake.in` ran in a fresh script-mode process, so `buildmaster_message` and `file_checksum_correct` were unknown (`Unknown CMake command "buildmaster_message"` / `"file_checksum_correct"` on consumer configure, e.g. bundled SQLite amalgamation). Both templates now `include(log.cmake)`, call `buildmaster_loglevel_init()`, and `include(tools/file/checksum.cmake)` before any helper use. Cache hit/miss, retries and hash checks keep `LOWLEVEL` / `DEBUG` enter–exit traces; `file_checksum_correct` remains the cache-hit checker.

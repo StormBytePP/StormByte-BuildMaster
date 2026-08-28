@@ -267,6 +267,73 @@ function(buildmaster_parse_component_pc options_string out_present out_enabled
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_pc")
 endfunction()
 
+## @brief Parse `LINK=<name>` / `LINK={name;name2}` from a component options string.
+## @param[in]  options_string Trailing `"KEY=value;…"` passed to create_*.
+## @param[out] out_items      Parent-scope CMake list of raw linker names
+##            (empty if `LINK` was omitted or `LINK={}`).
+## @note Items are **external to BuildMaster**. They are forwarded verbatim
+##       onto the component INTERFACE
+##       (`target_link_libraries(<id> INTERFACE …)`) and therefore propagate
+##       along the CMake link chain to the final artefact (`.dll` / `.so` /
+##       executable) that consumes that id. They do not rewrite the nested
+##       third-party build and they do not fix a link line that never goes
+##       through the BM INTERFACE.
+## @note Items are raw linker names (`shlwapi`, `ws2_32`), not component ids,
+##       not metas, not CMake targets, and not library specs under the install
+##       prefix. Use `component_link()` for BM graph nodes. A name that
+##       collides with an existing TARGET may be resolved by CMake as that
+##       target — do not use colliding names.
+## @note One item: `LINK=shlwapi`. Several: `LINK={shlwapi;ws2_32}` — `;`
+##       inside `{…}` is not a pair break. Bare `LINK` / `LINK=` is FATAL.
+##       Several items without braces is FATAL. Empty tokens inside `{…}`
+##       are dropped. This function does not interpret sibling keys.
+function(buildmaster_parse_component_link options_string out_items)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_link")
+	set(_items "")
+
+	if(NOT "${options_string}" STREQUAL "")
+		buildmaster_split_option_pairs("${options_string}" _pairs)
+		foreach(_pair IN LISTS _pairs)
+			if(_pair STREQUAL "")
+				continue()
+			endif()
+			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			if(NOT _ok OR NOT _key STREQUAL "LINK")
+				continue()
+			endif()
+			if(_val STREQUAL "")
+				buildmaster_message(COMPONENT FATAL
+					"LINK requires LINK=<name> or LINK={name;name2} (bare LINK is invalid)")
+			endif()
+			buildmaster_unwrap_brace_group("${_val}" _inner _brace)
+			if(_brace)
+				if(NOT _inner STREQUAL "")
+					buildmaster_split_option_pairs("${_inner}" _inner_pairs)
+					foreach(_it IN LISTS _inner_pairs)
+						string(STRIP "${_it}" _it)
+						if(_it STREQUAL "")
+							continue()
+						endif()
+						list(APPEND _items "${_it}")
+					endforeach()
+				endif()
+			else()
+				if(_val MATCHES ";")
+					buildmaster_message(COMPONENT FATAL
+						"LINK with several items must be LINK={a;b} (got '${_val}')")
+				endif()
+				list(APPEND _items "${_val}")
+			endif()
+		endforeach()
+	endif()
+
+	if(_items)
+		buildmaster_message(COMPONENT DEBUG "LINK items: ${_items}")
+	endif()
+	set(${out_items} "${_items}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_link")
+endfunction()
+
 ## @brief Parse the optional `KEY=VALUE;…` options string used by create_*_component.
 ## @param[out] out_indent     Indent level (integer, default 0).
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
@@ -284,14 +351,17 @@ endfunction()
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
-##            `PC={…}` groups are allowed; `;` inside braces is not a pair break.
+##            `PC={…}` and `LINK={…}` groups are allowed; `;` inside braces is
+##            not a pair break.
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
-##       `component_link()`. Values may contain `=` and spaces but not `;`
+##       `LINK=` / `LINK={…}` for raw system linker names and `component_link()`
+##       for BM graph nodes. Values may contain `=` and spaces but not `;`
 ##       outside `{…}`. Extra positional arguments are not handled here.
-## @note `PC` is recognized so it is not an “unknown key”. Generation details
-##       are in buildmaster_parse_component_pc(). Meta + PC is FATAL there /
-##       in create_meta_*.
+## @note `PC` and `LINK` are recognized so they are not “unknown keys”.
+##       Generation details: `buildmaster_parse_component_pc()`,
+##       `buildmaster_parse_component_link()`. Meta + PC is FATAL in
+##       create_meta_*. Meta + LINK is WARNING ignored there.
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -325,9 +395,11 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 				endif()
 			elseif(_key STREQUAL "TOOLCHAIN")
 				set(_toolchain "${_val}")
+			elseif(_key STREQUAL "LINK")
+				# parsed by buildmaster_parse_component_link()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				buildmaster_message(COMPONENT WARNING
-					"LINK_EXTRA is removed; use component_link() (ignored)")
+					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, component_link() for BM nodes (ignored)")
 			elseif(_key STREQUAL "RENAME")
 				buildmaster_option_flag_enabled("${_val}" _rename)
 			elseif(_key STREQUAL "BUILDONLY")

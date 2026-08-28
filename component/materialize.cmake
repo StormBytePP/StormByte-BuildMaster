@@ -12,14 +12,14 @@
 ##       `_toolchain`.
 ## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
-## @note Extra `component_link` dests that are raw library specs (not components,
-##       metas, targets, or existing files) are appended to the produced lists
-##       so install BYPRODUCTS stay complete.
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
 ## @note `_BM_PC_*` comes from `_buildmaster_component_fill_pc_vars` (tools/pkgconfig).
 ##       ENABLED is `1` only when `PC={…}` is on and not BUILDONLY (already FATAL
 ##       at create_component).
+## @note Raw `component_link` dests that are not a component, meta, target or
+##       on-disk archive are no longer treated as extra produced specs. Those
+##       names belong in `LINK=` / `LINK={…}`; `_buildmaster_apply_links` FATALs.
 function(_buildmaster_component_collect_outputs _component)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -80,36 +80,6 @@ function(_buildmaster_component_collect_outputs _component)
 				_LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
 
-		if(NOT _buildonly)
-			get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
-			get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
-			if(_lsrcs)
-				set(_li 0)
-				foreach(_lsrc IN LISTS _lsrcs)
-					list(GET _ldsts ${_li} _ldst)
-					math(EXPR _li "${_li} + 1")
-					if(NOT _lsrc STREQUAL "${_component}")
-						continue()
-					endif()
-					_buildmaster_component_is_registered("${_ldst}" _ldst_comp)
-					_buildmaster_meta_is("${_ldst}" _ldst_meta)
-					if(_ldst_comp OR _ldst_meta)
-						continue()
-					endif()
-					if(TARGET "${_ldst}")
-						continue()
-					endif()
-					if(EXISTS "${_ldst}" AND NOT IS_DIRECTORY "${_ldst}")
-						continue()
-					endif()
-					buildmaster_append_library_spec(
-						"${_library_mode}" "${_ldst}" "${_base_libdir}"
-						_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
-						_LIBRARY_COMPONENT_DLL_FILES)
-				endforeach()
-			endif()
-		endif()
-
 		set(_output_libraries "${_LIBRARY_COMPONENT_FILES}")
 		if(MSVC AND _library_mode STREQUAL "shared")
 			list(APPEND _output_libraries ${_LIBRARY_COMPONENT_DLL_FILES})
@@ -139,9 +109,14 @@ endfunction()
 ## @brief configure_file + include the shared component fragment template.
 ## @param[in] _component Registered component id.
 ## @param[in] _deferred  TRUE → dependant template (configure at build time).
-## @note Collects outputs, WHOLE link items, and recorded dependencies, then
-##       generates `component_<id>.cmake` under `BUILDMASTER_SCRIPTS_COMPONENTDIR`
-##       and `include()`s it so IMPORTED / INTERFACE targets exist immediately.
+## @note Collects outputs, WHOLE link items, LINK (raw linker names) and
+##       recorded dependencies, then generates `component_<id>.cmake` under
+##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it so IMPORTED /
+##       INTERFACE targets exist immediately.
+## @note `_BM_LINK_ITEMS` is the CMake list stored on
+##       `BUILDMASTER_COMPONENT_<id>_LINK` (empty string if unset). The
+##       template applies it INTERFACE on `<id>` so consumers of that id
+##       propagate the names to the final artefact.
 ## @note Stores produced names/files as GLOBAL properties for later link apply.
 function(_buildmaster_component_write_fragment _component _deferred)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_write_fragment")
@@ -195,6 +170,15 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		endif()
 	endif()
 
+	get_property(_BM_LINK_ITEMS GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINK)
+	if(NOT _BM_LINK_ITEMS)
+		set(_BM_LINK_ITEMS "")
+	endif()
+	if(_BM_LINK_ITEMS)
+		buildmaster_message(COMPONENT DEBUG
+			"${_component}: LINK (raw) → ${_BM_LINK_ITEMS}")
+	endif()
+
 	if(_deferred)
 		if(_library_mode STREQUAL "headers")
 			set(_tpl "component_headers_dependant.cmake.in")
@@ -235,8 +219,9 @@ endfunction()
 ## @brief Apply recorded component_link edges after all fragments are included.
 ## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
 ## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
-##       IMPORTED names), existing CMake target, existing archive file, or a
-##       library spec that creates an IMPORTED target under the install libdir.
+##       IMPORTED names), existing CMake target, or an existing archive file.
+## @note Dest that is none of the above is FATAL. Raw system linker names
+##       belong in `LINK=` / `LINK={…}` on the producer, not here.
 ## @note FATAL if source is not a target or dest is BUILDONLY.
 function(_buildmaster_apply_links)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_apply_links")
@@ -302,33 +287,8 @@ function(_buildmaster_apply_links)
 			continue()
 		endif()
 
-		get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_MODE)
-		if(_mode STREQUAL "" OR _mode STREQUAL "headers")
-			set(_mode "static")
-		endif()
-		set(_n "")
-		set(_f "")
-		set(_d "")
-		buildmaster_parse_subcomponent("${_dst}" _t _n0 _s)
-		buildmaster_append_library_spec(
-			"${_mode}" "${_dst}" "${BUILDMASTER_INSTALL_LIBDIR}" _n _f _d)
-		list(GET _n 0 _tn)
-		list(GET _f 0 _tf)
-		if(NOT TARGET "${_tn}")
-			if(_mode STREQUAL "shared")
-				add_library(${_tn} SHARED IMPORTED GLOBAL)
-			else()
-				add_library(${_tn} STATIC IMPORTED GLOBAL)
-			endif()
-			set_target_properties(${_tn} PROPERTIES
-				IMPORTED_LOCATION "${_tf}"
-				IMPORTED_LOCATION_DEBUG "${_tf}"
-				IMPORTED_LOCATION_RELEASE "${_tf}"
-				IMPORTED_LOCATION_MINSIZEREL "${_tf}"
-				IMPORTED_LOCATION_RELWITHDEBINFO "${_tf}"
-			)
-		endif()
-		target_link_libraries(${_src} INTERFACE ${_tn})
+		buildmaster_message(COMPONENT FATAL
+			"component_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, or on-disk archive. Raw system libraries belong in LINK= / LINK={…}.")
 	endforeach()
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
 endfunction()
