@@ -5,7 +5,11 @@ if(COMMAND buildmaster_loglevel_init)
 	buildmaster_loglevel_init()
 endif()
 
-if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt")
+# Cache alone is not enough: an interrupted first run leaves CMakeCache.txt
+# (and CMakeScratch) without build.ninja. The next parent configure used
+# to skip this block; Ninja then died with "loading build.ninja".
+if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
+		OR NOT EXISTS "@_CMAKE_BUILD_DIR@/build.ninja")
 	if(NOT "@_BM_CONFIGURE_VIA_TARGET@" STREQUAL "1")
 		buildmaster_message(CMAKE STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
 	endif()

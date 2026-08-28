@@ -82,6 +82,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Windows DLL “no candidate” under `lib/`:** `normalize_install_outputs` registers shared outputs on `BINDIR` as well as `LIBDIR`, and keeps the original stem case so `StormByte.dll` is not looked up as `stormbyte.dll`.
 - **Missing `-I` / `-L` / `INCLUDE` / `LIB` on nested configure:** 1.x env runners injected the install prefix; 2.0 dropped it, so Logger’s nested compile of `log.cxx` / `manipulators.cxx` never saw `StormByte/platform.h`. CMake and Meson stages now call `buildmaster_apply_install_search_paths` after `clean_cflags` and before writing runners / `_MESON_*_ARGS`. Nested configure no longer passes empty `-DCMAKE_C_FLAGS=` / `-DCMAKE_CXX_FLAGS=`.
 - **Consumer test layout:** `.github/tests/consumer` matches the real Logger/Buffer contract: sibling `thirdparty/`, `cmake_policy(SET CMP0079 NEW)`, `add_subdirectory(thirdparty)` then `add_library(Consumer::Dep ALIAS …)` with **no** `if(NOT TARGET)` guard and **no** DEFER workaround.
+- **Nested CMake configure skip:** `configure.cmake.in` treated `CMakeCache.txt` as “already configured”. An interrupted first run left cache + `CMakeScratch` and no `build.ninja`; the next parent configure skipped the stage and Ninja failed with `loading 'build.ninja'`. Skip now requires both the cache and `build.ninja` (same idea as Meson setup).
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
