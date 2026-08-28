@@ -14,9 +14,6 @@ stage targets, IMPORTED libraries, and link lines **once** — at the end of
 the parent `CMAKE_SOURCE_DIR` — into a single install prefix, with a
 toolchain and environment that actually reach nested Meson.
 
-The component **id itself** is already a CMake target the moment
-`create_*` returns. What is deferred is the wiring, not the name.
-
 This is not a wrapper around `ExternalProject_Add`. It is not FetchContent
 with extra macros. It is a small language for **graphs of third-party builds**.
 
@@ -129,8 +126,8 @@ larger library links as one `WHOLE` node.
 | Fetch / manage sources | Yes | Yes | Yes (Git helpers) |
 | Cacheable downloads | Partial | Manual | **Built-in** (`BUILDMASTER_DOWNLOADSDIR`) |
 | Hash-verified downloads | Yes | Manual | **Yes**, plus reuse across builds |
+| Download / unpack during parent configure | Manual | No | **Yes** (`file_*` helpers) |
 | Declarative graph (order-independent) | No | No | **Yes** |
-| Target exists at `create_*` (ALIAS / link now) | Yes | No | **Yes** (empty INTERFACE stub) |
 | Configure external project | N/A | Build time | **Eager or deferred** |
 | Inspect artifacts before main build | No | No | **When eager** |
 | Explicit `_configure` / `_build` / `_install` | No | No | **Yes** |
@@ -168,38 +165,33 @@ buildmaster_message(USER STATUS "Setting up My Library" 1)
 
 set(_opts "-DENABLE_FOO=ON")
 create_cmake_component(
-	mylib
-	"My Library"
-	${CMAKE_SOURCE_DIR}/thirdparty/mylib
-	${CMAKE_BINARY_DIR}/thirdparty/mylib_build
-	"${_opts}"
-	shared
-	"mylib"
+    mylib
+    "My Library"
+    ${CMAKE_SOURCE_DIR}/thirdparty/mylib
+    ${CMAKE_BINARY_DIR}/thirdparty/mylib_build
+    "${_opts}"
+    shared
+    "mylib"
 )
 
-add_library(My::Lib ALIAS mylib)
-target_link_libraries(MyApp PRIVATE My::Lib)
+target_link_libraries(MyApp PRIVATE mylib)
 ```
 
-No out-variable. No generated fragment to `include()`. After `create_*`,
-`mylib` **already exists** as an empty `INTERFACE` target — `ALIAS` and
-`target_link_libraries` are valid immediately. Stage targets, produced
-files and include dirs are filled in when the parent `CMakeLists.txt`
-finishes. Do not wrap the ALIAS in `if(NOT TARGET)`: if the stub is
-missing, that is a bug.
+No out-variable. No generated fragment to `include()`. Stage targets and
+IMPORTED libraries appear when the parent `CMakeLists.txt` finishes.
 
 Optional policy string (one trailing argument, never a pile of positionals):
 
 ```cmake
 create_cmake_component(
-	mylib
-	"My Library"
-	${CMAKE_SOURCE_DIR}/thirdparty/mylib
-	${CMAKE_BINARY_DIR}/thirdparty/mylib_build
-	"${_opts}"
-	static
-	"mylib"
-	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;PC={VERSION=1.2.3;NAME=mylib}"
+    mylib
+    "My Library"
+    ${CMAKE_SOURCE_DIR}/thirdparty/mylib
+    ${CMAKE_BINARY_DIR}/thirdparty/mylib_build
+    "${_opts}"
+    static
+    "mylib"
+    "INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;PC={VERSION=1.2.3;NAME=mylib}"
 )
 ```
 
@@ -217,7 +209,8 @@ with `create_meson_component`.
 3. **Connect** with `component_dependency` and/or `component_link`
    (again, any order).
 4. **Optional:** `component_prerequisite`, `file_download` /
-   `file_download_cached` / `file_decompress`, or configure-time
+   `file_download_cached` / `file_decompress` (these run during the
+   call, so sources exist before `create_*`), or configure-time
    `create_git_*`.
 5. End of `CMAKE_SOURCE_DIR`: BuildMaster materializes. Unused ids produce
    one **WARNING**.
@@ -230,61 +223,32 @@ with `create_meson_component`.
 That is the same behaviour you want by hand (consumer after producer)
 without writing two APIs.
 
+A tarball you unpack in the same `CMakeLists.txt` as `create_*` does
+**not** need a dependency edge for the first configure: the files are
+already on disk. Add `component_dependency` / `component_prerequisite`
+only when a *later rebuild* of that file target must precede configure.
+
 ---
 
 ## How a component works
 
 | Target | Role |
 |--------|------|
-| `<id>` | `INTERFACE`. Created **immediately** by `create_*`. Depends on `<id>_install` after materialize. **This is what you link.** |
-| `<id>_configure` | Nested CMake or Meson setup (created at materialize) |
-| `<id>_build` | Compile (created at materialize) |
+| `<id>` | `INTERFACE`. Depends on `<id>_install`. **This is what you link.** |
+| `<id>_configure` | Nested CMake or Meson setup |
+| `<id>_build` | Compile |
 | `<id>_install` | Install into `BUILDMASTER_INSTALL_DIR` (skipped for `BUILDONLY`) |
 | produced libs | `STATIC` / `SHARED` **IMPORTED** files under the prefix (or the build dir) |
-
-### The id is a target now
-
-`create_*_component` registers metadata **and** adds an empty `INTERFACE`
-library named after the component id. That stub is the contract:
-
-```cmake
-create_cmake_component(
-	StormByte-Logger
-	"StormByte Suite - Logger"
-	${LOGGER_SRC}
-	${LOGGER_BUILD}
-	"${LOGGER_OPTS}"
-	shared
-	"StormByte-Logger;StormByte"
-)
-
-add_library(StormByte::Logger ALIAS StormByte-Logger)
-target_link_libraries(StormByte-Buffer PUBLIC StormByte::Logger)
-```
-
-That is valid in the same `CMakeLists.txt`, in a sibling directory after
-`add_subdirectory`, and in a recursive consumer that only includes
-BuildMaster. You do **not** wait for DEFER. You do **not** write
-`if(NOT TARGET StormByte-Logger)` around the ALIAS: if the stub is
-missing, configure must fail.
-
-What is still deferred (end of parent configure):
-
-- `<id>_configure` / `_build` / `_install`
-- IMPORTED produced libraries
-- include directories on the INTERFACE
-- `add_dependencies(<id> <id>_install)`
-- `WHOLE` link options, `PC` files, rename / strip
-
-Until then the stub is empty on purpose. Linking against it still works
-because CMake records the edge; Ninja will not build the host until
-`_install` has run.
 
 Library-mode installs list archive paths as `OUTPUT` so Ninja can depend on
 real files, not empty stamps.
 
 **Ids** become target and script names — keep them filesystem-friendly.
 **Titles** may contain spaces; they only appear in status lines.
+
+The `INTERFACE` stub exists as soon as you call `create_*`. You may
+`add_library(Vendor::Foo ALIAS foo)` in the same file. Produced paths
+are filled in at materialize.
 
 ---
 
@@ -390,8 +354,10 @@ component_prerequisite(mylib my-unpack)
 `<id>_configure` waits on an existing target: a download, an unpack, a
 custom codegen step, anything CMake already knows.
 
-That is how you keep “fetch the extra data, then configure the library”
-declarative instead of a maze of `execute_process` in the parent.
+File helpers already run during the `file_*` call (see below). Use a
+prerequisite or `component_dependency` when a **rebuild** of that target
+must happen before a *deferred* configure — not to get the files onto
+disk the first time.
 
 ---
 
@@ -492,24 +458,24 @@ strip ran on each component’s install (or BUILDONLY “install”) first.
 
 ```cmake
 create_cmake_component(
-	plugin-a
-	"Plugin A"
-	${A_SRC} ${A_BUILD}
-	"${A_OPTS}"
-	static
-	"plugina"
-	"WHOLE"
+    plugin-a
+    "Plugin A"
+    ${A_SRC} ${A_BUILD}
+    "${A_OPTS}"
+    static
+    "plugina"
+    "WHOLE"
 )
 
 # Opt out when the .res is load-bearing:
 create_cmake_component(
-	branded
-	"Branded static"
-	${B_SRC} ${B_BUILD}
-	"${B_OPTS}"
-	static
-	"branded"
-	"STRIPRES=OFF"
+    branded
+    "Branded static"
+    ${B_SRC} ${B_BUILD}
+    "${B_OPTS}"
+    static
+    "branded"
+    "STRIPRES=OFF"
 )
 ```
 
@@ -529,23 +495,23 @@ BuildMaster can emit a small helper file from that.
 
 ```cmake
 create_cmake_component(
-	ogg
-	"Ogg"
-	${OGG_SRC} ${OGG_BUILD}
-	"${OGG_OPTS}"
-	static
-	"ogg"
-	"PC={VERSION=1.3.5;NAME=ogg;DESCRIPTION=Ogg bitstream}"
+    ogg
+    "Ogg"
+    ${OGG_SRC} ${OGG_BUILD}
+    "${OGG_OPTS}"
+    static
+    "ogg"
+    "PC={VERSION=1.3.5;NAME=ogg;DESCRIPTION=Ogg bitstream}"
 )
 
 create_cmake_component(
-	vorbis
-	"Vorbis"
-	${VORBIS_SRC} ${VORBIS_BUILD}
-	"${VORBIS_OPTS}"
-	static
-	"vorbis"
-	"PC={VERSION=1.3.7;NAME=vorbis}"
+    vorbis
+    "Vorbis"
+    ${VORBIS_SRC} ${VORBIS_BUILD}
+    "${VORBIS_OPTS}"
+    static
+    "vorbis"
+    "PC={VERSION=1.3.7;NAME=vorbis}"
 )
 component_link(vorbis ogg)
 ```
@@ -679,18 +645,19 @@ Pass the repo root if the nested project must find BuildMaster:
 
 ```cmake
 create_cmake_component(
-	nest
-	"Nested graph"
-	${NEST_SRC}
-	${NEST_BUILD}
-	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
-	static
-	"vendor/nest/nestlib;vendor/nest/midlib"
+    nest
+    "Nested graph"
+    ${NEST_SRC}
+    ${NEST_BUILD}
+    "-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
+    static
+    "vendor/nest/nestlib;vendor/nest/midlib"
 )
 ```
 
-Nested consumers can `ALIAS` and link the nested component id as soon as
-their `create_*` returns. They must not wait for the *outer* finalize.
+Third-party trees that themselves vendor BuildMaster must sit as **sibling
+directories** of the BuildMaster checkout the parent added. Nested projects
+expect that layout.
 
 ---
 
@@ -724,8 +691,8 @@ buildmaster_message(USER FATAL "extra data hash missing")
 ```
 
 ```text
--- [BuildMaster/User     ]: 	Setting up the library
--- [INFO    ][BuildMaster/User     ]: 		extra data already cached
+-- [BuildMaster/User     ]:	Setting up the library
+-- [INFO    ][BuildMaster/User     ]:		extra data already cached
 ```
 
 ### Levels
@@ -756,125 +723,50 @@ A line is printed when its level number is **≥** the current
 
 ### Format
 
-- Header is never indented. Tabs apply only to the body.
-- `STATUS`: `[BuildMaster/<Module>]: <tabs><text>`
-- Any other level: `[<LEVEL>][BuildMaster/<Module>]: <tabs><text>` (no space
-  between the two brackets)
-- `<LEVEL>` is uppercase, padded to `LOWLEVEL`
-- `<Module>` is CamelCase, padded to `Toolchain`
+`STATUS` lines use only the module header. Other levels prefix a padded
+level tag with **no space** between the two brackets:
 
-Ninja `COMMENT` strings use the same `STATUS` header so stage lines line
-up with configure output.
-
-### Selecting the level
-
-```bash
-export BUILDMASTER_LOGLEVEL=DEBUG
-# or
-cmake -DBUILDMASTER_LOGLEVEL=INFO …
+```text
+-- [BuildMaster/CMake    ]:	Configuring My Library
+-- [DEBUG   ][BuildMaster/File     ]:	cache hit
 ```
 
-Default is `STATUS`. `BUILDMASTER_DEBUG` is **ignored**.
-
-Change the level and **re-run CMake** so generated `-P` scripts see it.
-
-### Built-in modules
-
-| Key | Header | Typical owner |
-|-----|--------|---------------|
-| `ARCHIVE` | Archive | Static merge / archiver / `.res` strip |
-| `CMAKE` | CMake | CMake stages |
-| `COMPONENT` | Component | Factory / graph |
-| `CORE` | Core | Bootstrap, harness, helpers |
-| `ENV` | Env | Environment runners |
-| `EXTRA` | Extra | Extra tools (pkgconf, …) |
-| `FILE` | File | Download / decompress |
-| `GIT` | Git | Reset / patch / fetch |
-| `MESON` | Meson | Meson stages |
-| `NINJA` | Ninja | Ninja helpers |
-| `RENAME` | Rename | Archive name normalization |
-| `TOOLCHAIN` | Toolchain | Profiles / native files |
-| `TOOLS` | Tools | Tool bootstrap |
-| `USER` | User | **Parent project only** |
-
-Unknown module keys are **FATAL**.
+`BUILDMASTER_DEBUG` is ignored. Use `BUILDMASTER_LOGLEVEL`.
 
 ---
 
 ## Verbosity of tool output
 
-`BUILDMASTER_LOGLEVEL` only filters **BuildMaster lines**. Live compiler /
-linker stdout is a separate switch:
-
-```bash
-export BUILDMASTER_VERBOSE=1
-```
-
-| Stage | Effect |
-|-------|--------|
-| `cmake --build` | Live compile runner + `--verbose` |
-| `meson compile` | Live compile runner + `-v` |
-| Configure / setup / install / git | Unchanged unless you raise `LOGLEVEL` |
-
-`LOGLEVEL` does **not** imply `VERBOSE`. Silent runners still hide tool
-stdout on success and dump it on failure (Unix shell and Windows PowerShell).
-
-| LOGLEVEL | VERBOSE | BuildMaster lines | Compile lines |
-|----------|---------|-------------------|---------------|
-| `STATUS` | OFF | Stage titles | Quiet |
-| `DEBUG` | OFF | Graph + git + paths | Quiet |
-| `STATUS` | ON | Stage titles | Live + `--verbose` / `-v` |
-| `LOWLEVEL` | ON | Everything | Live + `--verbose` / `-v` |
+`BUILDMASTER_VERBOSE` is independent of the log level. It controls whether
+nested CMake / Meson / Ninja stdout is shown on success. Failures always
+print captured output.
 
 ---
 
 ## Fail-fast
 
-A non-zero nested build/install fails that stage. The INTERFACE target
-depends on `<id>_install`, so the parent does not compile against a
-half-empty prefix.
-
-Optional markers:
-
-```bash
-export BUILDMASTER_FAIL_FAST=1
-```
-
-| Value | Behaviour |
-|-------|-----------|
-| **ON** | First failure writes markers; later stages skip and fail |
-| **OFF** (default) | Independent components can continue (cache warm) |
+`BUILDMASTER_FAIL_FAST=ON` writes a marker after a stage failure so later
+stages skip instead of cascading.
 
 ---
 
 ## Compiler cache
 
-If the parent sets `CMAKE_C_COMPILER_LAUNCHER` /
-`CMAKE_CXX_COMPILER_LAUNCHER` and/or `CCACHE_DIR` / `SCCACHE_DIR`,
-BuildMaster forwards them to env runners, child CMake, and Meson native
-files.
-
-On Windows, launchers are **not** folded into `CC` / `CXX`.
+ccache / sccache launchers and cache directories propagate into nested
+CMake and Meson (including the Meson native file). Keep
+`BUILDMASTER_MESON_NATIVE_FILE` aligned with `TOOLCHAIN=` so cache keys
+do not mix compilers.
 
 ---
 
 ## Platform notes
 
-| Topic | Linux | Windows | macOS |
-|-------|-------|---------|-------|
-| Env runner | `runner.sh` | PowerShell (`runner_silent.ps1`) | same as Linux |
-| Static merge | GNU `ar` / `llvm-ar` | `lib /OUT:` | `libtool -static` |
-| `.res` strip | no-op | `lib` / `llvm-lib` `/LIST` + `/REMOVE` | no-op |
-| Meson PDB | — | `/Z7` | — |
-| `TOOLCHAIN=clang` | LLD required | use `clang-cl` | LLD not forced |
-| `TOOLCHAIN=msvc` / `clang-cl` | invalid | supported | invalid |
-
-AppleClang is treated as the **clang** family for toolchain swap tests and
-profile selection.
-
-On Windows, shared components install the DLL under `BINDIR` (`bin/`) and
-the import `.lib` under `LIBDIR` (`lib/`). Static archives stay in `LIBDIR`.
-`RENAME` follows that layout and keeps the declared basename case.
+- **Windows shared:** DLLs under `CMAKE_INSTALL_BINDIR`, import libs under
+  `CMAKE_INSTALL_LIBDIR`. `RENAME` treats both and keeps the produced case.
+- **Windows static:** archives under `LIBDIR` only.
+- **Unix:** `lib` / `lib64` from `GNUInstallDirs` (BuildMaster loads it).
+- Nested configure injects `-I`/`-L` (and Windows `INCLUDE`/`LIB`) for the
+  shared prefix so a child project finds siblings without extra flags.
 
 ---
 
@@ -899,7 +791,8 @@ the reset script path for a source tree.
 ## File download and decompress
 
 CMake can already hash a download. What it does not give you for free is a
-**stable cache** that survives `rm -rf build`.
+**stable cache** that survives `rm -rf build`, plus a call that leaves the
+file on disk **before** `create_*_component` runs.
 
 Default destination is `${BUILDMASTER_BINDIR}/downloads`. Point
 `BUILDMASTER_DOWNLOADSDIR` at a folder *outside* the build tree and the
@@ -914,9 +807,9 @@ cmake -DBUILDMASTER_DOWNLOADSDIR=/var/cache/buildmaster/downloads …
 ```
 
 A slow extra-data tarball from a far-away host should not be the reason you
-wait before you can compile *your* code again. The first run pays the
-network; every run after that is a hash check against a file you already
-have.
+wait before you can compile *your* code again. The first configure pays the
+network; every configure after that is a hash check against a file you
+already have.
 
 | Function | Role |
 |----------|------|
@@ -924,26 +817,52 @@ have.
 | `file_download` | Always fetch (progressive backoff) |
 | `file_decompress` | Unpack into a directory |
 
+**Contract**
+
+- No out-variable. No `include()` of a generated script.
+- Each call creates a CMake target of the same `name`.
+- The generated `-P` script also runs **during that call** (parent
+  configure). Scripts are idempotent: a cache hit or an already-extracted
+  tree is a no-op.
+- After `file_download_cached` / `file_decompress` return, the artifact is
+  on disk. You may `create_*_component` against that tree in the same
+  file; that component can still **eager**-configure.
+- `DEPENDS` on the file helpers is a *build-graph* edge only. It does not
+  delay the configure-time run. Call download before decompress in the
+  same `CMakeLists.txt`.
+- Paths are rejected if they contain `..` traversal.
+- Optional graph wiring: `component_prerequisite` / `component_dependency`
+  so a **rebuild** of the file target precedes a deferred `<id>_configure`.
+  You do not need that edge just to unpack once at configure.
+
 ```cmake
-file_download_cached(my-data
-	"https://example.invalid/extra.tar.gz"
-	EXPECTED_HASH SHA256=${EXTRA_HASH}
-	TITLE "Example data"
+file_download_cached(extra-download
+    "https://example.invalid/extra.tar.gz"
+    EXPECTED_HASH SHA256=${EXTRA_HASH}
+    TITLE "Example extra data"
+    INDENT 2
 )
-include(${my-data})
 
-file_decompress(my-unpack
-	"${BUILDMASTER_DOWNLOADSDIR}/extra.tar.gz"
-	"${CMAKE_BINARY_DIR}/extra"
-	TITLE "Example data"
+file_decompress(extra-unpack
+    "${BUILDMASTER_DOWNLOADSDIR}/extra.tar.gz"
+    "${CMAKE_BINARY_DIR}/extra"
+    TITLE "Example extra data"
+    INDENT 2
 )
-include(${my-unpack})
 
-component_prerequisite(mylib my-unpack)
+create_cmake_component(
+    mylib
+    "My Library"
+    "${CMAKE_BINARY_DIR}/extra/upstream"
+    "${CMAKE_BINARY_DIR}/extra_build"
+    "${_opts}"
+    static
+    "mylib"
+)
 ```
 
-Paths are checked against `..` traversal. Wire the resulting targets into
-the graph with `component_prerequisite` or `component_dependency`.
+`BUILDMASTER_DOWNLOADSDIR` is the cache. The unpack destination is yours
+(usually under the build tree). Keep the cache folder if you wipe `build/`.
 
 ---
 
@@ -985,13 +904,7 @@ Do not hardcode new assertions in `.github/workflows/ci.yml`.
 cmake -S .github/tests/harness -B build/harness -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build/harness --target run_buildmaster_checks
 cmake --build build/harness --target run_buildmaster_smoke
-
-cmake -S .github/tests/consumer -B build/tests/consumer -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/tests/consumer --target consumer_host
 ```
-
-The consumer tree mirrors a real host: `add_subdirectory` BuildMaster,
-`create_*`, then a namespaced `ALIAS` with **no** `if(NOT TARGET)` guard.
 
 ---
 

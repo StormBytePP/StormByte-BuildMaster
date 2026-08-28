@@ -2,7 +2,10 @@
 # tools/file/download.cmake — file_download / file_download_cached
 # =============================================================================
 # Public calls create a CMake custom target of the same name (no out-var,
-# no include()). Wire with component_dependency(<component> <file_target>).
+# no include()). The generated -P script also runs during the caller's
+# configure so artifacts exist before create_*_component. Wire extra graph
+# edges with component_dependency(<component> <file_target>) only when the
+# component must wait on a later rebuild of the file target.
 
 ## @brief Generate the force-download script and return its path (internal).
 ## @param[out] out_script Parent-scope path of the generated -P script.
@@ -57,11 +60,15 @@ function(_file_generate_download_script out_script url title expected_hash
 	buildmaster_message(FILE LOWLEVEL "Exiting _file_generate_download_script")
 endfunction()
 
-## @brief Create (or fatal) a BuildMaster file prerequisite target.
+## @brief Create a file prerequisite target and run its -P script now.
 ## @param[in] name    Target name.
 ## @param[in] script  Path to cmake -P script.
 ## @param[in] comment Progress COMMENT (wrapped with the File log header).
-## @param[in] depends Optional list of target dependencies.
+## @param[in] depends Optional list of target dependencies (build-graph only).
+## @note `execute_process(-P script)` runs at configure so callers can
+##       create_component against the artifact in the same directory.
+##       The custom target remains for incremental rebuilds / graph edges.
+##       The script must be idempotent (cached download, extract-if-missing).
 function(_file_add_prerequisite_target name script comment depends)
 	buildmaster_message(FILE LOWLEVEL "Entering _file_add_prerequisite_target")
 	if(TARGET "${name}")
@@ -87,6 +94,16 @@ function(_file_add_prerequisite_target name script comment depends)
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_FILE_TARGET_IDS "${name}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_FILE_${name}_SCRIPT "${script}")
+
+	execute_process(
+		COMMAND ${CMAKE_COMMAND} -P "${script}"
+		RESULT_VARIABLE _file_rc
+	)
+	if(NOT _file_rc EQUAL 0)
+		buildmaster_message(FILE FATAL
+			"file helper '${name}' failed at configure (exit ${_file_rc})")
+	endif()
+
 	buildmaster_message(FILE LOWLEVEL "Exiting _file_add_prerequisite_target")
 endfunction()
 
@@ -99,7 +116,8 @@ endfunction()
 ## @param[in] COMMENT       Optional custom target COMMENT.
 ## @param[in] DEPENDS       Optional list of CMake targets this waits on.
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
-## @note No out-variable and no include(). The download runs when `name` builds.
+## @note No out-variable and no include(). The -P script runs during this
+##       call (configure) and again if `name` is built.
 function(file_download name url)
 	buildmaster_message(FILE LOWLEVEL "Entering file_download")
 	if("${name}" STREQUAL "")
@@ -148,8 +166,10 @@ endfunction()
 ## @param[in] COMMENT       Optional custom target COMMENT.
 ## @param[in] DEPENDS       Optional list of CMake targets this waits on.
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
-## @note Generates force-download + cached wrapper scripts. Building `name` runs
-##       the cached wrapper via cmake -P. No out-variable / include().
+## @note Generates force-download + cached wrapper scripts. The cached
+##       wrapper runs during this call (configure) so the file is on disk
+##       before create_*_component. Building `name` re-runs the same
+##       idempotent wrapper. No out-variable / include().
 function(file_download_cached name url)
 	buildmaster_message(FILE LOWLEVEL "Entering file_download_cached")
 	if("${name}" STREQUAL "")

@@ -9,11 +9,14 @@
 ## @param[in] TITLE   Optional human-readable title.
 ## @param[in] COMMENT Optional custom target COMMENT.
 ## @param[in] DEPENDS Optional list of CMake targets this waits on (e.g. the
-##            download target for the same archive).
+##            download target for the same archive). Build-graph only; the
+##            extract itself runs during this call.
 ## @param[in] INDENT  Optional status indent tabs for the generated script.
 ## @note Uses file(ARCHIVE_EXTRACT) inside the generated -P script.
-##       No out-variable / include(). The named target must exist before
-##       finalize so component_dependency(… name) can resolve it.
+##       No out-variable / include(). The script runs at configure (so
+##       amalgamation sources exist before create_*_component) and again
+##       if `name` is built. Call after file_download_cached in the same
+##       CMakeLists so the archive is already on disk.
 function(file_decompress name archive out_dir)
 	buildmaster_message(FILE LOWLEVEL "Entering file_decompress")
 	if("${name}" STREQUAL "")
