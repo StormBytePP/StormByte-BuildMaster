@@ -47,6 +47,11 @@
 ##       fragments and stage scripts share the same runners.
 ## @note `_MESON_NATIVE_FILE` is the Meson `--native-file` for this component:
 ##       `TOOLCHAIN=` profile file, or this process's compiler family.
+## @note Before writing templates, calls
+##       `buildmaster_apply_install_search_paths()` so `_MESON_C_ARGS` /
+##       `_MESON_CXX_ARGS` / `_MESON_LINK_ARGS` include the shared prefix
+##       (`-I`/`-L` or `/I`/`/LIBPATH:`). Per-component runners also get
+##       Windows `INCLUDE`/`LIB` when TOOLCHAIN= is set.
 function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
 	buildmaster_message(MESON LOWLEVEL "Entering create_meson_stages")
 	if(ARGC GREATER 10)
@@ -220,13 +225,6 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 			set(BM_TC_RANLIB "${_MESON_RANLIB}")
 		endif()
 
-		buildmaster_create_component_env_runners(
-			_bm_tc_runner
-			_bm_tc_runner_silent
-			"${_component}"
-			"${_toolchain_name}"
-		)
-
 		if(NOT _MESON_AR STREQUAL "")
 			normalize_cmake_path(_MESON_AR "${_MESON_AR}")
 		endif()
@@ -240,6 +238,10 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 			"${CMAKE_C_FLAGS}" "${_toolchain_name}")
 		buildmaster_clean_cflags(CMAKE_CXX_FLAGS
 			"${CMAKE_CXX_FLAGS}" "${_toolchain_name}")
+
+		if(COMMAND buildmaster_apply_install_search_paths)
+			buildmaster_apply_install_search_paths()
+		endif()
 
 		# -fuse-ld= must be a driver flavor name, never an absolute path
 		if(BM_TC_FORCE_LLD)
@@ -260,6 +262,13 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		if(NOT _bm_fuse_ld STREQUAL "")
 			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
+
+		buildmaster_create_component_env_runners(
+			_bm_tc_runner
+			_bm_tc_runner_silent
+			"${_component}"
+			"${_toolchain_name}"
+		)
 
 		set(ENV_MESON_COMMAND ${_bm_tc_runner} "${_meson_name}")
 		set(ENV_MESON_SILENT_COMMAND ${_bm_tc_runner_silent} "${_meson_name}")
@@ -285,6 +294,10 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 				"${CMAKE_C_FLAGS}" "clang-cl")
 			buildmaster_clean_cflags(CMAKE_CXX_FLAGS
 				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		endif()
+
+		if(COMMAND buildmaster_apply_install_search_paths)
+			buildmaster_apply_install_search_paths()
 		endif()
 
 		set(_bm_lt "")
@@ -313,6 +326,10 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	endif()
 
 	string(STRIP "${_MESON_LINK_ARGS}" _MESON_LINK_ARGS)
+
+	if(COMMAND buildmaster_apply_install_search_paths)
+		buildmaster_apply_install_search_paths()
+	endif()
 
 	buildmaster_quote_cmd_list_for_script(_MESON_CMD_PREFIX ${ENV_MESON_COMMAND})
 	buildmaster_quote_cmd_list_for_script(_MESON_SILENT_CMD_PREFIX ${ENV_MESON_SILENT_COMMAND})

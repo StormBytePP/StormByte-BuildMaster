@@ -7,3 +7,4 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/runner.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/command.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/prefix_search.cmake")

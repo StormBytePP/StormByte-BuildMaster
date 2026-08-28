@@ -46,6 +46,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up the library" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
 - **Harness + consumer tests:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, helper-`.pc` fixture (`Requires` check), meta-toolchain, and a Logger-style consumer (`add_subdirectory(buildmaster)` + sibling library, no extra includes).
 - **Documented layout contract:** BuildMaster and every DSL-driven dependency must be **sibling directories** under the same parent. Registration `CMakeLists.txt` is not the nested `srcdir`.
+- **Prefix search injection** (`env/prefix_search.cmake`): after `clean_cflags` and before stage `configure_file` / Meson `_MESON_*_ARGS` / env runners, inject the shared install prefix into compile and link search paths:
+  - UNIX: `-I${BUILDMASTER_INSTALL_INCLUDEDIR}` and `-L${BUILDMASTER_INSTALL_LIBDIR}` on `CFLAGS` / `CXXFLAGS` / `LDFLAGS` and `CMAKE_{C,CXX,EXE,SHARED,MODULE}_LINKER_FLAGS`.
+  - Windows (MSVC-like): `/I` and `/LIBPATH:` on the same flag variables, **and** prepend `${BUILDMASTER_INSTALL_INCLUDEDIR}` / `${BUILDMASTER_INSTALL_LIBDIR}` to process `INCLUDE` and `LIB` (case-preserving).
+  - Nested `BUILDMASTER_CONFIGURED` persists those values through `update_toolchain.cmake` so a second configure does not drop them.
+- **Eager INTERFACE stub:** `add_library(<id> INTERFACE)` at `create_*_component` time (graph registration), so `ALIAS` / `target_link_libraries` in a sibling `lib/` that runs *before* DEFER finalize does not see a missing target.
 
 ### Changed
 - Stage `COMMENT` headers: **configure** stays `[BuildMaster/CMake]` / `[BuildMaster/Meson]`; **compile and install** use `[BuildMaster/Ninja]` (Ninja is the driver for those targets). Git post-install reset stays `[BuildMaster/Git]`.
@@ -72,6 +77,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Install prefix without `GNUInstallDirs`:** produced paths were `${prefix}//libfoo.a` and `RENAME` looked in the prefix root instead of `lib/` / `lib64/`. BuildMaster now loads `GNUInstallDirs` itself.
 - **Stage templates after sibling `add_subdirectory`:** `BUILDMASTER_TOOLS_CMAKE_SRCDIR` (and friends) resolve to the checkout, so `configure.cmake.in` is found instead of `/configure.cmake.in`.
 - **Component id equal to produced name:** fragment templates created `add_library(<id> INTERFACE)` and then `add_library(<id> STATIC|SHARED IMPORTED)`. CMake rejects the second target (`StormByte` / `StormByte` in Logger). The IMPORTED target is now `<name>__bm_imported` when `<name>` already exists; the INTERFACE `<id>` still links that archive. Host `target_link_libraries(… <id>)` is unchanged.
+- **`library_import_hint` arity in nested DEFER finalize:** 1.x callers used 3 arguments; 2.0 added an optional 4th (`subdir`). Finalize now dispatches 3-arg vs 4-arg instead of dying on “called with incorrect number of arguments”.
+- **ALIAS before DEFER:** `StormByte::Logger` (and any consumer `add_library(<ns>::<name> ALIAS <id>)`) no longer fails because `<id>` did not exist until end-of-`CMAKE_SOURCE_DIR`. The INTERFACE stub exists at registration; wiring (`INTERFACE_INCLUDE_DIRECTORIES`, link of `__bm_imported`) happens at finalize.
+- **Windows DLL “no candidate” under `lib/`:** `normalize_install_outputs` registers shared outputs on `BINDIR` as well as `LIBDIR`, and keeps the original stem case so `StormByte.dll` is not looked up as `stormbyte.dll`.
+- **Missing `-I` / `-L` / `INCLUDE` / `LIB` on nested configure:** 1.x env runners injected the install prefix; 2.0 dropped it, so Logger’s nested compile of `log.cxx` / `manipulators.cxx` never saw `StormByte/platform.h`. CMake and Meson stages now call `buildmaster_apply_install_search_paths` after `clean_cflags` and before writing runners / `_MESON_*_ARGS`. Nested configure no longer passes empty `-DCMAKE_C_FLAGS=` / `-DCMAKE_CXX_FLAGS=`.
+- **Consumer test layout:** `.github/tests/consumer` matches the real Logger/Buffer contract: sibling `thirdparty/`, `cmake_policy(SET CMP0079 NEW)`, `add_subdirectory(thirdparty)` then `add_library(Consumer::Dep ALIAS …)` with **no** `if(NOT TARGET)` guard and **no** DEFER workaround.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

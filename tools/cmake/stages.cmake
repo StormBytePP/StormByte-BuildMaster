@@ -50,6 +50,11 @@
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
 ##       component library fragments (including dependant targets) use the
 ##       same runners as the generated stage scripts.
+## @note Before writing templates, calls
+##       `buildmaster_apply_install_search_paths()` so nested
+##       `-DCMAKE_C_FLAGS=` / linker flags include the shared prefix
+##       (`-I`/`-L` or `/I`/`/LIBPATH:`, plus Windows `INCLUDE`/`LIB`
+##       on per-component runners).
 function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)
 	buildmaster_message(CMAKE LOWLEVEL "Entering create_cmake_stages")
 	if(ARGC GREATER 10)
@@ -248,13 +253,6 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 		set(BM_TC_RANLIB "${CMAKE_RANLIB}")
 		set(BM_TC_NM "${CMAKE_NM}")
 
-		buildmaster_create_component_env_runners(
-			_bm_tc_runner
-			_bm_tc_runner_silent
-			"${_component}"
-			"${_toolchain_name}"
-		)
-
 		buildmaster_clean_ldflags(CMAKE_EXE_LINKER_FLAGS
 			"${CMAKE_EXE_LINKER_FLAGS}" "${_toolchain_name}")
 		buildmaster_clean_ldflags(CMAKE_SHARED_LINKER_FLAGS
@@ -266,6 +264,17 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 			"${CMAKE_C_FLAGS}" "${_toolchain_name}")
 		buildmaster_clean_cflags(CMAKE_CXX_FLAGS
 			"${CMAKE_CXX_FLAGS}" "${_toolchain_name}")
+
+		if(COMMAND buildmaster_apply_install_search_paths)
+			buildmaster_apply_install_search_paths()
+		endif()
+
+		buildmaster_create_component_env_runners(
+			_bm_tc_runner
+			_bm_tc_runner_silent
+			"${_component}"
+			"${_toolchain_name}"
+		)
 
 		sanitize_for_filename(_bm_tc_file_safe "${_component}_${_toolchain_name}")
 		set(_bm_component_toolchain
@@ -301,6 +310,9 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 				"${CMAKE_C_FLAGS}" "clang-cl")
 			buildmaster_clean_cflags(CMAKE_CXX_FLAGS
 				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		endif()
+		if(COMMAND buildmaster_apply_install_search_paths)
+			buildmaster_apply_install_search_paths()
 		endif()
 	endif()
 

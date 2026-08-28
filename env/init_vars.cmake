@@ -95,6 +95,30 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(NM "")
 	endif()
 
+	if(NOT DEFINED INCLUDE)
+		set(INCLUDE "")
+	endif()
+	if(NOT DEFINED LIB)
+		set(LIB "")
+	endif()
+	if(NOT DEFINED CFLAGS)
+		set(CFLAGS "")
+	endif()
+	if(NOT DEFINED CXXFLAGS)
+		set(CXXFLAGS "")
+	endif()
+	if(NOT DEFINED LDFLAGS)
+		set(LDFLAGS "")
+	endif()
+
+	# Fill the 1.0.0 runner placeholders from the shared prefix.
+	# CMAKE_*_FLAGS here live in this directory; create_*_stages must
+	# call the same helper so nested configure.cmake.in is not empty.
+	include("${CMAKE_CURRENT_LIST_DIR}/prefix_search.cmake")
+	if(COMMAND buildmaster_apply_install_search_paths)
+		buildmaster_apply_install_search_paths()
+	endif()
+
 	prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 
 	# Compile-only runner: silent by default; full output when BUILDMASTER_VERBOSE
