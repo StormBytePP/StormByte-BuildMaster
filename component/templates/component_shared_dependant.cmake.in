@@ -1,7 +1,7 @@
 if(NOT TARGET @_LIBRARY_NAME@)
 	add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
 		COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
-        COMMENT "[BuildMaster/CMake    ]: Configuring @_LIBRARY_NAME@@_LIBRARY_TOOLCHAIN_SUFFIX@"
+		COMMENT "[BuildMaster/CMake    ]: Configuring @_LIBRARY_NAME@@_LIBRARY_TOOLCHAIN_SUFFIX@"
 		USES_TERMINAL
 		VERBATIM
 	)
@@ -32,9 +32,13 @@ if(NOT TARGET @_LIBRARY_NAME@)
 
 	if(MSVC)
 		foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
-			add_library(${lib} SHARED IMPORTED GLOBAL)
+			set(_bm_imp "${lib}")
+			if(TARGET "${_bm_imp}")
+				set(_bm_imp "${lib}__bm_imported")
+			endif()
+			add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
-			set_target_properties(${lib} PROPERTIES
+			set_target_properties(${_bm_imp} PROPERTIES
 				IMPORTED_IMPLIB "${lib_file}"
 				IMPORTED_IMPLIB_DEBUG "${lib_file}"
 				IMPORTED_IMPLIB_RELEASE "${lib_file}"
@@ -42,7 +46,7 @@ if(NOT TARGET @_LIBRARY_NAME@)
 				IMPORTED_IMPLIB_RELWITHDEBINFO "${lib_file}"
 			)
 
-			set_target_properties(${lib} PROPERTIES
+			set_target_properties(${_bm_imp} PROPERTIES
 				IMPORTED_LOCATION "${lib_dll_file}"
 				IMPORTED_LOCATION_DEBUG "${lib_dll_file}"
 				IMPORTED_LOCATION_RELEASE "${lib_dll_file}"
@@ -50,14 +54,18 @@ if(NOT TARGET @_LIBRARY_NAME@)
 				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
 			)
 
-			add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
+			add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
 		endforeach()
 	else()
 		foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-			add_library(${lib} SHARED IMPORTED GLOBAL)
+			set(_bm_imp "${lib}")
+			if(TARGET "${_bm_imp}")
+				set(_bm_imp "${lib}__bm_imported")
+			endif()
+			add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
-			set_target_properties(${lib} PROPERTIES
+			set_target_properties(${_bm_imp} PROPERTIES
 				IMPORTED_LOCATION "${lib_file}"
 				IMPORTED_LOCATION_DEBUG "${lib_file}"
 				IMPORTED_LOCATION_RELEASE "${lib_file}"
@@ -65,8 +73,8 @@ if(NOT TARGET @_LIBRARY_NAME@)
 				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
 			)
 
-			add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
+			add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
 		endforeach()
 	endif()
 endif()

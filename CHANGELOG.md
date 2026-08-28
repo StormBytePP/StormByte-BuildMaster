@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Consumer bootstrap / log modules:** `buildmaster_message(COMPONENT …)` during deferred finalize no longer dies with `unknown log module 'COMPONENT'. Accepted:` (empty list). Modules are registered when `log.cmake` is loaded from the root `CMakeLists.txt`, not only when a harness included helpers first.
 - **Install prefix without `GNUInstallDirs`:** produced paths were `${prefix}//libfoo.a` and `RENAME` looked in the prefix root instead of `lib/` / `lib64/`. BuildMaster now loads `GNUInstallDirs` itself.
 - **Stage templates after sibling `add_subdirectory`:** `BUILDMASTER_TOOLS_CMAKE_SRCDIR` (and friends) resolve to the checkout, so `configure.cmake.in` is found instead of `/configure.cmake.in`.
+- **Component id equal to produced name:** fragment templates created `add_library(<id> INTERFACE)` and then `add_library(<id> STATIC|SHARED IMPORTED)`. CMake rejects the second target (`StormByte` / `StormByte` in Logger). The IMPORTED target is now `<name>__bm_imported` when `<name>` already exists; the INTERFACE `<id>` still links that archive. Host `target_link_libraries(… <id>)` is unchanged.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

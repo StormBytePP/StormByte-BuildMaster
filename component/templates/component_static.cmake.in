@@ -14,9 +14,13 @@ if(NOT TARGET @_LIBRARY_NAME@)
 	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
 
 	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-		add_library(${lib} STATIC IMPORTED GLOBAL)
+		set(_bm_imp "${lib}")
+		if(TARGET "${_bm_imp}")
+			set(_bm_imp "${lib}__bm_imported")
+		endif()
+		add_library(${_bm_imp} STATIC IMPORTED GLOBAL)
 
-		set_target_properties(${lib} PROPERTIES
+		set_target_properties(${_bm_imp} PROPERTIES
 			IMPORTED_LOCATION "${lib_file}"
 			IMPORTED_LOCATION_DEBUG "${lib_file}"
 			IMPORTED_LOCATION_RELEASE "${lib_file}"
@@ -24,16 +28,15 @@ if(NOT TARGET @_LIBRARY_NAME@)
 			IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
 		)
 
-		add_dependencies(${lib} @_LIBRARY_STAGE_INSTALL@)
+		add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+		if(NOT "@_BM_WHOLE@" STREQUAL "1")
+			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
+		endif()
 	endforeach()
 
 	# WHOLE: one closed whole-archive region for all produced statics (FFmpeg-style).
-	# Non-WHOLE: link IMPORTED targets normally.
+	# Non-WHOLE: link IMPORTED targets normally (done in the loop above).
 	if("@_BM_WHOLE@" STREQUAL "1")
 		target_link_libraries(@_LIBRARY_NAME@ INTERFACE @_BM_WHOLE_LINK_ITEMS@)
-	else()
-		foreach(lib IN LISTS libs)
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${lib})
-		endforeach()
 	endif()
 endif()
