@@ -25,7 +25,7 @@ function(_buildmaster_component_defer_arm)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
 endfunction()
 
-## @brief Register a component. Targets are created at deferred finalize.
+## @brief Register a component.
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -42,6 +42,12 @@ endfunction()
 ##            MSVC/clang-cl archives after RENAME),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
+## @note Creates the INTERFACE target immediately (empty). Stage scripts,
+##       IMPORTED artifacts, include dirs and link lines are attached at
+##       deferred finalize. Consumers may `add_library(… ALIAS …)` and
+##       `target_link_libraries(…)` right after `create_*`.
+## @note Fragments must reuse this INTERFACE; they must not wrap wiring in
+##       `if(NOT TARGET)` or call `add_library(<id> INTERFACE)` again.
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
 ##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
 ##       FATAL (no shared prefix). An upstream `.pc` already at the canonical
@@ -81,6 +87,11 @@ function(create_component _component _component_title _srcdir _builddir
 	if(_is_meta)
 		buildmaster_message(COMPONENT FATAL
 			"create_component: '${_component}' is already a meta id")
+	endif()
+
+	if(TARGET "${_component}")
+		buildmaster_message(COMPONENT FATAL
+			"create_component: target '${_component}' already exists")
 	endif()
 
 	set(_options_string "")
@@ -196,6 +207,9 @@ function(create_component _component _component_title _srcdir _builddir
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_DESCRIPTION
 		"${_pc_description}")
 
+	# Empty INTERFACE now; finalize attaches includes / IMPORTED / deps.
+	add_library("${_component}" INTERFACE)
+
 	_buildmaster_component_defer_arm()
 	buildmaster_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_component")
@@ -234,7 +248,7 @@ function(component_dependency source dest)
 endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
-## @param[in] source Registered component id (INTERFACE after finalize).
+## @param[in] source Registered component id (INTERFACE after create_*).
 ## @param[in] dest   Registered component or meta, library spec, existing target,
 ##            or archive path.
 ## @note Linking to a BUILDONLY component is FATAL at materialize.

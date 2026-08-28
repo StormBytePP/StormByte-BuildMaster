@@ -1,65 +1,62 @@
-if(NOT TARGET @_LIBRARY_NAME@)
-	include(@_LIBRARY_CONFIGURE_FILE@)
-	include(@_LIBRARY_BUILD_FILE@)
-	include(@_LIBRARY_INSTALL_FILE@)
+include(@_LIBRARY_CONFIGURE_FILE@)
+include(@_LIBRARY_BUILD_FILE@)
+include(@_LIBRARY_INSTALL_FILE@)
 
-	add_library(@_LIBRARY_NAME@ INTERFACE)
-	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
+target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
 
-	# Parent targets that link this INTERFACE must wait for install (headers + libs)
-	add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+# Parent targets that link this INTERFACE must wait for install (headers + libs)
+add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
 
-	set(libs "@_LIBRARY_COMPONENT_NAMES@")
-	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
-	if(MSVC)
-		set(lib_dll_files "@_LIBRARY_COMPONENT_DLL_FILES@")
-	endif()
+set(libs "@_LIBRARY_COMPONENT_NAMES@")
+set(lib_files "@_LIBRARY_COMPONENT_FILES@")
+if(MSVC)
+	set(lib_dll_files "@_LIBRARY_COMPONENT_DLL_FILES@")
+endif()
 
-	if(MSVC)
-		foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
-			set(_bm_imp "${lib}")
-			if(TARGET "${_bm_imp}")
-				set(_bm_imp "${lib}__bm_imported")
-			endif()
-			add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
+if(MSVC)
+	foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
+		set(_bm_imp "${lib}")
+		if(TARGET "${_bm_imp}")
+			set(_bm_imp "${lib}__bm_imported")
+		endif()
+		add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
-			set_target_properties(${_bm_imp} PROPERTIES
-				IMPORTED_IMPLIB "${lib_file}"
-				IMPORTED_IMPLIB_DEBUG "${lib_file}"
-				IMPORTED_IMPLIB_RELEASE "${lib_file}"
-				IMPORTED_IMPLIB_MINSIZEREL "${lib_file}"
-				IMPORTED_IMPLIB_RELWITHDEBINFO "${lib_file}"
-			)
+		set_target_properties(${_bm_imp} PROPERTIES
+			IMPORTED_IMPLIB "${lib_file}"
+			IMPORTED_IMPLIB_DEBUG "${lib_file}"
+			IMPORTED_IMPLIB_RELEASE "${lib_file}"
+			IMPORTED_IMPLIB_MINSIZEREL "${lib_file}"
+			IMPORTED_IMPLIB_RELWITHDEBINFO "${lib_file}"
+		)
 
-			set_target_properties(${_bm_imp} PROPERTIES
-				IMPORTED_LOCATION "${lib_dll_file}"
-				IMPORTED_LOCATION_DEBUG "${lib_dll_file}"
-				IMPORTED_LOCATION_RELEASE "${lib_dll_file}"
-				IMPORTED_LOCATION_MINSIZEREL "${lib_dll_file}"
-				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
-			)
+		set_target_properties(${_bm_imp} PROPERTIES
+			IMPORTED_LOCATION "${lib_dll_file}"
+			IMPORTED_LOCATION_DEBUG "${lib_dll_file}"
+			IMPORTED_LOCATION_RELEASE "${lib_dll_file}"
+			IMPORTED_LOCATION_MINSIZEREL "${lib_dll_file}"
+			IMPORTED_LOCATION_RELWITHDEBINFO "${lib_dll_file}"
+		)
 
-			add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
-		endforeach()
-	else()
-		foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-			set(_bm_imp "${lib}")
-			if(TARGET "${_bm_imp}")
-				set(_bm_imp "${lib}__bm_imported")
-			endif()
-			add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
+		add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+		target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
+	endforeach()
+else()
+	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
+		set(_bm_imp "${lib}")
+		if(TARGET "${_bm_imp}")
+			set(_bm_imp "${lib}__bm_imported")
+		endif()
+		add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
-			set_target_properties(${_bm_imp} PROPERTIES
-				IMPORTED_LOCATION "${lib_file}"
-				IMPORTED_LOCATION_DEBUG "${lib_file}"
-				IMPORTED_LOCATION_RELEASE "${lib_file}"
-				IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
-				IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
-			)
+		set_target_properties(${_bm_imp} PROPERTIES
+			IMPORTED_LOCATION "${lib_file}"
+			IMPORTED_LOCATION_DEBUG "${lib_file}"
+			IMPORTED_LOCATION_RELEASE "${lib_file}"
+			IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
+			IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
+		)
 
-			add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
-		endforeach()
-	endif()
+		add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+		target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
+	endforeach()
 endif()

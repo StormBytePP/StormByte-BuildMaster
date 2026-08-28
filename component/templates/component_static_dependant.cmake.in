@@ -1,54 +1,51 @@
-if(NOT TARGET @_LIBRARY_NAME@)
-	add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
-		COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
-		COMMENT "[BuildMaster/CMake    ]: Configuring @_LIBRARY_NAME@@_LIBRARY_TOOLCHAIN_SUFFIX@"
-		USES_TERMINAL
-		VERBATIM
+add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
+	COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
+	COMMENT "[BuildMaster/CMake    ]: Configuring @_LIBRARY_NAME@@_LIBRARY_TOOLCHAIN_SUFFIX@"
+	USES_TERMINAL
+	VERBATIM
+)
+
+# Optional ordering: wait for other install stages before configure
+if(NOT "@_LIBRARY_DEPENDENCIES@" STREQUAL "")
+	add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ @_LIBRARY_DEPENDENCIES@)
+endif()
+if(TARGET buildmaster_build_init)
+	add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ buildmaster_build_init)
+endif()
+
+include(@_LIBRARY_BUILD_FILE@)
+add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
+include(@_LIBRARY_INSTALL_FILE@)
+
+target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
+
+# Parent targets that link this INTERFACE must wait for install (headers + libs)
+add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+
+set(libs "@_LIBRARY_COMPONENT_NAMES@")
+set(lib_files "@_LIBRARY_COMPONENT_FILES@")
+
+foreach(lib lib_file IN ZIP_LISTS libs lib_files)
+	set(_bm_imp "${lib}")
+	if(TARGET "${_bm_imp}")
+		set(_bm_imp "${lib}__bm_imported")
+	endif()
+	add_library(${_bm_imp} STATIC IMPORTED GLOBAL)
+
+	set_target_properties(${_bm_imp} PROPERTIES
+		IMPORTED_LOCATION "${lib_file}"
+		IMPORTED_LOCATION_DEBUG "${lib_file}"
+		IMPORTED_LOCATION_RELEASE "${lib_file}"
+		IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
+		IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
 	)
 
-	# Optional ordering: wait for other install stages before configure
-	if(NOT "@_LIBRARY_DEPENDENCIES@" STREQUAL "")
-		add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ @_LIBRARY_DEPENDENCIES@)
+	add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
+	if(NOT "@_BM_WHOLE@" STREQUAL "1")
+		target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
 	endif()
-	if(TARGET buildmaster_build_init)
-		add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ buildmaster_build_init)
-	endif()
+endforeach()
 
-	include(@_LIBRARY_BUILD_FILE@)
-	add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
-	include(@_LIBRARY_INSTALL_FILE@)
-
-	add_library(@_LIBRARY_NAME@ INTERFACE)
-	target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
-
-	# Parent targets that link this INTERFACE must wait for install (headers + libs)
-	add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
-
-	set(libs "@_LIBRARY_COMPONENT_NAMES@")
-	set(lib_files "@_LIBRARY_COMPONENT_FILES@")
-
-	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-		set(_bm_imp "${lib}")
-		if(TARGET "${_bm_imp}")
-			set(_bm_imp "${lib}__bm_imported")
-		endif()
-		add_library(${_bm_imp} STATIC IMPORTED GLOBAL)
-
-		set_target_properties(${_bm_imp} PROPERTIES
-			IMPORTED_LOCATION "${lib_file}"
-			IMPORTED_LOCATION_DEBUG "${lib_file}"
-			IMPORTED_LOCATION_RELEASE "${lib_file}"
-			IMPORTED_LOCATION_MINSIZEREL "${lib_file}"
-			IMPORTED_LOCATION_RELWITHDEBINFO "${lib_file}"
-		)
-
-		add_dependencies(${_bm_imp} @_LIBRARY_STAGE_INSTALL@)
-		if(NOT "@_BM_WHOLE@" STREQUAL "1")
-			target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_imp})
-		endif()
-	endforeach()
-
-	if("@_BM_WHOLE@" STREQUAL "1")
-		target_link_libraries(@_LIBRARY_NAME@ INTERFACE @_BM_WHOLE_LINK_ITEMS@)
-	endif()
+if("@_BM_WHOLE@" STREQUAL "1")
+	target_link_libraries(@_LIBRARY_NAME@ INTERFACE @_BM_WHOLE_LINK_ITEMS@)
 endif()
