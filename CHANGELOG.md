@@ -7,150 +7,145 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **`LINK=` / `LINK={…}`:** raw system linker names (`shlwapi`, `ws2_32`) on the component or meta INTERFACE. They propagate to whoever links that id, including the final `.dll` / `.so`. Not BM nodes and not a fix for a third-party link done outside this INTERFACE. Revives the 1.x `LINK_EXTRA` idea under a shorter name; `component_link` stays the graph (unknown dest is now fatal instead of inventing a prefix spec).
-- **`LINKFLAGS=` / `LINKFLAGS={…}`:** raw linker flags (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`) on the component or meta INTERFACE via `target_link_options`. They propagate to whoever links that id, including the final `.dll` / `.so`. Not library names (`LINK=`), not BM nodes, and not a rewrite of the nested third-party link line. Optional platform groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux and macOS). A group that does not apply on this host is skipped at INFO. Unknown platform key is FATAL. Headers mode: WARNING, ignored.
-- Logging: `WARNING` is no longer filtered. Default `BUILDMASTER_LOGLEVEL=STATUS`
-  shows STATUS, WARNING and FATAL. Policy ignores (STRIPRES/WHOLE/LINK on a
-  mode that cannot use them, ignored keys on a meta) are INFO; unknown options,
-  `LINK_EXTRA`, orphan components, and `LINKFLAGS` on headers stay WARNING.
-- Silent env runner replays nested BuildMaster lines live. The full child
-  log is still kept and dumped on failure. Matching uses both header
-  shapes (`[BuildMaster/…]` and `[LEVEL][BuildMaster/…]`); WARNING/FATAL
-  stay on stderr, the rest on stdout. Unix silent scripts run under bash.
-  Stage `-P` configure no longer captures child streams, so the replay
-  reaches the TTY as it happens. `BUILDMASTER_VERBOSE` still uses the
-  normal runner (entire child output, unfiltered).
-- **`create_*_component` 2.1-style arity:** omit the build directory.
-  Library: `id title srcdir options mode produced [optstr]`. Headers:
-  `id title srcdir options`. Mode (`static` / `shared` / `headers`)
-  selects the slot. BuildMaster assigns
-  `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and `create_component` creates
-  it (`file(MAKE_DIRECTORY)`, idempotent). No WARNING on this form.
-- **`buildmaster_on_component_materialize(id fn alias [CAPTURE …])` /
-  `buildmaster_on_graph_finalized(fn alias [CAPTURE …])`:** inspectable
-  hooks. `fn` must exist at registration (friendly FATAL). Alias is the
-  only order key (ASCII ascending, per id or among graph hooks). Scripts
-  land in `BUILDMASTER_SCRIPTS_HOOK_DIR` as
-  `<alias>__component_<id>.cmake` / `<alias>__graph.cmake`. Optional
-  `CAPTURE` snapshots variables by copy into the script (`set(NAME [=[…]=])`).
-  Per-id hooks run after that component’s fragment; graph hooks run after
-  links and orphan warn. No other order contract. An id that never
-  materializes is FATAL.
+2.x versus 1.0.x is a different product: declarative graph, no generated
+fragment to `include()`, no public dependant factories. A 1.x
+`CMakeLists.txt` will not configure. That is the point.
 
-### Changed
-- **`ensure_build_dir` deprecated (removed in 2.1.x).** It still fills the
-  output variable so existing CMakeLists keep a path; it no longer
-  creates the directory. WARNING explains why it stays in 2.0.x: there
-  is no public getter for the assigned builddir yet.
-- **Explicit `builddir` on `create_*_component` deprecated (removed in
-  2.1.x).** Legacy 7/8-arg (library) and 5/6-arg (headers) still work
-  and still use the caller path. WARNING on that slot. `create_component`
-  always `MAKE_DIRECTORY`s the path it receives; an already-populated
-  directory is the caller’s problem.
-- **WARNING log channel:** without `BUILDMASTER_VERBOSE`, a WARNING is one
-  yellow/bold `message(NOTICE)` line on stderr — no `CMake Warning at …`
-  banner. With `BUILDMASTER_VERBOSE` ON, `message(WARNING)` is kept so
-  CMake prints file and line. WARNING is still never filtered.
+### Added
+
+- **Declarative component graph.**
+  `component_dependency(source dest)` is order-only (id, stage name, or
+  existing CMake target). `component_link(source dest)` waits and links.
+  `dest` may be a component (all produced libs), a library spec
+  (`name` / `subdir/name`), a target, or an archive path. Spec dests are
+  listed on the source install `OUTPUT` so Ninja has a production rule.
 - **`component_link` always records `component_dependency`.**
-  `component_link(A B)` before `create_*(B)` still defers A. A library
-  spec or on-disk archive stays link-only (no wait target). Stage-name
-  dests use `"${dest}" MATCHES` (the unquoted `dest MATCHES` never ran).
-- **Duplicate graph edges are WARNING + no-op** when the user writes
-  them twice (`component_dependency` or `component_link` with the same
-  pair, including an explicit dep that `component_link` already added).
-  Internal auto-deps do not warn. Unresolvable dest at finalize stays
-  FATAL.
-
-### Fixed
-- **Git patch lost the race with eager configure:** `create_git_patch_file` only queued a `DEFER` on `CMAKE_SOURCE_DIR`, and component finalize was already armed first, so nested cmake/meson ran on the virgin tree (`cmake_minimum_required` too old, unknown Meson options). Flush now runs when the patch is registered, and `_buildmaster_finalize_components` flushes every queued git root *before* materialize. A second flush for the same root is still a no-op (reset then patch once).
-- **Cached download under `cmake -P`:** generated `file_download_cached.cmake.in` / `file_download.cmake.in` ran in a fresh script-mode process, so `buildmaster_message` and `file_checksum_correct` were unknown (`Unknown CMake command "buildmaster_message"` / `"file_checksum_correct"` on consumer configure, e.g. bundled SQLite amalgamation). Both templates now `include(log.cmake)`, call `buildmaster_loglevel_init()`, and `include(tools/file/checksum.cmake)` before any helper use. Cache hit/miss, retries and hash checks keep `LOWLEVEL` / `DEBUG` enter–exit traces; `file_checksum_correct` remains the cache-hit checker.
-- Initialization now uses logging
-- **`RENAME` ignored Unix-style static archives on Windows:** `normalize_install_outputs` only searched the canonical suffix, so a Meson/MSVC install of `libpgport.a` never became the produced `pgport.lib` (`no candidate for … suffix='.lib'`). Same-suffix variants still win; if none exist, `.a` ↔ `.lib` is accepted and the file is renamed onto the contract path. Shared `.dll` / `.so` / `.dylib` are unchanged. The script now logs `LOWLEVEL` enter/exit (outputs, patterns, each glob) and `DEBUG` decisions (missing output, suffix miss, alternate suffix, picked source).
-
-[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
-
-## [2.0.0] - 2026-08-28
-
-### Added
-- **Declarative component graph:**
-  - `component_dependency(source, dest)` — order-only edges (component id, stage name, or existing CMake target).
-  - `component_link(source, dest)` — link plus order; `dest` may be a component (all produced libs), a library spec (`name` / `subdir/name`), a target, or an archive path.
-  - Library-spec link destinations are also listed on the source component’s install `OUTPUT` so Ninja has a production rule (replaces the old `LINK_EXTRA` role).
-- **Deferred materialization:** `create_*` only registers metadata; fragments and stage targets are created at the end of parent configure (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order does not matter.
-- **Eager vs deferred configure:** components without dependency edges still configure during parent configure; components with edges configure at build time under `<id>_configure` (same behaviour as the former dependant templates).
-- **Subcomponent libdir paths:** library specs may be `<name>` or `<subdir>/<name>` under `BUILDMASTER_INSTALL_LIBDIR`.
-  - Imported target name replaces `/` with `_`; helper `buildmaster_parse_subcomponent()`.
-- **`library_import_hint` / `library_import_static_hint`:** optional 4th argument `subdir`.
-- **`RENAME` component option (flag, default ON):** post-install normalize of variant basenames to produced paths (`zs` → `z`, etc.); headers mode ignores it.
-- **`WHOLE` component / meta option:** whole-archive link of produced static archives (one linear group per consumer; ELF / Mach-O / MSVC).
-- **`STRIPRES` component option (flag, default ON):** after `RENAME`, strip `*.res` members from static MSVC / clang-cl archives via `lib` / `llvm-lib` `/LIST` + `/REMOVE`. Silent no-op on other toolchains; warning on shared / headers.
-- **`BUILDONLY` + `component_repack`:** build without publishing to the shared prefix; merge listed archives with the host archiver into one IMPORTED target.
-- **Helper `.pc` (`PC={…}`):** after install (RENAME + STRIPRES), write `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for **internal** consumers of this prefix — not a portable upstream package.
-  - Syntax: `PC={VERSION=1.2.3;NAME=foo;DESCRIPTION=…;ENABLED=ON}`. `;` inside `{…}` is not a pair break.
-  - `VERSION` is required when enabled. `ENABLED=OFF` skips the file and does not require `VERSION`.
-  - `NAME` defaults to the first produced spec; `DESCRIPTION` defaults to the component title.
-  - `Requires` comes from direct `component_link` destinations that themselves have PC enabled (one hop, no metas).
-  - `Cflags` are component extras minus parent `CMAKE_C{,XX}_FLAGS`; include tokens (`-I` / `/I` / `-isystem`) are dropped (prefix include is already in the BM env).
-  - `Libs` is `-L${libdir}` plus `-l<produced>` for each produced spec. `prefix` / `libdir` / `includedir` are the BuildMaster install tree.
-  - **FATAL:** bare `PC` / `PC=ON` without `{…}`; enabled PC + `BUILDONLY`; `PC={…}` on a meta; destination path already exists (do not clobber an upstream `.pc`).
-  - Unknown inner keys warn and are ignored. Parser helper: `buildmaster_parse_component_pc()`.
-- **Meta `TOOLCHAIN` inheritance:** `create_meta_component(… "TOOLCHAIN=<profile>")` no longer ignores the key. After leaves are known and before cmake/meson materialize, the profile is copied onto members (nested metas included) and onto `component_dependency` / `component_link` dests from that meta that have no `TOOLCHAIN` yet. An explicit child `TOOLCHAIN` is kept. Two metas inheriting different profiles onto the same empty destination is fatal.
-- **Unified logging API** (`log.cmake`):
-  - `buildmaster_message(<module> <level> "<text>" [<indent>])` — only public way to print from BuildMaster (and recommended for consumers).
-  - Levels (ascending, quieter filter): `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
-  - `BUILDMASTER_LOGLEVEL` (cache or env, default `STATUS`). Unknown names are fatal and list the accepted set.
-  - `FATAL` is never filtered. `WARNING` is hidden when the current level is stricter than `INFO`.
-  - Format: `[BuildMaster/<Module>]: …` for `STATUS`; `[<LEVEL>][BuildMaster/<Module>]: …` otherwise (no space between brackets; level and module labels padded).
-  - Header is never indented; optional indent applies only to the body.
-  - Ninja `COMMENT` lines use the same `STATUS` header via `buildmaster_log_comment()`.
-  - Module `USER` (`User`) is reserved for parent projects (`buildmaster_message(USER STATUS "Setting up the library" 1)`). CMake `message()` is discouraged in consumers and forbidden inside BuildMaster except `log.cmake`.
-- **Harness + consumer tests:** recursive cmake/meson chains, Meson rename fixture, order-independent fixture, helper-`.pc` fixture (`Requires` check), meta-toolchain, and a Logger-style consumer (`add_subdirectory(buildmaster)` + sibling library, no extra includes).
-- **Documented layout contract:** BuildMaster and every DSL-driven dependency must be **sibling directories** under the same parent. Registration `CMakeLists.txt` is not the nested `srcdir`.
-- **Prefix search injection** (`env/prefix_search.cmake`): after `clean_cflags` and before stage `configure_file` / Meson `_MESON_*_ARGS` / env runners, inject the shared install prefix into compile and link search paths:
-  - UNIX: `-I${BUILDMASTER_INSTALL_INCLUDEDIR}` and `-L${BUILDMASTER_INSTALL_LIBDIR}` on `CFLAGS` / `CXXFLAGS` / `LDFLAGS` and `CMAKE_{C,CXX,EXE,SHARED,MODULE}_LINKER_FLAGS`.
-  - Windows (MSVC-like): `/I` and `/LIBPATH:` on the same flag variables, **and** prepend `${BUILDMASTER_INSTALL_INCLUDEDIR}` / `${BUILDMASTER_INSTALL_LIBDIR}` to process `INCLUDE` and `LIB` (case-preserving).
-  - Nested `BUILDMASTER_CONFIGURED` persists those values through `update_toolchain.cmake` so a second configure does not drop them.
-- **Eager INTERFACE stub:** `add_library(<id> INTERFACE)` at `create_*_component` time (graph registration), so `ALIAS` / `target_link_libraries` in a sibling `lib/` that runs *before* DEFER finalize does not see a missing target.
+  `component_link(A B)` before `create_*(B)` still defers A. A spec or
+  on-disk archive stays link-only. Stage-name dests match
+  `"${dest}" MATCHES`. Duplicate *explicit* edges are WARNING + no-op;
+  internal auto-deps do not warn. Unresolvable dest at finalize is FATAL.
+- **Deferred materialization.** `create_*` only registers metadata.
+  Fragments and stage targets exist at the end of parent configure
+  (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order
+  does not matter. Components without edges still configure during
+  parent configure; components with edges configure at build time under
+  `<id>_configure`.
+- **Eager INTERFACE stub.** `add_library(<id> INTERFACE)` at
+  `create_*` time so a sibling `ALIAS` / `target_link_libraries` before
+  DEFER does not see a missing target.
+- **`LINK=` / `LINK={…}`.** Raw system linker names (`shlwapi`, `ws2_32`)
+  on the component or meta INTERFACE. They propagate to whoever links
+  that id, including the final `.dll` / `.so`. Not BM nodes. Revives the
+  1.x `LINK_EXTRA` idea under a shorter name.
+- **`LINKFLAGS=` / `LINKFLAGS={…}`.** Raw linker flags
+  (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`) via `target_link_options` on the
+  same INTERFACE. Optional groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX`
+  (`UNIX` = Linux + macOS). A group that does not apply is skipped at
+  INFO. Unknown platform key is FATAL. Headers mode: WARNING, ignored.
+- **`RENAME` (flag, default ON).** Post-install normalize of variant
+  basenames to produced paths. Headers mode ignores it.
+- **`WHOLE`.** Whole-archive link of produced static archives (ELF /
+  Mach-O / MSVC).
+- **`STRIPRES` (flag, default ON).** After `RENAME`, strip `*.res` from
+  static MSVC / clang-cl archives. Silent no-op on other toolchains.
+- **`BUILDONLY` + `component_repack`.** Build without publishing to the
+  shared prefix; merge listed archives into one IMPORTED target.
+- **Helper `.pc` (`PC={…}`).** After install, write
+  `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for *this* prefix.
+  `VERSION` required when enabled. FATAL if the path already exists
+  (do not clobber upstream). Not a portable package.
+- **Meta `TOOLCHAIN` inheritance.** `create_meta_component(…
+  "TOOLCHAIN=<profile>")` copies the profile onto members and onto
+  empty dests. An explicit child `TOOLCHAIN` wins. Two metas fighting
+  over the same empty dest is FATAL.
+- **Subcomponent libdir paths.** Specs may be `<name>` or
+  `<subdir>/<name>` under `BUILDMASTER_INSTALL_LIBDIR`.
+- **Unified logging.** `buildmaster_message(<module> <level> "<text>"
+  [<indent>])`. Levels: `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`,
+  `STATUS`, `FATAL`. `BUILDMASTER_LOGLEVEL` (default `STATUS`).
+  `WARNING` is never filtered. Without `BUILDMASTER_VERBOSE` it is one
+  yellow `message(NOTICE)` line; with verbose, `message(WARNING)` keeps
+  the CMake banner. Module `USER` is for parent projects.
+- **Silent env runner** replays nested `[BuildMaster/…]` lines live;
+  the full child log is dumped on failure. `BUILDMASTER_VERBOSE` still
+  uses the unfiltered runner.
+- **`create_*_component` 2.1-style arity:** omit the build directory.
+  BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. No WARNING
+  on this form.
+- **Hooks.** `buildmaster_on_component_materialize(id fn alias
+  [CAPTURE …])` / `buildmaster_on_graph_finalized(fn alias [CAPTURE …])`.
+  `fn` must exist at registration. Alias is the only order key (ASCII
+  ascending). `CAPTURE` snapshots by copy. An id that never
+  materializes is FATAL.
+- Prefix search injection (`-I`/`-L` or `/I`/`/LIBPATH:` + `INCLUDE`/`LIB`)
+  so nested compiles see the shared install tree.
+- Harness + consumer tests for recursive cmake/meson, helper `.pc`,
+  meta-toolchain, LINKFLAGS, and a sibling-layout consumer.
 
 ### Changed
-- Stage `COMMENT` headers: **configure** stays `[BuildMaster/CMake]` / `[BuildMaster/Meson]`; **compile and install** use `[BuildMaster/Ninja]` (Ninja is the driver for those targets). Git post-install reset stays `[BuildMaster/Git]`.
-- Stage targets (`*_build` / `*_install`, CMake and Meson) use `COMMENT` instead of `cmake -E echo`. Ninja without `-v` shows only `Compiling …` / `Installing …`; the full `cd … && cmake -P …` line appears with `ninja -v` or `VERBOSE=1`.
-- **Breaking — logging:**
-  - `BUILDMASTER_DEBUG` (cache and env) is removed and ignored. Use `BUILDMASTER_LOGLEVEL` (`LOWLEVEL` / `DEBUG` / `INFO` / `STATUS` / `WARNING` / `FATAL`).
-  - `BUILDMASTER_VERBOSE` is unchanged and independent (live compiler/linker output only).
-- **Breaking — fully declarative `create_*` API:**
-  - No out-variable and no consumer `include()` of a generated fragment.
-  - Signature: `create_cmake_component(<id> <title> <srcdir> <builddir> <options> <mode> <produced> [options_string])` (and Meson / headers analogues).
-  - Removed public `create_*_dependant_component` / `create_*_headers_dependant_component`; use `create_*` + `component_dependency`.
-  - Removed `LINK_EXTRA` from the options string; use `component_link`.
-  - `create_*_stages` are **internal** (not part of the supported public API).
-- **Breaking — options string:** single optional trailing `KEY=value;…` (keys `INDENT` / `INDENT_LEVEL`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`, `PC={…}`). `;` inside `{…}` is not a pair break. Unknown keys warn; extra positionals are fatal.
-- **Internal layout:** `component/helpers.cmake` owns registry, graph, and shared fragment emit; `component/cmake` and `component/meson` own wrappers and backend materialize (`create_*_stages`). Templates under `component/templates/`; `BUILDMASTER_COMPONENT_TEMPLATEDIR`.
-- Install stages do not write empty placeholder archives; missing produced paths after optional `RENAME` are fatal. Header-only stamps still apply.
-- Root `CMakeLists.txt` includes `helpers.cmake` (and thus `log.cmake`) before `init_vars.cmake`, so `add_subdirectory(buildmaster)` alone is a valid consumer bootstrap — no extra `include(…/helpers.cmake)` required after the subdirectory.
-- Root configure includes `GNUInstallDirs` so `CMAKE_INSTALL_LIBDIR` / `INCLUDEDIR` exist even when the host forgot them; `BUILDMASTER_INSTALL_LIBDIR` is no longer an empty path with a doubled slash.
+
+- **Breaking — `create_*` is declarative.** No out-variable. No
+  consumer `include()` of a generated fragment. Signature:
+  `create_cmake_component(<id> <title> <srcdir> <builddir> <options>
+  <mode> <produced> [options_string])` (Meson / headers analogues).
+- **Breaking — dependant factories are gone.**
+  `create_*_dependant_component` / `create_*_headers_dependant_component`
+  are not public. Use `create_*` + `component_dependency` (or
+  `component_link`, which waits).
+- **Breaking — `LINK_EXTRA` is gone.** Use `component_link` for graph
+  nodes and `LINK=` for raw system libs.
+- **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
+  `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged
+  (compiler/linker output only).
+- **Breaking — options string.** One optional trailing `KEY=value;…`
+  (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
+  `PC={…}`, `LINK=`, `LINKFLAGS=`). `;` inside `{…}` is not a pair
+  break. Unknown keys warn; extra positionals are fatal.
+- `create_*_stages` are internal.
+- **`ensure_build_dir` deprecated (removed in 2.1.x).** Still fills the
+  output variable; it no longer creates the directory. There is no
+  public getter for the assigned builddir yet.
+- **Explicit `builddir` on `create_*` deprecated (removed in 2.1.x).**
+  Legacy arity still works and still uses the caller path (WARNING).
+- Stage `COMMENT`: configure stays CMake/Meson; compile and install
+  use `[BuildMaster/Ninja]`.
+- Root `CMakeLists.txt` includes helpers before `init_vars`, so
+  `add_subdirectory(buildmaster)` alone bootstraps a consumer.
+- Root configure includes `GNUInstallDirs`.
 
 ### Fixed
-- **`TOOLCHAIN=` in nested CMake:** `BUILDMASTER_KNOWN_TOOLCHAINS` coming from the toolchain dump could be a newline- or space-separated string. `list(FIND)` then rejected valid names (`gcc`, `clang`, …). Validation now normalizes that value to a CMake list; the dump exports a semicolon-separated list.
-- **Meson `--native-file`:** `create_meson_stages` always picks `native_<profile>.ini` for `TOOLCHAIN=<name>`, or the file for **this** process’s compiler family (`CMAKE_C_COMPILER_ID` / clang-cl) when `TOOLCHAIN` is omitted. It no longer keeps the outer job’s default native file across a swapped toolchain. Setup does not fall back to bare `CC=` when a native file exists, so ccache/sccache stay keyed to the compiler actually used.
-- **Consumer bootstrap / log modules:** `buildmaster_message(COMPONENT …)` during deferred finalize no longer dies with `unknown log module 'COMPONENT'. Accepted:` (empty list). Modules are registered when `log.cmake` is loaded from the root `CMakeLists.txt`, not only when a harness included helpers first.
-- **Install prefix without `GNUInstallDirs`:** produced paths were `${prefix}//libfoo.a` and `RENAME` looked in the prefix root instead of `lib/` / `lib64/`. BuildMaster now loads `GNUInstallDirs` itself.
-- **Stage templates after sibling `add_subdirectory`:** `BUILDMASTER_TOOLS_CMAKE_SRCDIR` (and friends) resolve to the checkout, so `configure.cmake.in` is found instead of `/configure.cmake.in`.
-- **Component id equal to produced name:** fragment templates created `add_library(<id> INTERFACE)` and then `add_library(<id> STATIC|SHARED IMPORTED)`. CMake rejects the second target (`StormByte` / `StormByte` in Logger). The IMPORTED target is now `<name>__bm_imported` when `<name>` already exists; the INTERFACE `<id>` still links that archive. Host `target_link_libraries(… <id>)` is unchanged.
-- **`library_import_hint` arity in nested DEFER finalize:** 1.x callers used 3 arguments; 2.0 added an optional 4th (`subdir`). Finalize now dispatches 3-arg vs 4-arg instead of dying on “called with incorrect number of arguments”.
-- **ALIAS before DEFER:** `StormByte::Logger` (and any consumer `add_library(<ns>::<name> ALIAS <id>)`) no longer fails because `<id>` did not exist until end-of-`CMAKE_SOURCE_DIR`. The INTERFACE stub exists at registration; wiring (`INTERFACE_INCLUDE_DIRECTORIES`, link of `__bm_imported`) happens at finalize.
-- **Windows DLL “no candidate” under `lib/`:** `normalize_install_outputs` registers shared outputs on `BINDIR` as well as `LIBDIR`, and keeps the original stem case so `StormByte.dll` is not looked up as `stormbyte.dll`.
-- **Missing `-I` / `-L` / `INCLUDE` / `LIB` on nested configure:** 1.x env runners injected the install prefix; 2.0 dropped it, so Logger’s nested compile of `log.cxx` / `manipulators.cxx` never saw `StormByte/platform.h`. CMake and Meson stages now call `buildmaster_apply_install_search_paths` after `clean_cflags` and before writing runners / `_MESON_*_ARGS`. Nested configure no longer passes empty `-DCMAKE_C_FLAGS=` / `-DCMAKE_CXX_FLAGS=`.
-- **Consumer test layout:** `.github/tests/consumer` matches the real Logger/Buffer contract: sibling `thirdparty/`, `cmake_policy(SET CMP0079 NEW)`, `add_subdirectory(thirdparty)` then `add_library(Consumer::Dep ALIAS …)` with **no** `if(NOT TARGET)` guard and **no** DEFER workaround.
-- **Nested CMake configure skip:** `configure.cmake.in` treated `CMakeCache.txt` as “already configured”. An interrupted first run left cache + `CMakeScratch` and no `build.ninja`; the next parent configure skipped the stage and Ninja failed with `loading 'build.ninja'`. Skip now requires both the cache and `build.ninja` (same idea as Meson setup).
-- **Meson `-Dbuildtype=`:** `create_meson_stages` now maps `CMAKE_BUILD_TYPE` to a concrete Meson choice (`Debug` → `debug`, `RelWithDebInfo` → `debugoptimized`, `MinSizeRel` → `minsize`, `Release` or empty/multi-config → `release`). An empty `@MESON_BUILD_TYPE@` made Meson reject `Value "."` and abort setup (e.g. PostgreSQL).
-- **Meson/CMake `--jobs` / `--parallel`:** `NPROC` from `ProcessorCount()` lived only in the BuildMaster subdirectory. `PARENT_SCOPE` stops at `thirdparty/` and `persist.cmake` only cached `BUILDMASTER_*` / `ENV_*`, so `@NPROC@` was empty at DEFER and Meson aborted with `argument -j/--jobs: expected one argument`. `NPROC` is now a cache INTERNAL (minimum 1).
-- **File helpers at configure:** `file_download`, `file_download_cached` and `file_decompress` still create a named target and do not use an out-var / `include()`. The generated `-P` script also runs during the call so the artifact is on disk before `create_*_component`. Scripts stay idempotent. `DEPENDS` is build-graph only. A `component_dependency` on the file target is only needed when a later rebuild must precede a deferred configure.
-- **Git patch vs reset order:** `create_git_patch_file` then `create_git_reset_file` applied the patch at configure and immediately `reset --hard`, so the tree that compiled was the unpatched commit (Crypto++ `stdext` on MSVC). Ops are queued per repository and flushed as reset + clean, then apply. Post-install still resets and cleans so a successful build does not leave a dirty worktree.
-- **Consumer git-patch smoke:** the dependant library source ships a compile-breaking typo and `0001-fix-typo.patch`, and registers patch then reset in that order. Smoke fails if the patch is not still applied at build time.
 
-[2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
+- Git patch lost the race with eager configure: flush runs at
+  registration and again *before* materialize (reset then patch once
+  per root).
+- Cached download under `cmake -P` did not see `buildmaster_message` /
+  `file_checksum_correct`; templates now include log + checksum.
+- `RENAME` ignored Unix-style `.a` on Windows when the contract asked
+  for `.lib`.
+- `TOOLCHAIN=` rejected valid names when the dump was not a CMake list.
+- Meson `--native-file` followed the outer job instead of the component
+  profile.
+- `buildmaster_message(COMPONENT …)` during DEFER with an empty module
+  list.
+- Produced paths `${prefix}//libfoo.a` when the host skipped
+  `GNUInstallDirs`.
+- Component id equal to produced name (`add_library` twice).
+- `library_import_hint` 3-arg vs 4-arg at nested finalize.
+- ALIAS before DEFER.
+- Windows DLL lookup under `lib/` / wrong stem case.
+- Missing prefix `-I`/`-L` on nested compile (1.x had it; first 2.x
+  drop).
+- Interrupted CMake configure left cache without `build.ninja` and
+  skipped the next run.
+- Empty Meson `-Dbuildtype=`.
+- Empty `@NPROC@` at DEFER (`-j` without an argument).
+- File helpers only created a target; the `-P` script now also runs at
+  the call so the artifact exists before `create_*`.
+- `create_git_patch_file` then `create_git_reset_file` used to apply
+  and immediately `reset --hard`. Ops flush as reset + clean, then
+  apply.
+
+[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 
 ## [1.0.1] - 2026-08-26
 
