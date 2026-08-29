@@ -28,7 +28,7 @@ you asked for `z.lib`, some that must configure *after* another prefix
 exists, some that only work under `clang-cl`, and a static plugin pack the
 linker will drop unless you wrap it in `--whole-archive` — and you already
 have a private orchestration layer. Usually it is `add_custom_command`,
-hardcoded paths, and “remember to declare ogg before vorbis”.
+hardcoded paths, and “remember to declare zlib before libpng”.
 
 BuildMaster is that layer, written once:
 
@@ -36,6 +36,7 @@ BuildMaster is that layer, written once:
 |-------------------|----------|
 | “Declare A before B or configure explodes” | Order-independent registration |
 | `ExternalProject` that configures at *build* time | Eager configure when the graph allows it |
+| `component_link` *and* a matching `component_dependency` | `component_link` already waits |
 | Hand-rolled Meson `setup` that misses `.pc` files | Same prefix, `PKG_CONFIG_PATH`, compilers, cache launchers |
 | `POST_BUILD` rename scripts per MSVC flavor | Optional `RENAME` on the component |
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** collection |
@@ -43,6 +44,7 @@ BuildMaster is that layer, written once:
 | `shlwapi` on every consumer because a static `.lib` does not record it | Optional `LINK={…}` on the producer (or the meta) |
 | `/FORCE:MULTIPLE` / `-Bsymbolic` on the parent because the WHOLE pack needs it | Optional `LINKFLAGS={WINDOWS={…};LINUX={…}}` on the producer |
 | Hand-written `.pc` so the next Meson node finds this prefix | Optional helper `PC={…}` on the component |
+| `cmake_language(DEFER)` so a summary line appears *after* the graph | Optional **hooks** |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
 
@@ -62,6 +64,7 @@ a product, not a build blog.
 - [Raw system libraries (`LINK`)](#raw-system-libraries-link)
 - [Raw linker flags (`LINKFLAGS`)](#raw-linker-flags-linkflags)
 - [Meta components](#meta-components)
+- [Hooks](#hooks)
 - [Orphan warnings](#orphan-warnings)
 - [Prerequisites](#prerequisites)
 - [Component options](#component-options)
@@ -95,6 +98,8 @@ While the parent is still configuring, you **declare**:
   variants / low-level `create_component`)
 - collections (`create_meta_component` + `meta_component_add`)
 - edges (`component_dependency`, `component_link`)
+- hooks (`buildmaster_on_component_materialize`,
+  `buildmaster_on_graph_finalized`)
 - optional work that must finish first (`component_prerequisite`, file and
   git helpers)
 
@@ -154,6 +159,7 @@ larger library links as one `WHOLE` node.
 | Fail-fast after a stage failure | No | Manual | **Optional** |
 | INTERFACE depends on `_install` | No | Manual | **Yes** |
 | Orphan component / meta warning | No | No | **Yes** |
+| Inspectable post-graph hooks | Manual `DEFER` | Manual | **Yes** |
 | Git reset + reconfigure (`buildmaster_clean`) | No | Manual | **Optional** |
 | Per-repo post-install git reset | No | Manual | **Yes** |
 
@@ -214,17 +220,17 @@ with `create_meson_component`.
    `meta_component_add` (`add` may run *before* `create`).
 3. **Connect** with `component_dependency` and/or `component_link`
    (again, any order).
-4. **Optional:** `component_prerequisite`, `file_download` /
-   `file_download_cached` / `file_decompress` (these run during the
-   call, so sources exist before `create_*`), or configure-time
-   `create_git_*`.
+4. **Optional:** hooks (`buildmaster_on_*`), `component_prerequisite`,
+   `file_download` / `file_download_cached` / `file_decompress` (these
+   run during the call, so sources exist before `create_*`), or
+   configure-time `create_git_*`.
 5. End of `CMAKE_SOURCE_DIR`: BuildMaster materializes. Unused ids produce
-   one **WARNING**.
+   one **WARNING**. Hooks run after that pass.
 
 | Nested configure | When |
 |------------------|------|
-| **Eager** | The component is not the `source` of any `component_dependency` — it can configure while the parent configures. |
-| **Deferred** | It depends on another node — configure runs at build time under `<id>_configure`. |
+| **Eager** | The component is not the `source` of any recorded wait edge — it can configure while the parent configures. |
+| **Deferred** | It must wait on another node — configure runs at build time under `<id>_configure`. |
 
 That is the same behaviour you want by hand (consumer after producer)
 without writing two APIs.
@@ -269,10 +275,17 @@ Order-only edge. At materialize time `dest` resolves as the first match:
 3. Name matching `*_install` / `*_configure` / `*_build`
 4. Existing CMake target (prerequisite, `file_*`, your own custom target)
 
-Otherwise: **FATAL_ERROR**.
+Otherwise: **FATAL_ERROR** — unless the same pair is also a
+`component_link` to a library spec or an on-disk archive. That dest is
+link-only: there is no wait target.
 
-Use this when you need *ordering* without a link line (headers-only producer,
-a download that is not a library, a host target that writes files).
+Use this when you need *ordering* without a link line (headers-only
+producer, a download that is not a library, a host target that writes
+files).
+
+A second explicit call with the same `(source, dest)` is **WARNING** and
+a no-op. That includes “I already `component_link`’d this pair”. The
+warning is for you. Unresolvable dest at finalize stays **FATAL**.
 
 ### `component_link(source, dest)`
 
@@ -280,12 +293,22 @@ Records a link on the component `INTERFACE`.
 
 `dest` is a **BuildMaster graph node**: another component, a meta, an
 existing CMake target, an archive that already exists on disk, or a
-library spec (`<name>` / `<subdir>/<name>`) under the BM prefix. If it
-is a graph node, BuildMaster also records `component_dependency`.
+library spec (`<name>` / `<subdir>/<name>`) under the BM prefix.
 
-It is **not** where you list `shlwapi`. A dest that matches none of the
-kinds above is **FATAL** — that name belongs in `LINK=` on the producer
-(see the next section).
+**Link already waits.** Every `component_link(A B)` records the same
+order-only edge as `component_dependency(A B)`, even if `B` is
+`create_*`’d later in the file. libpng does not eager-configure just
+because you wrote the link before zlib existed. You do not add a second
+`component_dependency(png zlib)` unless you enjoy the warning.
+
+A spec or an on-disk archive stays **link-only** (no `_install` to wait
+on). `shlwapi` is still not a dest — that name belongs in `LINK=` on the
+producer (see the next section). A dest that matches none of the kinds
+above is **FATAL** at materialize.
+
+A second explicit `component_link` with the same pair is **WARNING** and
+a no-op. The auto-dependency that the first link recorded does **not**
+warn (you cannot delete an internal call).
 
 Host binaries are not graph nodes. Link them the ordinary way:
 
@@ -318,10 +341,10 @@ create_cmake_component(
     "INDENT=1;LINK={shlwapi;ws2_32;advapi32}"
 )
 
-target_link_libraries(StormByte-Database PRIVATE MariaDB-ConnectorC)
+target_link_libraries(MyDatabase PRIVATE MariaDB-ConnectorC)
 ```
 
-CMake then carries `shlwapi` through the chain to `StormByte-Database.dll`.
+CMake then carries `shlwapi` through the chain to `MyDatabase.dll`.
 You did not repair Connector-C’s own CMake. You told the BM target the
 truth about what a consumer of that target must pass to the linker.
 
@@ -365,19 +388,19 @@ whoever links this `INTERFACE` also gets these flags, via
 `target_link_options`.
 
 ```cmake
-create_meson_component(
-    ffmpeg
-    "FFmpeg"
-    ${FFMPEG_SRC_DIR}
-    ${FFMPEG_BUILD_DIR}
-    "${FFMPEG_MESON_OPTIONS}"
+create_cmake_component(
+    x265
+    "x265"
+    ${X265_SRC_DIR}
+    ${X265_BUILD_DIR}
+    "${X265_OPTIONS}"
     static
-    "avutil;avcodec;avformat;swscale;swresample;avfilter"
+    "x265"
     "WHOLE;LINKFLAGS={WINDOWS={/FORCE:MULTIPLE}}"
 )
 ```
 
-Read that twice before you copy `-Bsymbolic` onto every codec.
+Read that twice before you copy `-Bsymbolic` onto every leaf.
 
 The BM node is an `INTERFACE` library. CMake has no useful `PRIVATE` on
 that kind of target: if the flags are not `INTERFACE`, the consumer never
@@ -387,23 +410,23 @@ That is **one hop**, not a virus:
 
 | Who links whom | What happens |
 |----------------|--------------|
-| `target_link_libraries(Multimedia PRIVATE ffmpeg)` | Flags are used **while linking Multimedia**. They do **not** become `INTERFACE` of Multimedia. |
-| `target_link_libraries(Multimedia PUBLIC ffmpeg)` | Flags are used while linking Multimedia **and** re-exported to whoever links Multimedia. |
-| Someone links `avcodec.a` by hand, skipping the BM id | `LINKFLAGS` does not exist. Same contract as `LINK`. |
+| `target_link_libraries(MyApp PRIVATE x265)` | Flags are used **while linking MyApp**. They do **not** become `INTERFACE` of MyApp. |
+| `target_link_libraries(MyApp PUBLIC x265)` | Flags are used while linking MyApp **and** re-exported to whoever links MyApp. |
+| Someone links `x265.a` by hand, skipping the BM id | `LINKFLAGS` does not exist. Same contract as `LINK`. |
 
-So: if Multimedia must **not** be born with `-Wl,-Bsymbolic`, do not put
-that flag on `ffmpeg`. FFmpeg’s own Meson may still pass `-Bsymbolic`
-when *it* builds `libavcodec.so`. That link already happened inside the
-nested project. `LINKFLAGS` is only the **next** link — your artefact
-swallowing the static pack.
+So: if MyApp must **not** be born with `-Wl,-Bsymbolic`, do not put that
+flag on `x265`. The nested project may still pass private flags when
+*it* builds its own DSO. That link already happened inside the nested
+tree. `LINKFLAGS` is only the **next** link — your artefact swallowing
+the static pack.
 
-Typical split for a static FFmpeg WHOLE pack:
+Typical split for a static WHOLE pack:
 
 - Windows: `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE}}` — the WHOLE pull
   often needs it, and it belongs on *this* link.
 - Linux / macOS: omit `LINUX` / `UNIX` / `MAC` unless you have measured
-  that *your* `.so` needs `-Bsymbolic`. Copying FFmpeg’s private DSO
-  flag onto Multimedia is how you invent a new bug.
+  that *your* `.so` needs `-Bsymbolic`. Copying a nested DSO flag onto
+  MyApp is how you invent a new bug.
 
 | Form | Meaning |
 |------|---------|
@@ -478,6 +501,110 @@ target_link_libraries(MyApp PRIVATE engine)
 `zlib` and `png` compile as `clang` unless they already declared their
 own `TOOLCHAIN`. `LINK={m}` rides on `plugins` and therefore on `engine`
 and `MyApp`.
+
+---
+
+## Hooks
+
+You already know the itch. The graph is declarative. The *sentence you
+want to print* is not. So you reach for
+`cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL …)` and hope
+your DEFER wins the race against BuildMaster’s. Next week someone adds
+a component and your “crypto backend: OpenSSL” line appears in the
+middle of zlib’s configure.
+
+Hooks are that sentence, owned by the DSL.
+
+```cmake
+buildmaster_on_component_materialize(<id> <function> <alias>
+    [CAPTURE <var> [var…]])
+
+buildmaster_on_graph_finalized(<function> <alias>
+    [CAPTURE <var> [var…]])
+```
+
+`<function>` must **already exist** (`COMMAND`). If it does not, you get
+a one-line BuildMaster **FATAL**, not CMake’s stack of “Unknown CMake
+command”. `<alias>` is required. It is the only order key: ASCII
+ascending, inside one component or among graph hooks. Registration
+order is not a contract. Graph order is not a contract. If you need A
+before B, use aliases (`10-…`, `90-…`) or put both steps in **one**
+function.
+
+| Hook | When it runs |
+|------|----------------|
+| `on_component_materialize` | After **that** id’s stages and fragment exist. |
+| `on_graph_finalized` | After every concrete component, repacks, links, and the orphan warning. |
+
+A meta id is not a concrete component. Hooking `plugins` (a meta) and
+expecting a materialize callback is how you get “component was never
+materialized” at finalize. If the question is “after the whole pack
+exists”, that is a **graph** hook.
+
+The callback is a `function()`. It runs in the finalize context (the
+source root). Locals from the `CMakeLists.txt` that registered the hook
+are **gone** unless you asked for them.
+
+`CAPTURE` is a **copy** taken *now*. The generated script contains
+`set(NAME [=[value]=])` and then `fn()`. Values you append *after* the
+`on_*` call are not in the snapshot. Register the hook at the **bottom**
+of the file that finished the list.
+
+Scripts are not a ghost `cmake_language(CALL)`. They live in
+`${BUILDMASTER_SCRIPTS_HOOK_DIR}`:
+
+```text
+<alias>__component_<id>.cmake
+<alias>__graph.cmake
+```
+
+`ls` of that folder is the execution order. Open the file if you do not
+trust us. That is the point.
+
+The callback must not call `create_*` or graph mutators. Finalize already
+closed the registry.
+
+### A stack everyone has fought
+
+You are shipping an app that speaks Git. Upstream is polite about it:
+libgit2 wants libssh2, libssh2 wants OpenSSL (or mbedTLS, pick your
+scar). After the graph is closed you want **one** line that says which
+backend actually landed — not three `STATUS` calls interleaved with
+OpenSSL’s “looking for zlib”.
+
+```cmake
+function(git_stack_announce)
+    buildmaster_message(USER STATUS
+        "libgit2 stack: HTTPS=${GIT_HTTPS_BACKEND}  SSH=${GIT_SSH_BACKEND}")
+endfunction()
+
+# … create_cmake_component(openssl / libssh2 / libgit2), component_link …
+
+set(GIT_HTTPS_BACKEND "OpenSSL")
+set(GIT_SSH_BACKEND   "libssh2")
+
+buildmaster_on_graph_finalized(git_stack_announce zz-git-stack
+    CAPTURE GIT_HTTPS_BACKEND GIT_SSH_BACKEND)
+```
+
+That function can sit ten lines above the `on_*`. The capture is the
+contract: what you named is what the script contains. Tomorrow you add
+`mbedtls` as an option; the announce still runs last, still with the
+values from the end of this file, still without a private DEFER.
+
+Need something to happen the moment `openssl` itself is a real target
+(ALIAS already legal, fragment included), not at the end of the world?
+
+```cmake
+function(openssl_ready)
+    buildmaster_message(USER STATUS "OpenSSL INTERFACE is live")
+endfunction()
+
+buildmaster_on_component_materialize(openssl openssl_ready 10-openssl)
+```
+
+Two graph hooks? Give them aliases you would be willing to see in `ls`.
+`10-licenses` then `90-summary`. Do not ask BuildMaster to guess.
 
 ---
 
@@ -649,32 +776,32 @@ BuildMaster can emit a small helper file from that.
 
 ```cmake
 create_cmake_component(
-    ogg
-    "Ogg"
-    ${OGG_SRC} ${OGG_BUILD}
-    "${OGG_OPTS}"
+    zlib
+    "zlib"
+    ${ZLIB_SRC} ${ZLIB_BUILD}
+    "${ZLIB_OPTS}"
     static
-    "ogg"
-    "PC={VERSION=1.3.5;NAME=ogg;DESCRIPTION=Ogg bitstream}"
+    "z"
+    "PC={VERSION=1.3.1;NAME=zlib;DESCRIPTION=zlib compression}"
 )
 
 create_cmake_component(
-    vorbis
-    "Vorbis"
-    ${VORBIS_SRC} ${VORBIS_BUILD}
-    "${VORBIS_OPTS}"
+    png
+    "libpng"
+    ${PNG_SRC} ${PNG_BUILD}
+    "${PNG_OPTS}"
     static
-    "vorbis"
-    "PC={VERSION=1.3.7;NAME=vorbis}"
+    "png"
+    "PC={VERSION=1.6.43;NAME=libpng}"
 )
-component_link(vorbis ogg)
+component_link(png zlib)
 ```
 
-After `ogg_install` / `vorbis_install`:
+After `zlib_install` / `png_install`:
 
 ```text
-${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/ogg.pc
-${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/vorbis.pc   # Requires: ogg
+${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/zlib.pc
+${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/libpng.pc   # Requires: zlib
 ```
 
 `prefix` / `libdir` / `includedir` are the **BuildMaster install tree**.
@@ -712,10 +839,10 @@ group. Turn it back on without rewriting the rest of the options string.
 ## Build-only components and repack
 
 Some upstreams are not “the library you ship”. They are intermediate
-static archives you later merge (several bit-depth builds, a main lib plus
-a plugin pack). Mark them `BUILDONLY`: they compile into the component
-build dir and never enter the shared prefix. `component_repack` then
-publishes one archive from those inputs.
+static archives you later merge (several bit-depth builds of the same
+encoder, a main lib plus a plugin pack). Mark them `BUILDONLY`: they
+compile into the component build dir and never enter the shared prefix.
+`component_repack` then publishes one archive from those inputs.
 
 A `BUILDONLY` component is not a link dest (`component_link` to it is
 **FATAL**). Wait on its stages with `component_dependency`, or consume it
@@ -746,7 +873,7 @@ ignored. `LINKFLAGS` is **WARNING**, ignored.
 ## Per-component toolchains
 
 | Profile | Compilers | Notes |
-|------|---------|--------|
+|---------|-----------|-------|
 | `gcc` | `gcc` / `g++` | System default |
 | `clang` | `clang` / `clang++` | LLD required on **Linux**; not forced on **macOS** |
 | `clang-cl` | `clang-cl` | `lld-link` + `llvm-lib` (Windows) |
@@ -804,7 +931,7 @@ buildmaster_message(<module> <level> "<text>" [<indent>])
 
 | Argument | Meaning |
 |----------|---------|
-| `module` | Who is speaking. Internal keys below, or **`USER`** from a parent project. |
+| `module` | Who is speaking. Internal keys, or **`USER`** from a parent project. |
 | `level` | `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL` (always uppercase). |
 | `text` | Body. The header is never indented. |
 | `indent` | Optional tab count **after** the header (default `0`). |
@@ -833,7 +960,7 @@ Higher number = quieter filter threshold for the *optional* levels.
 | `LOWLEVEL` | Function enter/exit and path plumbing |
 | `DEBUG` | Useful when debugging BuildMaster or a consumer graph |
 | `INFO` | Policy that was ignored because it cannot apply (STRIPRES/WHOLE/LINK on the wrong mode, ignored keys on a meta, skipped `LINKFLAGS` platform group, rename already done) |
-| `WARNING` | Something you should fix: unknown option, `LINK_EXTRA`, `LINKFLAGS` on headers, orphan component. **Always printed.** |
+| `WARNING` | Something you should fix: unknown option, `LINK_EXTRA`, `LINKFLAGS` on headers, orphan component, duplicate graph edge. **Always printed.** |
 | `STATUS` | Default narrative. Stage titles (`Configuring` / `Compiling` / `Installing`) |
 | `FATAL` | Always printed. Stops configure/script. Never filtered |
 
@@ -845,6 +972,11 @@ discouraged if you wanted silence — there is no `SILENT` level.
 
 An unknown level (typo `DEHBUG`) is **FATAL** and lists accepted names.
 
+Without `BUILDMASTER_VERBOSE`, a WARNING is one yellow/bold
+`message(NOTICE)` line — your `[WARNING][BuildMaster/…]` text, no
+`CMake Warning at file:line`. With `BUILDMASTER_VERBOSE` ON, CMake’s
+`message(WARNING)` banner is kept so you get the file and line.
+
 ### Filter
 
 | Level | When it prints |
@@ -853,18 +985,18 @@ An unknown level (typo `DEHBUG`) is **FATAL** and lists accepted names.
 | `WARNING` | Always |
 | `STATUS` / `INFO` / `DEBUG` / `LOWLEVEL` | When its number is **≥** current `BUILDMASTER_LOGLEVEL` |
 
-Set `BUILDMASTER_LOGLEVEL=INFO` (cache or env) to see ignored-policy lines
-and rename skips. `LOWLEVEL` is the firehose.
+Set `BUILDMASTER_LOGLEVEL=INFO` (cache or env) to see ignored-policy
+lines and rename skips. `LOWLEVEL` is the firehose.
 
 Parent configure calls `message()` directly. Nested CMake/Meson/Ninja go
 through an env runner (next section).
 
 ### Nested / recursive lines
 
-A child project that `add_subdirectory(buildmaster)` again emits the same
-headers. The **silent** runner keeps the full child log and, **line by
-line**, reprints BuildMaster lines as they appear so a long nested
-configure does not look hung.
+A child project that `add_subdirectory(buildmaster)` again emits the
+same headers. The **silent** runner keeps the full child log and,
+**line by line**, reprints BuildMaster lines as they appear so a long
+nested configure does not look hung.
 
 A line is BM when, after stripping CMake’s optional `-- ` prefix, it is
 one of:
@@ -879,8 +1011,8 @@ Both pieces of the tagged header must be present. Upstream `CMake Warning`
 noise is not replayed.
 
 On child failure the runner dumps the **entire** log to stderr (BM lines
-may repeat). `FAIL_FAST` is unchanged: that stage is dead either way;
-the marker only decides whether later stages run.
+may repeat). `FAIL_FAST` is unchanged: that stage is dead either way; the
+marker only decides whether later stages run.
 
 Stage `-P` scripts do not capture `OUTPUT_VARIABLE` / `ERROR_VARIABLE`.
 Capturing would hold the pipe until exit and undo the live replay.
@@ -957,22 +1089,23 @@ create_git_switch_branch(mylib "MyLib branch" ${MYLIB_SRC_DIR} my-topic)
 create_git_fetch(mylib "MyLib fetch" ${MYLIB_SRC_DIR})
 ```
 
-`buildmaster_clean` resets registered git roots and is meant to be followed
-by a reconfigure. `buildmaster_git_post_install_marker_for_srcdir` resolves
-the reset script path for a source tree.
+`buildmaster_clean` resets registered git roots and is meant to be
+followed by a reconfigure.
+`buildmaster_git_post_install_marker_for_srcdir` resolves the reset
+script path for a source tree.
 
 ---
 
 ## File download and decompress
 
-CMake can already hash a download. What it does not give you for free is a
-**stable cache** that survives `rm -rf build`, plus a call that leaves the
-file on disk **before** `create_*_component` runs.
+CMake can already hash a download. What it does not give you for free is
+a **stable cache** that survives `rm -rf build`, plus a call that leaves
+the file on disk **before** `create_*_component` runs.
 
 Default destination is `${BUILDMASTER_BINDIR}/downloads`. Point
 `BUILDMASTER_DOWNLOADSDIR` at a folder *outside* the build tree and the
-same URL + hash is reused on the next configure. No extra `if(EXISTS)`, no
-hand-rolled stamp files.
+same URL + hash is reused on the next configure. No extra `if(EXISTS)`,
+no hand-rolled stamp files.
 
 ```bash
 # Keep tarballs across wipe-and-rebuild
@@ -981,63 +1114,20 @@ export BUILDMASTER_DOWNLOADSDIR="$HOME/.cache/buildmaster/downloads"
 cmake -DBUILDMASTER_DOWNLOADSDIR=/var/cache/buildmaster/downloads …
 ```
 
-A slow extra-data tarball from a far-away host should not be the reason you
-wait before you can compile *your* code again. The first configure pays the
-network; every configure after that is a hash check against a file you
-already have.
+A slow extra-data tarball from a far-away host should not be the reason
+you wait before you can compile *your* code again. The first configure
+pays the network; every configure after that is a hash check against a
+file you already have.
 
 | Function | Role |
 |----------|------|
 | `file_download_cached` | Reuse the file when the hash matches; download only on miss or mismatch |
 | `file_download` | Always fetch (progressive backoff) |
 | `file_decompress` | Unpack into a directory |
+| `file_checksum_correct` | Verify an on-disk file against an expected hash |
 
-**Contract**
-
-- No out-variable. No `include()` of a generated script.
-- Each call creates a CMake target of the same `name`.
-- The generated `-P` script also runs **during that call** (parent
-  configure). Scripts are idempotent: a cache hit or an already-extracted
-  tree is a no-op.
-- After `file_download_cached` / `file_decompress` return, the artifact is
-  on disk. You may `create_*_component` against that tree in the same
-  file; that component can still **eager**-configure.
-- `DEPENDS` on the file helpers is a *build-graph* edge only. It does not
-  delay the configure-time run. Call download before decompress in the
-  same `CMakeLists.txt`.
-- Paths are rejected if they contain `..` traversal.
-- Optional graph wiring: `component_prerequisite` / `component_dependency`
-  so a **rebuild** of the file target precedes a deferred `<id>_configure`.
-  You do not need that edge just to unpack once at configure.
-
-```cmake
-file_download_cached(extra-download
-    "https://example.invalid/extra.tar.gz"
-    EXPECTED_HASH SHA256=${EXTRA_HASH}
-    TITLE "Example extra data"
-    INDENT 2
-)
-
-file_decompress(extra-unpack
-    "${BUILDMASTER_DOWNLOADSDIR}/extra.tar.gz"
-    "${CMAKE_BINARY_DIR}/extra"
-    TITLE "Example extra data"
-    INDENT 2
-)
-
-create_cmake_component(
-    mylib
-    "My Library"
-    "${CMAKE_BINARY_DIR}/extra/upstream"
-    "${CMAKE_BINARY_DIR}/extra_build"
-    "${_opts}"
-    static
-    "mylib"
-)
-```
-
-`BUILDMASTER_DOWNLOADSDIR` is the cache. The unpack destination is yours
-(usually under the build tree). Keep the cache folder if you wipe `build/`.
+These run at the call site (parent configure). Keep the cache folder if
+you wipe `build/`.
 
 ---
 
@@ -1047,6 +1137,7 @@ create_cmake_component(
 |------|----------|
 | Components | `create_cmake_component`, `create_meson_component`, `create_cmake_headers_component`, `create_meson_headers_component`, `create_component` |
 | Graph | `component_dependency`, `component_link`, `component_prerequisite` |
+| Hooks | `buildmaster_on_component_materialize`, `buildmaster_on_graph_finalized` |
 | Meta | `create_meta_component`, `meta_component_add` |
 | Repack | `component_repack` |
 | Files | `file_download`, `file_download_cached`, `file_decompress`, `file_checksum_correct` |
@@ -1064,22 +1155,8 @@ Stage generators (`create_cmake_stages` / `create_meson_stages`) are
 ## Self-tests
 
 A synthetic harness lives under `.github/tests/` (not part of the DSL
-runtime). It has no real third-party projects.
-
-| You added… | Update |
-|------------|--------|
-| Public function or macro | `.github/tests/expected/public_functions.txt` |
-| Propagated / toolchain-exported variable | `.github/tests/expected/propagated_vars.txt` |
-| Dependant graph edge | `.github/tests/expected/dependant_edges.txt` |
-| Smoke install artifact | `.github/tests/expected/smoke_artifacts.txt` |
-
-Do not hardcode new assertions in `.github/workflows/ci.yml`.
-
-```bash
-cmake -S .github/tests/harness -B build/harness -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/harness --target run_buildmaster_checks
-cmake --build build/harness --target run_buildmaster_smoke
-```
+runtime). It has no real third-party projects. CI runs it on Linux,
+Windows and macOS.
 
 ---
 
@@ -1091,13 +1168,11 @@ MIT. See [LICENSE](LICENSE).
 
 ## Supporting the project
 
-BuildMaster is free software. If it saves you a weekend of glue code — or
-if you use it together with the rest of the StormByte stack — voluntary
-support helps keep maintenance and CI going.
+If BuildMaster saved you from a third `POST_BUILD` rename script, a
+star on the repo is the polite nod. A well-aimed issue is better than a
+vague “it broke”. Pull requests that keep the DSL small are the ones
+that land.
 
-PayPal: [StormByte@gmail.com](mailto:StormByte@gmail.com)
-
-If you prefer another channel (bank transfer, sponsorship of a specific
-issue, or something that fits your organisation), write to the same
-address and we will find a workable option. There is no obligation; the
-license does not change either way.
+This is not a tip jar at the church door. It is a toolkit written
+because the alternative was another private graph in every product.
+Use it. Break it on purpose. Tell us which sentence in this file lied.

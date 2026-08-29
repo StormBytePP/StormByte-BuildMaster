@@ -286,6 +286,98 @@ function(component_dependency source dest)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
 endfunction()
 
+## @brief Whether `(source, dest)` is already stored in two parallel GLOBAL lists.
+## @param[in]  _srcs_prop Property name of sources.
+## @param[in]  _dsts_prop Property name of dests (same length, same order).
+## @param[in]  source     Left side of the pair.
+## @param[in]  dest       Right side of the pair.
+## @param[out] out_var    Parent-scope TRUE if the pair exists.
+function(_buildmaster_pair_in_lists _srcs_prop _dsts_prop source dest out_var)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_pair_in_lists")
+	get_property(_srcs GLOBAL PROPERTY ${_srcs_prop})
+	get_property(_dsts GLOBAL PROPERTY ${_dsts_prop})
+	set(_i 0)
+	foreach(_src IN LISTS _srcs)
+		list(GET _dsts ${_i} _dst)
+		math(EXPR _i "${_i} + 1")
+		if(_src STREQUAL "${source}" AND _dst STREQUAL "${dest}")
+			set(${out_var} TRUE PARENT_SCOPE)
+			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
+			return()
+		endif()
+	endforeach()
+	set(${out_var} FALSE PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
+endfunction()
+
+## @brief Record an order-only edge if the pair is new. No user WARNING.
+## @param[in] source Component id or CMake target (resolved at finalize).
+## @param[in] dest   Component id, meta, stage, or existing target.
+## @note Called from `component_link` (auto-dep) and from public
+##       `component_dependency` after the duplicate check. A second
+##       internal record of the same pair is a silent no-op.
+function(_buildmaster_record_dependency source dest)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_record_dependency")
+	_buildmaster_pair_in_lists(
+		BUILDMASTER_COMPONENT_DEP_SOURCES
+		BUILDMASTER_COMPONENT_DEP_DESTS
+		"${source}" "${dest}" _have)
+	if(_have)
+		buildmaster_message(COMPONENT DEBUG
+			"record_dependency ${source} → ${dest} (already present)")
+		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
+		return()
+	endif()
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES
+		"${source}")
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS
+		"${dest}")
+	_buildmaster_component_defer_arm()
+	buildmaster_message(COMPONENT DEBUG "record_dependency ${source} → ${dest}")
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
+endfunction()
+
+## @brief Declare an order-only edge (no link line).
+## @param[in] source Component id or CMake target (resolved at finalize).
+## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
+##            or `<id>_install` / `<id>_configure` / `<id>_build`.
+## @note A non-BUILDONLY component must not depend on a BUILDONLY component
+##       (checked at materialize). BUILDONLY may depend on BUILDONLY or normal.
+## @note May be called before either endpoint exists; edges are recorded and
+##       resolved in `_buildmaster_finalize_components`.
+## @note A second explicit call with the same `(source, dest)` is WARNING and
+##       a no-op (including when `component_link` already recorded the pair).
+##       Unresolvable dest at finalize stays FATAL.
+function(component_dependency source dest)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering component_dependency")
+	if(ARGC GREATER 2)
+		buildmaster_message(COMPONENT FATAL
+			"component_dependency: expected exactly two arguments")
+	endif()
+	if("${source}" STREQUAL "" OR "${dest}" STREQUAL "")
+		buildmaster_message(COMPONENT FATAL
+			"component_dependency: source and dest must be non-empty")
+	endif()
+	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
+	if(_done)
+		buildmaster_message(COMPONENT FATAL
+			"component_dependency: called after finalize")
+	endif()
+	_buildmaster_pair_in_lists(
+		BUILDMASTER_COMPONENT_DEP_SOURCES
+		BUILDMASTER_COMPONENT_DEP_DESTS
+		"${source}" "${dest}" _have)
+	if(_have)
+		buildmaster_message(COMPONENT WARNING
+			"component_dependency('${source}', '${dest}'): edge already recorded — extra call ignored")
+		buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
+		return()
+	endif()
+	_buildmaster_record_dependency("${source}" "${dest}")
+	buildmaster_message(COMPONENT DEBUG "component_dependency ${source} → ${dest}")
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
+endfunction()
+
 ## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE from create_*).
 ## @param[in] dest   Registered component or meta, existing CMake target,
@@ -299,8 +391,10 @@ endfunction()
 ## @note Linking to a BUILDONLY component is FATAL at materialize.
 ## @note component_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).
-## @note When dest is a component, meta, existing target, or stage name, an
-##       order-only `component_dependency` is recorded automatically.
+## @note Always records an order-only edge via `_buildmaster_record_dependency`
+##       so `component_link(A B)` before `create_*(B)` still defers A.
+##       A second explicit `component_link` with the same pair is WARNING
+##       and a no-op. The auto-dependency does not WARN.
 function(component_link source dest)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering component_link")
 	if(ARGC GREATER 2)
@@ -316,19 +410,22 @@ function(component_link source dest)
 		buildmaster_message(COMPONENT FATAL
 			"component_link: called after finalize")
 	endif()
+	_buildmaster_pair_in_lists(
+		BUILDMASTER_COMPONENT_LINK_SOURCES
+		BUILDMASTER_COMPONENT_LINK_DESTS
+		"${source}" "${dest}" _have)
+	if(_have)
+		buildmaster_message(COMPONENT WARNING
+			"component_link('${source}', '${dest}'): edge already recorded — extra call ignored")
+		buildmaster_message(COMPONENT LOWLEVEL "Exiting component_link")
+		return()
+	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES
 		"${source}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS
 		"${dest}")
 
-	_buildmaster_component_is_registered("${dest}" _dest_comp)
-	_buildmaster_meta_is("${dest}" _dest_meta)
-	if(_dest_comp
-			OR _dest_meta
-			OR TARGET "${dest}"
-			OR dest MATCHES "^(.+)_(install|configure|build)$")
-		component_dependency("${source}" "${dest}")
-	endif()
+	_buildmaster_record_dependency("${source}" "${dest}")
 
 	_buildmaster_component_defer_arm()
 	buildmaster_message(COMPONENT DEBUG "component_link ${source} → ${dest}")
@@ -479,7 +576,7 @@ function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
 		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 		return()
 	endif()
-	if(dest MATCHES "^(.+)_(install|configure|build)$")
+	if("${dest}" MATCHES "^(.+)_(install|configure|build)$")
 		set(${out_tgt} "${dest}" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
 		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
@@ -500,8 +597,9 @@ endfunction()
 ## @param[in]  id      Component whose outgoing dependency edges are collected.
 ## @param[out] out_var Parent-scope string of unique target names, space-joined
 ##            (empty if this component has no recorded dests).
-## @note FATAL if dest cannot be resolved, or if a non-BUILDONLY `id` depends
-##       on a BUILDONLY dest.
+## @note FATAL if dest cannot be resolved, unless the same pair is also a
+##       `component_link` (spec or on-disk archive: link-only, no wait target).
+##       FATAL if a non-BUILDONLY `id` depends on a BUILDONLY dest.
 function(_buildmaster_component_dep_targets id out_var)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_dep_targets")
 	set(_dep_targets "")
@@ -528,6 +626,15 @@ function(_buildmaster_component_dep_targets id out_var)
 
 		_buildmaster_resolve_dep_dest("${_dst}" _tgt _ok)
 		if(NOT _ok)
+			_buildmaster_pair_in_lists(
+				BUILDMASTER_COMPONENT_LINK_SOURCES
+				BUILDMASTER_COMPONENT_LINK_DESTS
+				"${id}" "${_dst}" _also_link)
+			if(_also_link)
+				buildmaster_message(COMPONENT DEBUG
+					"component_dependency('${id}', '${_dst}'): dest is link-only (spec or archive), no wait target")
+				continue()
+			endif()
 			buildmaster_message(COMPONENT FATAL
 				"component_dependency('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install; meta id → <id>_install; <id>_install / _configure / _build; existing CMake target (e.g. component_prerequisite / file_* target).")
 		endif()

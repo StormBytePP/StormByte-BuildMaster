@@ -52,6 +52,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   yellow/bold `message(NOTICE)` line on stderr — no `CMake Warning at …`
   banner. With `BUILDMASTER_VERBOSE` ON, `message(WARNING)` is kept so
   CMake prints file and line. WARNING is still never filtered.
+- **`component_link` always records `component_dependency`.**
+  `component_link(A B)` before `create_*(B)` still defers A. A library
+  spec or on-disk archive stays link-only (no wait target). Stage-name
+  dests use `"${dest}" MATCHES` (the unquoted `dest MATCHES` never ran).
+- **Duplicate graph edges are WARNING + no-op** when the user writes
+  them twice (`component_dependency` or `component_link` with the same
+  pair, including an explicit dep that `component_link` already added).
+  Internal auto-deps do not warn. Unresolvable dest at finalize stays
+  FATAL.
 
 ### Fixed
 - **Git patch lost the race with eager configure:** `create_git_patch_file` only queued a `DEFER` on `CMAKE_SOURCE_DIR`, and component finalize was already armed first, so nested cmake/meson ran on the virgin tree (`cmake_minimum_required` too old, unknown Meson options). Flush now runs when the patch is registered, and `_buildmaster_finalize_components` flushes every queued git root *before* materialize. A second flush for the same root is still a no-op (reset then patch once).
