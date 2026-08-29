@@ -164,28 +164,17 @@ function(buildmaster_log_comment _out _module _text)
 	set(${_out} "[BuildMaster/${_modp}]: ${_text}" PARENT_SCOPE)
 endfunction()
 
-## @brief Unified BuildMaster log line.
-## @param[in] _module Module tag (`BUILDMASTER_LOG_MODULES`). Use USER from parent projects.
+## @brief Unified BuildMaster log line (internal).
+## @param[in] _module Module tag (`BUILDMASTER_LOG_MODULES`).
 ## @param[in] _level  LOWLEVEL, DEBUG, INFO, WARNING, STATUS, or FATAL.
 ## @param[in] _message Text after the header.
 ## @param[in] _indent Optional tab count after the header (default 0).
-## @note FATAL and WARNING are never filtered. Default `BUILDMASTER_LOGLEVEL`
-##       is STATUS: STATUS + WARNING + FATAL are visible; INFO / DEBUG /
-##       LOWLEVEL are not. Setting the filter to INFO (or lower) reveals
-##       those. STATUS lines have no [LEVEL] tag. Header is never indented.
-## @note WARNING without `BUILDMASTER_VERBOSE`: one `message(NOTICE)` line
-##       on stderr, yellow/bold (CMake warning colour), no `CMake Warning
-##       at …` banner. With `BUILDMASTER_VERBOSE` ON: `message(WARNING)`.
-## @note FATAL stays `message(FATAL_ERROR)`.
-## @note This file is the only BuildMaster source allowed to call message().
-## @note Tables live in GLOBAL properties so deferred finalize in the parent
-##       CMAKE_SOURCE_DIR (consumer add_subdirectory pattern) still resolves
-##       modules such as COMPONENT.
-function(buildmaster_message _module _level _message)
+## @note Not public. Parent projects call `buildmaster_message`.
+function(_bm_log_message _module _level _message)
 	_buildmaster_log_ensure_registry()
 	if(ARGC LESS 3 OR ARGC GREATER 4)
 		message(FATAL_ERROR
-			"[BuildMaster/Core]: buildmaster_message requires module, level, message and optional indent")
+			"[BuildMaster/Core]: _bm_log_message requires module, level, message and optional indent")
 	endif()
 
 	string(TOUPPER "${_module}" _mod)
@@ -248,5 +237,22 @@ function(buildmaster_message _module _level _message)
 		endif()
 	else()
 		message(STATUS "${_line}")
+	endif()
+endfunction()
+
+## @brief Public log line for parent projects.
+## @param[in] _level   LOWLEVEL, DEBUG, INFO, WARNING, STATUS, or FATAL.
+## @param[in] _message Text after the header.
+## @param[in] _indent  Optional tab count after the header (default 0).
+## @note Module is always USER. It cannot be overridden.
+function(buildmaster_message _level _message)
+	if(ARGC LESS 2 OR ARGC GREATER 3)
+		message(FATAL_ERROR
+			"[BuildMaster/Core]: buildmaster_message requires level, message and optional indent")
+	endif()
+	if(ARGC EQUAL 3)
+		_bm_log_message(USER "${_level}" "${_message}" "${ARGV2}")
+	else()
+		_bm_log_message(USER "${_level}" "${_message}")
 	endif()
 endfunction()

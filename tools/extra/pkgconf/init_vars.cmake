@@ -22,11 +22,11 @@ if(PKG_CONFIG_FOUND)
 	)
 
 	if(NOT _pkg_config_test_result EQUAL 0)
-		buildmaster_message(PKGCONF WARNING "Testing system pkg-config failed, using bundled one instead")
+		_bm_log_message(PKGCONF WARNING "Testing system pkg-config failed, using bundled one instead")
 	else()
 		set(PKG_CONFIG_WORKING TRUE)
 		set(PKG_CONFIG_VERSION "${PKG_CONFIG_VERSION_STRING}")
-		buildmaster_message(PKGCONF STATUS "Using system pkg-config version: ${PKG_CONFIG_VERSION}" 3)
+		_bm_log_message(PKGCONF STATUS "Using system pkg-config version: ${PKG_CONFIG_VERSION}" 3)
 	endif()
 endif()
 
@@ -64,7 +64,7 @@ if(NOT PKG_CONFIG_WORKING)
 		WORKING_DIRECTORY "${PKGCONF_BUILD_DIR}"
 	)
 	if(NOT _pkgconf_build_result EQUAL 0)
-		buildmaster_message(PKGCONF FATAL "Building pkgconf failed:\n${_pkgconf_build_err}")
+		_bm_log_message(PKGCONF FATAL "Building pkgconf failed:\n${_pkgconf_build_err}")
 	endif()
 
 	# Set pkgconf executable path and config path
@@ -79,11 +79,11 @@ if(NOT PKG_CONFIG_WORKING)
 	)
 
 	if(NOT _pkgconf_test_result EQUAL 0)
-		buildmaster_message(PKGCONF FATAL "Testing pkgconf failed")
+		_bm_log_message(PKGCONF FATAL "Testing pkgconf failed")
 	else()
 		set(PKG_CONFIG_WORKING TRUE) # Not really needed, but for consistency
 		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
-		buildmaster_message(PKGCONF STATUS "Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
+		_bm_log_message(PKGCONF STATUS "Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
 
 		# Propagate to parent scope and regenerate bootstrap env runner
 		update_env_runner()

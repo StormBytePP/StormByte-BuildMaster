@@ -6,13 +6,13 @@
 ## @note Created once. Individual `buildmaster_clean_git_<id>` targets are
 ##       attached when BUILDMASTER_CLEAN_RESET_REPOS is on.
 function(_buildmaster_ensure_clean_target)
-	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_ensure_clean_target")
+	_bm_log_message(GIT LOWLEVEL "Entering _buildmaster_ensure_clean_target")
 	if(NOT TARGET buildmaster_clean)
 		add_custom_target(buildmaster_clean
 			COMMENT "BuildMaster: resetting registered git repos and invalidating parent configure"
 		)
 	endif()
-	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_ensure_clean_target")
+	_bm_log_message(GIT LOWLEVEL "Exiting _buildmaster_ensure_clean_target")
 endfunction()
 
 ## @brief Resolve the git toplevel for a path (or the path itself).
@@ -21,11 +21,11 @@ endfunction()
 ## @note Uses `git rev-parse --show-toplevel`. If GIT_EXECUTABLE is unset or
 ##       the command fails, `_path` (absolutized) is returned unchanged.
 function(_buildmaster_git_toplevel _out _path)
-	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_toplevel")
+	_bm_log_message(GIT LOWLEVEL "Entering _buildmaster_git_toplevel")
 	get_filename_component(_abs "${_path}" ABSOLUTE)
 	if(NOT GIT_EXECUTABLE)
 		set(${_out} "${_abs}" PARENT_SCOPE)
-		buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_toplevel")
+		_bm_log_message(GIT LOWLEVEL "Exiting _buildmaster_git_toplevel")
 		return()
 	endif()
 	execute_process(
@@ -40,7 +40,7 @@ function(_buildmaster_git_toplevel _out _path)
 	else()
 		set(${_out} "${_abs}" PARENT_SCOPE)
 	endif()
-	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_toplevel")
+	_bm_log_message(GIT LOWLEVEL "Exiting _buildmaster_git_toplevel")
 endfunction()
 
 ## @brief Path of the post-install reset -P script for one git root.
@@ -57,11 +57,11 @@ endfunction()
 ## @param[in] _git_root Absolute git toplevel.
 ## @note The generated script runs `git reset --hard` then `git clean -fd`
 ##       via ENV_GIT_SILENT_COMMAND. Stdout/stderr are captured so raw git
-##       lines (`HEAD is now at …`) go through `buildmaster_message(GIT …)`
+##       lines (`HEAD is now at …`) go through `_bm_log_message(GIT …)`
 ##       instead of leaking unprefixed. Failures are WARNING (install already
 ##       succeeded). Invoked from install_exec after the component install.
 function(_buildmaster_register_post_install_reset _git_root)
-	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_register_post_install_reset")
+	_bm_log_message(GIT LOWLEVEL "Entering _buildmaster_register_post_install_reset")
 	_buildmaster_git_marker_path(_marker "${_git_root}")
 	set(_git_cmd_line "")
 	foreach(_tok IN LISTS ENV_GIT_SILENT_COMMAND)
@@ -82,9 +82,9 @@ execute_process(
 	ERROR_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _rc EQUAL 0)
-	buildmaster_message(GIT WARNING \"git reset --hard failed in ${_git_root} (exit \${_rc})\")
+	_bm_log_message(GIT WARNING \"git reset --hard failed in ${_git_root} (exit \${_rc})\")
 elseif(NOT \"\${_out}\" STREQUAL \"\")
-	buildmaster_message(GIT STATUS \"\${_out}\")
+	_bm_log_message(GIT STATUS \"\${_out}\")
 endif()
 execute_process(
 	COMMAND${_git_cmd_line} -C \"${_git_root}\" clean -fd
@@ -95,10 +95,10 @@ execute_process(
 	ERROR_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _rc EQUAL 0)
-	buildmaster_message(GIT WARNING \"git clean -fd failed in ${_git_root} (exit \${_rc})\")
+	_bm_log_message(GIT WARNING \"git clean -fd failed in ${_git_root} (exit \${_rc})\")
 endif()
 ")
-	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_register_post_install_reset")
+	_bm_log_message(GIT LOWLEVEL "Exiting _buildmaster_register_post_install_reset")
 endfunction()
 
 ## @brief Register a component id with a git root for clean / post-install.
@@ -108,7 +108,7 @@ endfunction()
 ##       is true, adds `buildmaster_clean_git_<id>` under `buildmaster_clean`
 ##       (reset + clean + delete BUILDMASTER_GIT_CONFIGURE_STAMP).
 function(_buildmaster_git_register_op _component_id _git_repo_dir)
-	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_register_op")
+	_bm_log_message(GIT LOWLEVEL "Entering _buildmaster_git_register_op")
 	sanitize_for_filename(_cid "${_component_id}")
 	_buildmaster_git_toplevel(_git_root "${_git_repo_dir}")
 	_buildmaster_register_post_install_reset("${_git_root}")
@@ -135,8 +135,8 @@ function(_buildmaster_git_register_op _component_id _git_repo_dir)
 			add_dependencies(buildmaster_clean ${_clean_target})
 		endif()
 	endif()
-	buildmaster_message(GIT DEBUG "git register ${_component_id} root=${_git_root}")
-	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_register_op")
+	_bm_log_message(GIT DEBUG "git register ${_component_id} root=${_git_root}")
+	_bm_log_message(GIT LOWLEVEL "Exiting _buildmaster_git_register_op")
 endfunction()
 
 ## @brief Resolve post-install reset script path for a source directory.
@@ -144,7 +144,7 @@ endfunction()
 ## @param[in]  _srcdir  Component source directory.
 ## @note Used by create_*_stages so install_exec can reset the tree after install.
 function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
-	buildmaster_message(GIT LOWLEVEL "Entering buildmaster_git_post_install_marker_for_srcdir")
+	_bm_log_message(GIT LOWLEVEL "Entering buildmaster_git_post_install_marker_for_srcdir")
 	_buildmaster_git_toplevel(_git_root "${_srcdir}")
 	_buildmaster_git_marker_path(_marker "${_git_root}")
 	if(EXISTS "${_marker}")
@@ -152,5 +152,5 @@ function(buildmaster_git_post_install_marker_for_srcdir _out _srcdir)
 	else()
 		set(${_out} "" PARENT_SCOPE)
 	endif()
-	buildmaster_message(GIT LOWLEVEL "Exiting buildmaster_git_post_install_marker_for_srcdir")
+	_bm_log_message(GIT LOWLEVEL "Exiting buildmaster_git_post_install_marker_for_srcdir")
 endfunction()

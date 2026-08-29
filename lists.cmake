@@ -8,9 +8,9 @@
 ##            is read and the negated value is written into the parent
 ##            scope.
 function(toggle_bool _var)
-	buildmaster_message(CORE LOWLEVEL "Entering toggle_bool")
+	_bm_log_message(CORE LOWLEVEL "Entering toggle_bool")
 	if(NOT ARGC EQUAL 1)
-		buildmaster_message(CORE FATAL "toggle_bool requires one variable name")
+		_bm_log_message(CORE FATAL "toggle_bool requires one variable name")
 	endif()
 
 	if(${${_var}})
@@ -18,7 +18,7 @@ function(toggle_bool _var)
 	else()
 		set(${_var} TRUE PARENT_SCOPE)
 	endif()
-	buildmaster_message(CORE LOWLEVEL "Exiting toggle_bool")
+	_bm_log_message(CORE LOWLEVEL "Exiting toggle_bool")
 endfunction()
 
 ## @brief Join a CMake list into a single string while preserving
@@ -35,7 +35,7 @@ endfunction()
 ##       unexpected output. Quote characters themselves are not copied
 ##       into the result (the joined string is wrapped in one pair of `"`).
 function(list_join _out_var _raw_string _separator)
-	buildmaster_message(CORE LOWLEVEL "Entering list_join")
+	_bm_log_message(CORE LOWLEVEL "Entering list_join")
 	set(result "\"")
 	set(in_single_quote FALSE)
 	set(in_double_quote FALSE)
@@ -77,5 +77,5 @@ function(list_join _out_var _raw_string _separator)
 
 	set(result "${result}\"")
 	set(${_out_var} "${result}" PARENT_SCOPE)
-	buildmaster_message(CORE LOWLEVEL "Exiting list_join")
+	_bm_log_message(CORE LOWLEVEL "Exiting list_join")
 endfunction()

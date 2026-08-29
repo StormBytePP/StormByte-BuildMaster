@@ -15,7 +15,7 @@
 ##       still runs under `<id>_configure` at build time.
 ## @note Per-id hooks run after the fragment include (alias order).
 function(_buildmaster_materialize_cmake _component)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_cmake")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_cmake")
 	get_property(_component_title GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_TITLE)
 	get_property(_srcdir GLOBAL PROPERTY
@@ -35,7 +35,7 @@ function(_buildmaster_materialize_cmake _component)
 		if(NOT _toolchain STREQUAL "")
 			set(_tc_suffix " (with toolchain ${_toolchain})")
 		endif()
-		buildmaster_message(CMAKE STATUS
+		_bm_log_message(CMAKE STATUS
 			"Setting up ${_component_title} for build-time configure${_tc_suffix}"
 			"${_indent_level}")
 	else()
@@ -60,6 +60,6 @@ function(_buildmaster_materialize_cmake _component)
 
 	_buildmaster_component_write_fragment("${_component}" "${_deferred}")
 	_buildmaster_run_component_materialize_hooks("${_component}")
-	buildmaster_message(COMPONENT DEBUG "Materialized cmake component ${_component} deferred=${_deferred}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_cmake")
+	_bm_log_message(COMPONENT DEBUG "Materialized cmake component ${_component} deferred=${_deferred}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_cmake")
 endfunction()

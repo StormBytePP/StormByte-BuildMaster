@@ -8,13 +8,13 @@
 ## @note Exactly one of `CMakeLists.txt` / `meson.build`. Both or neither
 ##       is FATAL. No recursion into subdirectories.
 function(_bm_detect_build_system srcdir out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _bm_detect_build_system")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_detect_build_system")
 	if("${srcdir}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"_bm_detect_build_system: empty source directory")
 	endif()
 	if(NOT IS_DIRECTORY "${srcdir}")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"_bm_detect_build_system: '${srcdir}' is not a directory")
 	endif()
 
@@ -28,28 +28,28 @@ function(_bm_detect_build_system srcdir out_var)
 	endif()
 
 	if(_cmake AND _meson)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use create_cmake_component or create_meson_component")
 	endif()
 	if(_cmake)
 		set(${out_var} "cmake" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
 		return()
 	endif()
 	if(_meson)
 		set(${out_var} "meson" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
 		return()
 	endif()
 
-	buildmaster_message(COMPONENT FATAL
+	_bm_log_message(COMPONENT FATAL
 		"buildmaster_component: unknown build system in '${srcdir}' (need CMakeLists.txt or meson.build)")
 endfunction()
 
 ## @brief Split `KEY=value` (first `=`). Empty key is FATAL.
 function(_bm_factory_split_pair item out_key out_val)
 	if(NOT item MATCHES "^([^=]+)=(.*)$")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: option '${item}' is not KEY=value")
 	endif()
 	set(${out_key} "${CMAKE_MATCH_1}" PARENT_SCOPE)
@@ -59,7 +59,7 @@ endfunction()
 ## @brief Resolve INCLUDES= path against srcdir. Missing path is FATAL.
 function(_bm_factory_resolve_include srcdir raw out_var)
 	if("${raw}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: INCLUDES= is empty")
 	endif()
 	if(IS_ABSOLUTE "${raw}")
@@ -69,7 +69,7 @@ function(_bm_factory_resolve_include srcdir raw out_var)
 	endif()
 	get_filename_component(_p "${_p}" ABSOLUTE)
 	if(NOT IS_DIRECTORY "${_p}")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: INCLUDES='${raw}' is not a directory (${_p})")
 	endif()
 	set(${out_var} "${_p}" PARENT_SCOPE)
@@ -85,7 +85,7 @@ endfunction()
 ##       args the toolchain already set. Not ENV{CFLAGS}. Private to the
 ##       nested compile — not INTERFACE on the BM id.
 function(_bm_factory_translate_options sys srcdir raw out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _bm_factory_translate_options")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_factory_translate_options")
 	set(_c "")
 	set(_cxx "")
 	set(_ld "")
@@ -112,12 +112,12 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 			list(APPEND _inc "${_p}")
 		elseif(_k STREQUAL "DEFINITIONS")
 			if("${_v}" STREQUAL "")
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"buildmaster_component: DEFINITIONS= is empty")
 			endif()
 			list(APPEND _def "${_v}")
 		else()
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"buildmaster_component: unknown option '${_k}=' (allowed: CFLAGS CXXFLAGS CPPFLAGS LDFLAGS INCLUDES DEFINITIONS)")
 		endif()
 	endforeach()
@@ -177,7 +177,7 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 	endif()
 
 	set(${out_var} "${_out}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _bm_factory_translate_options")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_translate_options")
 endfunction()
 
 ## @brief Register a component; backend is inferred from `srcdir`.
@@ -203,14 +203,14 @@ endfunction()
 ## @note optstr (`LINK=`, `PC=`, `WHOLE`, …) is unchanged and last.
 ## @note INTERFACE `<id>` exists on return (delegates to create_*).
 function(buildmaster_component _component _component_title _srcdir)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: expected 6–8 arguments (same arity as create_cmake_component)")
 	endif()
 	if("${_srcdir}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component('${_component}'): empty source directory")
 	endif()
 
@@ -251,7 +251,7 @@ function(buildmaster_component _component _component_title _srcdir)
 
 	_bm_detect_build_system("${_srcdir}" _sys)
 	_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
-	buildmaster_message(COMPONENT DEBUG
+	_bm_log_message(COMPONENT DEBUG
 		"buildmaster_component('${_component}'): ${_sys}")
 
 	if(_legacy)
@@ -280,5 +280,5 @@ function(buildmaster_component _component _component_title _srcdir)
 		endif()
 	endif()
 
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
 endfunction()

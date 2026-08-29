@@ -43,14 +43,14 @@ endif()
 ## @note Missing `lib`, failed `/LIST`, or failed `/REMOVE` of one member
 ##       do not abort the parent install (`WARNING` / `DEBUG` only).
 function(buildmaster_strip_msvc_res lib)
-	buildmaster_message(ARCHIVE LOWLEVEL "Entering buildmaster_strip_msvc_res")
+	_bm_log_message(ARCHIVE LOWLEVEL "Entering buildmaster_strip_msvc_res")
 	if("${lib}" STREQUAL "")
-		buildmaster_message(ARCHIVE FATAL "buildmaster_strip_msvc_res: empty lib path")
+		_bm_log_message(ARCHIVE FATAL "buildmaster_strip_msvc_res: empty lib path")
 	endif()
 
 	if(NOT EXISTS "${lib}")
-		buildmaster_message(ARCHIVE DEBUG "strip_msvc_res: missing ${lib} (skip)")
-		buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
+		_bm_log_message(ARCHIVE DEBUG "strip_msvc_res: missing ${lib} (skip)")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
 		return()
 	endif()
 
@@ -60,9 +60,9 @@ function(buildmaster_strip_msvc_res lib)
 	endif()
 	buildmaster_find_archiver(_bm_ar _bm_style "${_hint}")
 	if(NOT _bm_style STREQUAL "msvc_lib")
-		buildmaster_message(ARCHIVE DEBUG
+		_bm_log_message(ARCHIVE DEBUG
 			"strip_msvc_res: archiver style '${_bm_style}' is not msvc_lib (skip)")
-		buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
 		return()
 	endif()
 
@@ -74,9 +74,9 @@ function(buildmaster_strip_msvc_res lib)
 		OUTPUT_STRIP_TRAILING_WHITESPACE
 	)
 	if(NOT _rc EQUAL 0)
-		buildmaster_message(ARCHIVE WARNING
+		_bm_log_message(ARCHIVE WARNING
 			"strip_msvc_res: /LIST failed on ${lib} (${_rc}): ${_err}")
-		buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
 		return()
 	endif()
 
@@ -95,7 +95,7 @@ function(buildmaster_strip_msvc_res lib)
 			continue()
 		endif()
 
-		buildmaster_message(ARCHIVE INFO "strip_msvc_res: removing '${_mem}' from ${lib}")
+		_bm_log_message(ARCHIVE INFO "strip_msvc_res: removing '${_mem}' from ${lib}")
 		execute_process(
 			COMMAND "${_bm_ar}" /NOLOGO "/REMOVE:${_mem}" "${lib}"
 			RESULT_VARIABLE _rc2
@@ -103,22 +103,22 @@ function(buildmaster_strip_msvc_res lib)
 			ERROR_VARIABLE _err2
 		)
 		if(NOT _rc2 EQUAL 0)
-			buildmaster_message(ARCHIVE WARNING
+			_bm_log_message(ARCHIVE WARNING
 				"strip_msvc_res: /REMOVE:${_mem} failed (${_rc2}): ${_err2}")
 		else()
 			math(EXPR _removed "${_removed} + 1")
 		endif()
 	endforeach()
 
-	buildmaster_message(ARCHIVE DEBUG
+	_bm_log_message(ARCHIVE DEBUG
 		"strip_msvc_res: removed ${_removed} .res member(s) from ${lib}")
-	buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
+	_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_strip_msvc_res")
 endfunction()
 
 if(CMAKE_SCRIPT_MODE_FILE AND CMAKE_SCRIPT_MODE_FILE STREQUAL CMAKE_CURRENT_LIST_FILE)
 	if(NOT LIB)
 		if(COMMAND buildmaster_message)
-			buildmaster_message(ARCHIVE FATAL "strip_msvc_res: need -DLIB=")
+			_bm_log_message(ARCHIVE FATAL "strip_msvc_res: need -DLIB=")
 		else()
 			message(FATAL_ERROR "strip_msvc_res: need -DLIB=")
 		endif()

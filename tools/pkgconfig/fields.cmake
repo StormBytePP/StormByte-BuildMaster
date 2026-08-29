@@ -8,7 +8,7 @@
 ## @note Those paths belong to the BM prefix env, not to a helper .pc.
 ## @note Empty `flags` yields an empty string.
 function(_buildmaster_pc_drop_include_tokens flags out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_drop_include_tokens")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_drop_include_tokens")
 	set(_keep "")
 	separate_arguments(_toks UNIX_COMMAND "${flags}")
 	foreach(_t IN LISTS _toks)
@@ -23,7 +23,7 @@ function(_buildmaster_pc_drop_include_tokens flags out_var)
 	string(REPLACE ";" " " _joined "${_keep}")
 	string(STRIP "${_joined}" _joined)
 	set(${out_var} "${_joined}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_drop_include_tokens")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_drop_include_tokens")
 endfunction()
 
 ## @brief Tokens in `child` that are not in `parent`.
@@ -32,7 +32,7 @@ endfunction()
 ## @param[out] out_var Parent-scope leftover string.
 ## @note Comparison is exact token match after `separate_arguments`.
 function(_buildmaster_pc_subtract_parent parent child out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_subtract_parent")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_subtract_parent")
 	separate_arguments(_p UNIX_COMMAND "${parent}")
 	separate_arguments(_c UNIX_COMMAND "${child}")
 	set(_out "")
@@ -52,7 +52,7 @@ function(_buildmaster_pc_subtract_parent parent child out_var)
 	string(REPLACE ";" " " _joined "${_out}")
 	string(STRIP "${_joined}" _joined)
 	set(${out_var} "${_joined}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_subtract_parent")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_subtract_parent")
 endfunction()
 
 ## @brief Pull C/C++ flag strings out of a component option list.
@@ -61,7 +61,7 @@ endfunction()
 ## @note Recognized prefixes: `-DCMAKE_C_FLAGS=`, `-DCMAKE_CXX_FLAGS=`,
 ##       `-Dc_args=`, `-Dcpp_args=`. Other options are ignored.
 function(_buildmaster_pc_options_flags options out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_options_flags")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_pc_options_flags")
 	set(_acc "")
 	foreach(_opt IN LISTS options)
 		if(_opt MATCHES "^-DCMAKE_C_FLAGS=(.*)$")
@@ -76,7 +76,7 @@ function(_buildmaster_pc_options_flags options out_var)
 	endforeach()
 	string(STRIP "${_acc}" _acc)
 	set(${out_var} "${_acc}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_options_flags")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pc_options_flags")
 endfunction()
 
 ## @brief Fill `_BM_PC_*` for `install_exec` / `create_*_stages`.
@@ -89,7 +89,7 @@ endfunction()
 ##       extras minus parent `CMAKE_C{,XX}_FLAGS`, minus include tokens.
 ## @note When PC is off, all string outs are empty and ENABLED is `0`.
 function(_buildmaster_component_fill_pc_vars id)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_fill_pc_vars")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_fill_pc_vars")
 	get_property(_on GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC)
 	if(NOT _on)
 		set(_BM_PC_ENABLED "0" PARENT_SCOPE)
@@ -100,7 +100,7 @@ function(_buildmaster_component_fill_pc_vars id)
 		set(_BM_PC_REQUIRES "" PARENT_SCOPE)
 		set(_BM_PC_CFLAGS "" PARENT_SCOPE)
 		set(_BM_PC_OUT "" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_fill_pc_vars")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_fill_pc_vars")
 		return()
 	endif()
 
@@ -168,6 +168,6 @@ function(_buildmaster_component_fill_pc_vars id)
 	set(_BM_PC_REQUIRES "${_req}" PARENT_SCOPE)
 	set(_BM_PC_CFLAGS "${_cflags}" PARENT_SCOPE)
 	set(_BM_PC_OUT "${_out}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT DEBUG "PC fields for ${id}: ${_name} ${_ver} → ${_out}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_fill_pc_vars")
+	_bm_log_message(COMPONENT DEBUG "PC fields for ${id}: ${_name} ${_ver} → ${_out}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_fill_pc_vars")
 endfunction()

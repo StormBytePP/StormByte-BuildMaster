@@ -9,9 +9,9 @@
 ##       with `BUILDMASTER_CONFIGURED` must **not** call this (they would wipe
 ##       the parent dump). Safe to call more than once in the primary path.
 function(buildmaster_toolchain_reset)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_reset")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_reset")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_reset")
 endfunction()
 
 ## @brief Register a simple string assignment for the toolchain file dump.
@@ -22,15 +22,15 @@ endfunction()
 ##       Does not write the toolchain file; call `buildmaster_toolchain_write`.
 ## @note Empty `name` is fatal.
 function(buildmaster_toolchain_export name value)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export")
 	if("${name}" STREQUAL "")
-		buildmaster_message(TOOLCHAIN FATAL "buildmaster_toolchain_export: empty name")
+		_bm_log_message(TOOLCHAIN FATAL "buildmaster_toolchain_export: empty name")
 	endif()
 	string(REPLACE "\\" "/" _bm_tc_val "${value}")
 	string(REPLACE "\"" "\\\"" _bm_tc_val "${_bm_tc_val}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES
 		"set(${name} \"${_bm_tc_val}\")")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export")
 endfunction()
 
 ## @brief Register a pre-formatted CMake line for the toolchain file dump.
@@ -40,13 +40,13 @@ endfunction()
 ##       Empty lines are ignored. Does not write the file until
 ##       `buildmaster_toolchain_write` is called.
 function(buildmaster_toolchain_export_raw line)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export_raw")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export_raw")
 	if("${line}" STREQUAL "")
-		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
 		return()
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES "${line}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
 endfunction()
 
 ## @brief Write all registered toolchain lines to a file.
@@ -56,9 +56,9 @@ endfunction()
 ##       call `buildmaster_toolchain_write_component` instead.
 ## @note Empty `path` is fatal.
 function(buildmaster_toolchain_write path)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write")
 	if("${path}" STREQUAL "")
-		buildmaster_message(TOOLCHAIN FATAL "buildmaster_toolchain_write: empty path")
+		_bm_log_message(TOOLCHAIN FATAL "buildmaster_toolchain_write: empty path")
 	endif()
 	normalize_cmake_path(_bm_tc_out "${path}")
 	get_filename_component(_bm_tc_dir "${_bm_tc_out}" DIRECTORY)
@@ -73,8 +73,8 @@ function(buildmaster_toolchain_write path)
 		string(APPEND _bm_tc_body "${_bm_tc_line}\n")
 	endforeach()
 	file(WRITE "${_bm_tc_out}" "${_bm_tc_body}")
-	buildmaster_message(TOOLCHAIN DEBUG "Wrote toolchain dump ${_bm_tc_out}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write")
+	_bm_log_message(TOOLCHAIN DEBUG "Wrote toolchain dump ${_bm_tc_out}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write")
 endfunction()
 
 ## @brief Write a component toolchain file: parent registry snapshot + profile overlay.
@@ -92,7 +92,7 @@ endfunction()
 ## @note If `buildmaster_get_meson_native_file` exists, also records
 ##       `BUILDMASTER_MESON_NATIVE_FILE` for nested Meson under this component.
 macro(buildmaster_toolchain_write_component path toolchain_name)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write_component")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write_component")
 	buildmaster_toolchain_write("${path}")
 
 	normalize_cmake_path(_bm_tc_self "${path}")
@@ -148,6 +148,6 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 	file(APPEND "${path}" "${_bm_tc_overlay}")
 	unset(_bm_tc_overlay)
 	unset(_bm_tc_self)
-	buildmaster_message(TOOLCHAIN DEBUG "Wrote component toolchain overlay ${path}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write_component")
+	_bm_log_message(TOOLCHAIN DEBUG "Wrote component toolchain overlay ${path}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write_component")
 endmacro()

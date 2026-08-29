@@ -16,7 +16,7 @@
 ##       wrapping (`list_join` would nest quotes inside the STATUS string
 ##       and break CMake parse).
 function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
-	buildmaster_message(GIT LOWLEVEL "Entering create_git_patch_file")
+	_bm_log_message(GIT LOWLEVEL "Entering create_git_patch_file")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(_patches "${_git_patches}")
 	string(REPLACE ";" " " GIT_PATCHES "${_patches}")
@@ -39,6 +39,6 @@ function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
 	_buildmaster_git_flush_repo("${_git_repo_dir}")
 	cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
 		CALL _buildmaster_git_flush_repo "${_git_repo_dir}")
-	buildmaster_message(GIT DEBUG "Queued git patch for ${_component_id}")
-	buildmaster_message(GIT LOWLEVEL "Exiting create_git_patch_file")
+	_bm_log_message(GIT DEBUG "Queued git patch for ${_component_id}")
+	_bm_log_message(GIT LOWLEVEL "Exiting create_git_patch_file")
 endfunction()

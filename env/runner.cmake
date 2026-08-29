@@ -114,7 +114,7 @@ endfunction()
 ## @note Empty `component` or `toolchain_name` is fatal.
 macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
-		buildmaster_message(TOOLCHAIN FATAL
+		_bm_log_message(TOOLCHAIN FATAL
 			"buildmaster_create_component_env_runners: component and toolchain_name must be non-empty"
 		)
 	endif()

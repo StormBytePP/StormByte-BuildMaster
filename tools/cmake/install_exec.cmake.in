@@ -11,8 +11,8 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 
 if(EXISTS "@BUILDMASTER_FAIL_MARKER@")
-	buildmaster_message(CMAKE STATUS "Skipped @_CMAKE_COMPONENT_TITLE@")
-	buildmaster_message(CMAKE FATAL "Skipped @_CMAKE_COMPONENT_TITLE@")
+	_bm_log_message(CMAKE STATUS "Skipped @_CMAKE_COMPONENT_TITLE@")
+	_bm_log_message(CMAKE FATAL "Skipped @_CMAKE_COMPONENT_TITLE@")
 endif()
 
 if(NOT "@_BM_BUILDONLY@" STREQUAL "1")
@@ -28,7 +28,7 @@ if(NOT "@_BM_BUILDONLY@" STREQUAL "1")
 			file(WRITE "@BUILDMASTER_FAIL_MARKER@" "@_CMAKE_COMPONENT_SAFE@\n")
 			file(WRITE "@BUILDMASTER_MARKERS_DIR@/@_CMAKE_COMPONENT_SAFE@.failed" "")
 		endif()
-		buildmaster_message(CMAKE FATAL
+		_bm_log_message(CMAKE FATAL
 			"Installing @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 	endif()
 endif()
@@ -45,7 +45,7 @@ if("@_BM_RENAME_ENABLED@" STREQUAL "1")
 		RESULT_VARIABLE _BM_RENAME_RC
 	)
 	if(NOT _BM_RENAME_RC EQUAL 0)
-		buildmaster_message(CMAKE FATAL
+		_bm_log_message(CMAKE FATAL
 			"Install rename/normalize failed for @_CMAKE_COMPONENT_TITLE@ (exit ${_BM_RENAME_RC})")
 	endif()
 endif()
@@ -66,10 +66,10 @@ foreach(_bm_out IN LISTS _BM_OUTPUTS)
 		file(WRITE "${_bm_out}" "")
 	else()
 		if("@_BM_BUILDONLY@" STREQUAL "1")
-			buildmaster_message(CMAKE FATAL
+			_bm_log_message(CMAKE FATAL
 				"BUILDONLY @_CMAKE_COMPONENT_TITLE@: expected output missing under build dir: ${_bm_out}")
 		else()
-			buildmaster_message(CMAKE FATAL
+			_bm_log_message(CMAKE FATAL
 				"Install of @_CMAKE_COMPONENT_TITLE@ succeeded but expected output is missing: ${_bm_out}")
 		endif()
 	endif()
@@ -94,7 +94,7 @@ if("@_BM_STRIPRES_ENABLED@" STREQUAL "1")
 			RESULT_VARIABLE _BM_STRIP_RC
 		)
 		if(NOT _BM_STRIP_RC EQUAL 0)
-			buildmaster_message(CMAKE FATAL
+			_bm_log_message(CMAKE FATAL
 				"strip .res failed for @_CMAKE_COMPONENT_TITLE@ (${_bm_out}, exit ${_BM_STRIP_RC})")
 		endif()
 	endforeach()
@@ -119,7 +119,7 @@ if("@_BM_PC_ENABLED@" STREQUAL "1")
 		RESULT_VARIABLE _BM_PC_RC
 	)
 	if(NOT _BM_PC_RC EQUAL 0)
-		buildmaster_message(CMAKE FATAL
+		_bm_log_message(CMAKE FATAL
 			"helper .pc failed for @_CMAKE_COMPONENT_TITLE@ (exit ${_BM_PC_RC})")
 	endif()
 endif()

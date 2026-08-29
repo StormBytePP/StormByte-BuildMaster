@@ -9,7 +9,7 @@ if(NOT IS_ABSOLUTE "${_FILE_ARCHIVE}")
 endif()
 
 if(NOT EXISTS "${_FILE_ARCHIVE}")
-	buildmaster_message(FILE FATAL "Archive not found: ${_FILE_ARCHIVE}")
+	_bm_log_message(FILE FATAL "Archive not found: ${_FILE_ARCHIVE}")
 endif()
 
 file(MAKE_DIRECTORY "@_FILE_OUT_DIR@")
@@ -18,4 +18,4 @@ file(ARCHIVE_EXTRACT
 	INPUT "${_FILE_ARCHIVE}"
 	DESTINATION "@_FILE_OUT_DIR@"
 )
-buildmaster_message(FILE INFO "Unpacking @_FILE_TITLE@... OK")
+_bm_log_message(FILE INFO "Unpacking @_FILE_TITLE@... OK")

@@ -11,14 +11,14 @@ endif()
 if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
 		OR NOT EXISTS "@_CMAKE_BUILD_DIR@/build.ninja")
 	if(NOT "@_BM_CONFIGURE_VIA_TARGET@" STREQUAL "1")
-		buildmaster_message(CMAKE STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
+		_bm_log_message(CMAKE STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
 	endif()
 
 	# Prefix is ENV_CMAKE_*: runner tokens + cmake binary.
 	set(_bm_runner @_CMAKE_CFG_CMD_PREFIX@)
 	list(LENGTH _bm_runner _bm_n)
 	if(_bm_n LESS 1)
-		buildmaster_message(CMAKE FATAL "ENV_CMAKE command prefix is empty")
+		_bm_log_message(CMAKE FATAL "ENV_CMAKE command prefix is empty")
 	endif()
 	math(EXPR _bm_last "${_bm_n} - 1")
 	list(GET _bm_runner ${_bm_last} _bm_cmake_exe)
@@ -86,7 +86,7 @@ if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
 	endif()
 
 	if(NOT CMAKE_RESULT EQUAL 0)
-		buildmaster_message(CMAKE FATAL
+		_bm_log_message(CMAKE FATAL
 			"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT}). Working directory: @_CMAKE_BUILD_DIR@. Nested output was already written by the env runner.")
 	endif()
 endif()

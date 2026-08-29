@@ -22,24 +22,24 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ##       and buildmaster_find_archiver (CMAKE_AR, ENV{AR}, llvm-lib/lib, ar…).
 ## @note Duplicate id vs create_component / another repack → FATAL.
 function(component_repack id)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering component_repack")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering component_repack")
 	if("${id}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL "component_repack: empty id")
+		_bm_log_message(COMPONENT FATAL "component_repack: empty id")
 	endif()
 
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_repack('${id}'): called after finalize")
 	endif()
 
 	cmake_parse_arguments(ARG "" "OUTPUT" "INPUTS" ${ARGN})
 	if(NOT ARG_OUTPUT)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_repack('${id}'): OUTPUT is required")
 	endif()
 	if(NOT ARG_INPUTS)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_repack('${id}'): INPUTS is required")
 	endif()
 
@@ -47,7 +47,7 @@ function(component_repack id)
 	if(_ids)
 		list(FIND _ids "${id}" _idx)
 		if(NOT _idx EQUAL -1)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_repack: id '${id}' already a component")
 		endif()
 	endif()
@@ -55,7 +55,7 @@ function(component_repack id)
 	if(_rids)
 		list(FIND _rids "${id}" _ridx)
 		if(NOT _ridx EQUAL -1)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_repack: duplicate id '${id}'")
 		endif()
 	endif()
@@ -65,8 +65,8 @@ function(component_repack id)
 	set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${id}_INPUTS "${ARG_INPUTS}")
 
 	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "Registered repack ${id} OUTPUT=${ARG_OUTPUT}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_repack")
+	_bm_log_message(COMPONENT DEBUG "Registered repack ${id} OUTPUT=${ARG_OUTPUT}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting component_repack")
 endfunction()
 
 ## @brief Resolve one INPUT token into files and/or order targets.
@@ -74,7 +74,7 @@ endfunction()
 ## @param[out] out_files Parent-scope list of archive paths to merge.
 ## @param[out] out_deps  Parent-scope list of CMake targets for ordering.
 function(_buildmaster_repack_resolve_input token out_files out_deps)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_repack_resolve_input")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_repack_resolve_input")
 	set(_files "")
 	set(_deps "")
 
@@ -87,7 +87,7 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		get_property(_produced GLOBAL PROPERTY
 			BUILDMASTER_COMPONENT_${token}_PRODUCED)
 		if(_mode STREQUAL "headers")
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_repack: INPUT '${token}' is headers-only")
 		endif()
 		foreach(_spec IN LISTS _produced)
@@ -111,7 +111,7 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		endif()
 		set(${out_files} "${_files}" PARENT_SCOPE)
 		set(${out_deps} "${_deps}" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
 		return()
 	endif()
 
@@ -119,7 +119,7 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		list(APPEND _deps "${token}")
 		set(${out_files} "" PARENT_SCOPE)
 		set(${out_deps} "${_deps}" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
 		return()
 	endif()
 
@@ -127,7 +127,7 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		list(APPEND _files "${token}")
 		set(${out_files} "${_files}" PARENT_SCOPE)
 		set(${out_deps} "" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
 		return()
 	endif()
 
@@ -136,11 +136,11 @@ function(_buildmaster_repack_resolve_input token out_files out_deps)
 		list(APPEND _files "${_abs}")
 		set(${out_files} "${_files}" PARENT_SCOPE)
 		set(${out_deps} "" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_repack_resolve_input")
 		return()
 	endif()
 
-	buildmaster_message(COMPONENT FATAL
+	_bm_log_message(COMPONENT FATAL
 		"component_repack: cannot resolve INPUT '${token}' (expected component id, CMake target, or archive path)")
 endfunction()
 
@@ -153,17 +153,17 @@ endfunction()
 ##       with CMAKE_AR when set. Empty INPUT file list is FATAL.
 ## @note Marks BUILDMASTER_REPACK_<id>_FILE for orphan / consumption checks.
 function(_buildmaster_materialize_repacks)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_repacks")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_repacks")
 	get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
 	if(NOT _rids)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_repacks")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_repacks")
 		return()
 	endif()
 
 	set(_merge_script
 		"${BUILDMASTER_SRCDIR}/tools/bundle/merge_static_archives.cmake")
 	if(NOT EXISTS "${_merge_script}")
-		buildmaster_message(COMPONENT FATAL "missing ${_merge_script}")
+		_bm_log_message(COMPONENT FATAL "missing ${_merge_script}")
 	endif()
 
 	foreach(_id IN LISTS _rids)
@@ -183,7 +183,7 @@ function(_buildmaster_materialize_repacks)
 		endforeach()
 
 		if(_all_files STREQUAL "")
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_repack('${_id}'): no archive files from INPUTS")
 		endif()
 		if(_all_deps)
@@ -245,7 +245,7 @@ function(_buildmaster_materialize_repacks)
 		endif()
 
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_FILE "${_out_path}")
-		buildmaster_message(COMPONENT DEBUG "Materialized repack ${_id} → ${_out_path}")
+		_bm_log_message(COMPONENT DEBUG "Materialized repack ${_id} → ${_out_path}")
 	endforeach()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_repacks")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_repacks")
 endfunction()

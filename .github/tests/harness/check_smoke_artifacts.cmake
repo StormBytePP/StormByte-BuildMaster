@@ -13,10 +13,10 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 
 if(NOT BUILDMASTER_INSTALL_DIR)
-	buildmaster_message(CORE FATAL "BUILDMASTER_INSTALL_DIR is required")
+	_bm_log_message(CORE FATAL "BUILDMASTER_INSTALL_DIR is required")
 endif()
 if(NOT BM_TEST_EXPECTED_DIR)
-	buildmaster_message(CORE FATAL "BM_TEST_EXPECTED_DIR is required")
+	_bm_log_message(CORE FATAL "BM_TEST_EXPECTED_DIR is required")
 endif()
 
 if(NOT BM_INSTALL_LIBDIR)
@@ -28,7 +28,7 @@ endif()
 
 set(_bm_art_list "${BM_TEST_EXPECTED_DIR}/smoke_artifacts.txt")
 if(NOT EXISTS "${_bm_art_list}")
-	buildmaster_message(CORE FATAL "Missing ${_bm_art_list}")
+	_bm_log_message(CORE FATAL "Missing ${_bm_art_list}")
 endif()
 
 if(WIN32)
@@ -54,7 +54,7 @@ foreach(_line IN LISTS _bm_lines)
 
 	# Strict entry form: [!]path|all|unix|windows
 	if(NOT _line MATCHES "^!?[^|]+\\|(all|unix|windows)$")
-		buildmaster_message(CORE WARNING "Malformed artifact line: ${_line}")
+		_bm_log_message(CORE WARNING "Malformed artifact line: ${_line}")
 		continue()
 	endif()
 
@@ -77,14 +77,14 @@ foreach(_line IN LISTS _bm_lines)
 	set(_full "${BUILDMASTER_INSTALL_DIR}/${_rel}")
 	if(_absent)
 		if(EXISTS "${_full}")
-			buildmaster_message(CORE WARNING "Smoke artifact must not exist: ${_full}")
+			_bm_log_message(CORE WARNING "Smoke artifact must not exist: ${_full}")
 			set(_bm_fail TRUE)
 		else()
 			math(EXPR _bm_absent_ok "${_bm_absent_ok} + 1")
 		endif()
 	else()
 		if(NOT EXISTS "${_full}")
-			buildmaster_message(CORE WARNING "Smoke artifact missing: ${_full}")
+			_bm_log_message(CORE WARNING "Smoke artifact missing: ${_full}")
 			set(_bm_fail TRUE)
 		else()
 			math(EXPR _bm_ok "${_bm_ok} + 1")
@@ -93,8 +93,8 @@ foreach(_line IN LISTS _bm_lines)
 endforeach()
 
 if(_bm_fail)
-	buildmaster_message(CORE FATAL "BuildMaster smoke artifact checks failed")
+	_bm_log_message(CORE FATAL "BuildMaster smoke artifact checks failed")
 endif()
 
-buildmaster_message(CORE STATUS
+_bm_log_message(CORE STATUS
 	"smoke artifacts: OK (${_bm_ok} present, ${_bm_absent_ok} expected absent)")

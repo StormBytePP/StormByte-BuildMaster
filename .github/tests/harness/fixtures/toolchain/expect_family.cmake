@@ -16,7 +16,7 @@ endif()
 ##       Unknown or empty values are a fatal harness error.
 function(harness_apply_expect_family _tgt)
 	if(NOT HARNESS_EXPECT_FAMILY)
-		buildmaster_message(CORE FATAL "toolchain fixture: HARNESS_EXPECT_FAMILY is required")
+		_bm_log_message(CORE FATAL "toolchain fixture: HARNESS_EXPECT_FAMILY is required")
 	endif()
 	string(TOLOWER "${HARNESS_EXPECT_FAMILY}" _f)
 	if(_f STREQUAL "clang-cl")
@@ -28,7 +28,7 @@ function(harness_apply_expect_family _tgt)
 	elseif(_f STREQUAL "gcc")
 		target_compile_definitions(${_tgt} PRIVATE HARNESS_EXPECT_FAMILY_GCC=1)
 	else()
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"toolchain fixture: unknown HARNESS_EXPECT_FAMILY=${HARNESS_EXPECT_FAMILY}")
 	endif()
 endfunction()

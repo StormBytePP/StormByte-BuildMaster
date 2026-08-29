@@ -15,7 +15,7 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 include("@BUILDMASTER_SRCDIR@/tools/file/checksum.cmake")
 
-buildmaster_message(FILE LOWLEVEL "Entering file_download script")
+_bm_log_message(FILE LOWLEVEL "Entering file_download script")
 
 set(_url            "@_FILE_URL@")
 set(_output         "@_FILE_OUTPUT@")
@@ -25,11 +25,11 @@ set(_max_retries    "@_FILE_MAX_RETRIES@")
 set(_current_try    "@_FILE_CURRENT_TRY@")
 set(_indent         "@_FILE_INDENT@")
 
-buildmaster_message(FILE DEBUG "Force download for ${_title}")
-buildmaster_message(FILE LOWLEVEL "url=${_url}")
-buildmaster_message(FILE LOWLEVEL "output=${_output}")
-buildmaster_message(FILE LOWLEVEL "expected_hash=${_expected_hash}")
-buildmaster_message(FILE LOWLEVEL "max_retries=${_max_retries} current_try=${_current_try}")
+_bm_log_message(FILE DEBUG "Force download for ${_title}")
+_bm_log_message(FILE LOWLEVEL "url=${_url}")
+_bm_log_message(FILE LOWLEVEL "output=${_output}")
+_bm_log_message(FILE LOWLEVEL "expected_hash=${_expected_hash}")
+_bm_log_message(FILE LOWLEVEL "max_retries=${_max_retries} current_try=${_current_try}")
 
 # ---------------------------------------------------------------------------
 # Local helpers
@@ -43,16 +43,16 @@ buildmaster_message(FILE LOWLEVEL "max_retries=${_max_retries} current_try=${_cu
 ## @note Called only after file(DOWNLOAD) reports success so CMake is not
 ##       asked to hash a failed transfer.
 function(_file_dl_checksum_ok _out_var _file _hash)
-	buildmaster_message(FILE LOWLEVEL "Entering _file_dl_checksum_ok")
+	_bm_log_message(FILE LOWLEVEL "Entering _file_dl_checksum_ok")
 	if("${_hash}" STREQUAL "")
 		set(${_out_var} TRUE PARENT_SCOPE)
-		buildmaster_message(FILE LOWLEVEL "Exiting _file_dl_checksum_ok (no hash)")
+		_bm_log_message(FILE LOWLEVEL "Exiting _file_dl_checksum_ok (no hash)")
 		return()
 	endif()
 
 	file_checksum_correct(_ok "${_file}" "${_hash}")
 	set(${_out_var} "${_ok}" PARENT_SCOPE)
-	buildmaster_message(FILE LOWLEVEL "Exiting _file_dl_checksum_ok")
+	_bm_log_message(FILE LOWLEVEL "Exiting _file_dl_checksum_ok")
 endfunction()
 
 ## @brief Whether a file(DOWNLOAD) error should not be retried.
@@ -61,13 +61,13 @@ endfunction()
 ## @note Treats HTTP 404 and “Not Found” as permanent. Timeouts and other
 ##       network errors stay retryable up to @_FILE_MAX_RETRIES@.
 function(_file_dl_is_permanent_error _out_var _msg)
-	buildmaster_message(FILE LOWLEVEL "Entering _file_dl_is_permanent_error")
+	_bm_log_message(FILE LOWLEVEL "Entering _file_dl_is_permanent_error")
 	if("${_msg}" MATCHES "404" OR "${_msg}" MATCHES "[Nn]ot [Ff]ound")
 		set(${_out_var} TRUE PARENT_SCOPE)
 	else()
 		set(${_out_var} FALSE PARENT_SCOPE)
 	endif()
-	buildmaster_message(FILE LOWLEVEL "Exiting _file_dl_is_permanent_error")
+	_bm_log_message(FILE LOWLEVEL "Exiting _file_dl_is_permanent_error")
 endfunction()
 
 # ---------------------------------------------------------------------------
@@ -78,7 +78,7 @@ execute_process(COMMAND ${CMAKE_COMMAND} -E echo_append "${_indent}Downloading $
 # ---------------------------------------------------------------------------
 # Download (silent; no EXPECTED_HASH on file(DOWNLOAD))
 # ---------------------------------------------------------------------------
-buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
+_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
 file(DOWNLOAD
 	"${_url}"
 	"${_output}"
@@ -90,7 +90,7 @@ file(DOWNLOAD
 
 list(GET _status 0 _code)
 list(GET _status 1 _msg)
-buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
+_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
 
 # ---------------------------------------------------------------------------
 # Network / HTTP failure → retry with progressive backoff
@@ -99,23 +99,23 @@ while(NOT _code EQUAL 0)
 	_file_dl_is_permanent_error(_permanent "${_msg}")
 	if(_permanent OR _current_try GREATER_EQUAL _max_retries)
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: ${_msg}")
-		buildmaster_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
+		_bm_log_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
 	endif()
 
 	execute_process(COMMAND ${CMAKE_COMMAND} -E echo
 		" ERROR: ${_msg}, retrying (${_current_try}/${_max_retries})")
-	buildmaster_message(FILE DEBUG "Retrying download for ${_title} (${_current_try}/${_max_retries}): ${_msg}")
+	_bm_log_message(FILE DEBUG "Retrying download for ${_title} (${_current_try}/${_max_retries}): ${_msg}")
 
 	math(EXPR _wait_secs "5 * ${_current_try}")
 	execute_process(COMMAND ${CMAKE_COMMAND} -E echo
 		"${_indent}Waiting ${_wait_secs} seconds before retry...")
-	buildmaster_message(FILE LOWLEVEL "Backoff ${_wait_secs}s")
+	_bm_log_message(FILE LOWLEVEL "Backoff ${_wait_secs}s")
 	execute_process(COMMAND ${CMAKE_COMMAND} -E sleep ${_wait_secs})
 
 	math(EXPR _current_try "${_current_try} + 1")
 	execute_process(COMMAND ${CMAKE_COMMAND} -E echo_append "${_indent}Downloading ${_title}...")
 
-	buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
+	_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
 	file(DOWNLOAD
 		"${_url}"
 		"${_output}"
@@ -126,37 +126,37 @@ while(NOT _code EQUAL 0)
 	)
 	list(GET _status 0 _code)
 	list(GET _status 1 _msg)
-	buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
+	_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
 endwhile()
 
 # ---------------------------------------------------------------------------
 # Hash check (only after a successful download)
 # ---------------------------------------------------------------------------
 if(NOT "${_expected_hash}" STREQUAL "")
-	buildmaster_message(FILE LOWLEVEL "Verifying downloaded file hash")
+	_bm_log_message(FILE LOWLEVEL "Verifying downloaded file hash")
 	_file_dl_checksum_ok(_hash_ok "${_output}" "${_expected_hash}")
 	while(NOT _hash_ok)
 		if(_current_try GREATER_EQUAL _max_retries)
 			file(REMOVE "${_output}")
 			execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: Hash mismatch")
-			buildmaster_message(FILE FATAL "Hash mismatch for ${_title} after ${_max_retries} attempt(s)")
+			_bm_log_message(FILE FATAL "Hash mismatch for ${_title} after ${_max_retries} attempt(s)")
 		endif()
 
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo
 			" ERROR: Hash mismatch, retrying (${_current_try}/${_max_retries})")
-		buildmaster_message(FILE DEBUG "Hash mismatch for ${_title}, retrying (${_current_try}/${_max_retries})")
+		_bm_log_message(FILE DEBUG "Hash mismatch for ${_title}, retrying (${_current_try}/${_max_retries})")
 		file(REMOVE "${_output}")
 
 		math(EXPR _wait_secs "5 * ${_current_try}")
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo
 			"${_indent}Waiting ${_wait_secs} seconds before retry...")
-		buildmaster_message(FILE LOWLEVEL "Backoff ${_wait_secs}s")
+		_bm_log_message(FILE LOWLEVEL "Backoff ${_wait_secs}s")
 		execute_process(COMMAND ${CMAKE_COMMAND} -E sleep ${_wait_secs})
 
 		math(EXPR _current_try "${_current_try} + 1")
 		execute_process(COMMAND ${CMAKE_COMMAND} -E echo_append "${_indent}Downloading ${_title}...")
 
-		buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
+		_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) attempt ${_current_try}/${_max_retries}")
 		file(DOWNLOAD
 			"${_url}"
 			"${_output}"
@@ -167,13 +167,13 @@ if(NOT "${_expected_hash}" STREQUAL "")
 		)
 		list(GET _status 0 _code)
 		list(GET _status 1 _msg)
-		buildmaster_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
+		_bm_log_message(FILE LOWLEVEL "file(DOWNLOAD) status code=${_code} msg=${_msg}")
 
 		if(NOT _code EQUAL 0)
 			_file_dl_is_permanent_error(_permanent "${_msg}")
 			if(_permanent OR _current_try GREATER_EQUAL _max_retries)
 				execute_process(COMMAND ${CMAKE_COMMAND} -E echo " ERROR: ${_msg}")
-				buildmaster_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
+				_bm_log_message(FILE FATAL "Download failed for ${_title}: ${_msg}")
 			endif()
 			file(REMOVE "${_output}")
 			set(_hash_ok FALSE)
@@ -181,8 +181,8 @@ if(NOT "${_expected_hash}" STREQUAL "")
 			_file_dl_checksum_ok(_hash_ok "${_output}" "${_expected_hash}")
 		endif()
 	endwhile()
-	buildmaster_message(FILE DEBUG "Hash OK for ${_title}")
+	_bm_log_message(FILE DEBUG "Hash OK for ${_title}")
 endif()
 
 execute_process(COMMAND ${CMAKE_COMMAND} -E echo " OK")
-buildmaster_message(FILE LOWLEVEL "Exiting file_download script")
+_bm_log_message(FILE LOWLEVEL "Exiting file_download script")

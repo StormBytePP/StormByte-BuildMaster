@@ -17,7 +17,7 @@
 ##            See create_component for supported keys.
 ## @note Same arity rules as create_cmake_component.
 function(create_meson_component _component _component_title _srcdir)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_meson_component")
 
 	set(_builddir "")
 	set(_options "")
@@ -27,7 +27,7 @@ function(create_meson_component _component _component_title _srcdir)
 	set(_legacy FALSE)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meson_component: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
 	endif()
 
@@ -68,7 +68,7 @@ function(create_meson_component _component _component_title _srcdir)
 		"${_options}" "${_library_mode}" "meson" "${_produced}"
 		"${_options_string}"
 	)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_meson_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_meson_component")
 endfunction()
 
 ## @brief Register a header-only Meson component (INTERFACE `<id>` on return).
@@ -79,7 +79,7 @@ endfunction()
 ##            create_cmake_headers_component.
 ## @note 5 arguments are always the path form.
 function(create_meson_headers_component _component _component_title _srcdir)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_headers_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_meson_headers_component")
 
 	set(_builddir "")
 	set(_options "")
@@ -87,7 +87,7 @@ function(create_meson_headers_component _component _component_title _srcdir)
 	set(_legacy FALSE)
 
 	if(ARGC LESS 4 OR ARGC GREATER 6)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meson_headers_component: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
 	endif()
 
@@ -113,5 +113,5 @@ function(create_meson_headers_component _component _component_title _srcdir)
 		"${_options}" "headers" "meson" ""
 		"${_options_string}"
 	)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_meson_headers_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_meson_headers_component")
 endfunction()

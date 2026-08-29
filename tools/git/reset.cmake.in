@@ -1,9 +1,9 @@
 include("@BUILDMASTER_SRCDIR@/log.cmake")
 
-buildmaster_message(GIT LOWLEVEL "Entering git reset script (@GIT_REPO@)")
+_bm_log_message(GIT LOWLEVEL "Entering git reset script (@GIT_REPO@)")
 
 if(NOT EXISTS "@GIT_REPO@")
-	buildmaster_message(GIT FATAL
+	_bm_log_message(GIT FATAL
 		"Git reset --hard: repository does not exist:\n  @GIT_REPO@")
 endif()
 
@@ -17,14 +17,14 @@ execute_process(
 	ERROR_STRIP_TRAILING_WHITESPACE
 )
 if(NOT GIT_RESULT EQUAL 0)
-	buildmaster_message(GIT FATAL
+	_bm_log_message(GIT FATAL
 		"Git reset --hard failed (exit ${GIT_RESULT}) in\n  @GIT_REPO@\n\n--- stdout ---\n${GIT_OUT}\n\n--- stderr ---\n${GIT_ERROR}")
 endif()
 if(NOT "${GIT_OUT}" STREQUAL "")
-	buildmaster_message(GIT STATUS "${GIT_OUT}")
+	_bm_log_message(GIT STATUS "${GIT_OUT}")
 endif()
 if(NOT "${GIT_ERROR}" STREQUAL "")
-	buildmaster_message(GIT DEBUG "git reset stderr: ${GIT_ERROR}")
+	_bm_log_message(GIT DEBUG "git reset stderr: ${GIT_ERROR}")
 endif()
 
 execute_process(
@@ -37,12 +37,12 @@ execute_process(
 	ERROR_STRIP_TRAILING_WHITESPACE
 )
 if(NOT GIT_CLEAN_RESULT EQUAL 0)
-	buildmaster_message(GIT FATAL
+	_bm_log_message(GIT FATAL
 		"Git clean -fdx failed (exit ${GIT_CLEAN_RESULT}) in\n  @GIT_REPO@\n\n--- stdout ---\n${GIT_CLEAN_OUT}\n\n--- stderr ---\n${GIT_CLEAN_ERROR}")
 endif()
 if(NOT "${GIT_CLEAN_OUT}" STREQUAL "")
-	buildmaster_message(GIT DEBUG "git clean: ${GIT_CLEAN_OUT}")
+	_bm_log_message(GIT DEBUG "git clean: ${GIT_CLEAN_OUT}")
 endif()
 
-buildmaster_message(GIT DEBUG "git reset/clean completed in @GIT_REPO@")
-buildmaster_message(GIT LOWLEVEL "Exiting git reset script")
+_bm_log_message(GIT DEBUG "git reset/clean completed in @GIT_REPO@")
+_bm_log_message(GIT LOWLEVEL "Exiting git reset script")

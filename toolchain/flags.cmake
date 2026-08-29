@@ -12,7 +12,7 @@
 ## @note `msvc`: drops Clang/LLVM LTO and `-fuse-ld=*` tokens.
 ## @note `clang-cl`: drops MSVC LTCG / `/GL` tokens that `lld-link` rejects.
 function(buildmaster_clean_ldflags out_flags flags toolchain_name)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_ldflags")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_ldflags")
 	set(_f "${flags}")
 
 	if(toolchain_name STREQUAL "msvc")
@@ -49,7 +49,7 @@ function(buildmaster_clean_ldflags out_flags flags toolchain_name)
 	endif()
 
 	set(${out_flags} "${_f}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_ldflags")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_ldflags")
 endfunction()
 
 ## @brief Strip compile-flag tokens that are invalid for a given toolchain.
@@ -63,7 +63,7 @@ endfunction()
 ## @note `clang-cl`: removes MSVC whole-program LTCG compile switches (`/GL`,
 ##       `/LTCG*`) that clang-cl reports as “unknown argument ignored”.
 function(buildmaster_clean_cflags out_flags flags toolchain_name)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_cflags")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_clean_cflags")
 	set(_f "${flags}")
 
 	if(toolchain_name STREQUAL "msvc")
@@ -107,7 +107,7 @@ function(buildmaster_clean_cflags out_flags flags toolchain_name)
 	endif()
 
 	set(${out_flags} "${_f}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_cflags")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_clean_cflags")
 endfunction()
 
 ## @brief Map linker type/path to a driver-safe `-fuse-ld=` flag for Meson/CMake.
@@ -121,7 +121,7 @@ endfunction()
 ##       `bfd`, `link`). System `ld` and unknown paths yield an empty flag so
 ##       Meson keeps the default linker.
 function(buildmaster_fuse_ld_flag out_flag linker_type linker)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_fuse_ld_flag")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_fuse_ld_flag")
 	set(_flag "")
 	string(STRIP "${linker_type}" _lt)
 	string(TOUPPER "${_lt}" _lt)
@@ -163,5 +163,5 @@ function(buildmaster_fuse_ld_flag out_flag linker_type linker)
 	endif()
 
 	set(${out_flag} "${_flag}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_fuse_ld_flag")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_fuse_ld_flag")
 endfunction()

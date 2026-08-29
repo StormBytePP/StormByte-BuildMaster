@@ -10,7 +10,7 @@
 ##       Without a cache entry the value is empty and Meson errors with
 ##       `argument -j/--jobs: expected one argument`.
 function(buildmaster_persist_bootstrap)
-	buildmaster_message(CORE LOWLEVEL "Entering buildmaster_persist_bootstrap")
+	_bm_log_message(CORE LOWLEVEL "Entering buildmaster_persist_bootstrap")
 	get_cmake_property(_bm_vars VARIABLES)
 	foreach(_bm_v IN LISTS _bm_vars)
 		if(_bm_v MATCHES "^BUILDMASTER_" OR _bm_v MATCHES "^ENV_")
@@ -22,5 +22,5 @@ function(buildmaster_persist_bootstrap)
 		set(NPROC "${NPROC}" CACHE INTERNAL
 			"BuildMaster persisted job count")
 	endif()
-	buildmaster_message(CORE LOWLEVEL "Exiting buildmaster_persist_bootstrap")
+	_bm_log_message(CORE LOWLEVEL "Exiting buildmaster_persist_bootstrap")
 endfunction()

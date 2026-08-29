@@ -16,7 +16,7 @@ endfunction()
 
 function(_bm_lf_expect tgt token should_have)
 	if(NOT TARGET "${tgt}")
-		buildmaster_message(CORE FATAL "LINKFLAGS check: target '${tgt}' does not exist")
+		_bm_log_message(CORE FATAL "LINKFLAGS check: target '${tgt}' does not exist")
 	endif()
 	get_target_property(_opts "${tgt}" INTERFACE_LINK_OPTIONS)
 	if(_opts STREQUAL "_opts-NOTFOUND" OR NOT _opts)
@@ -24,18 +24,18 @@ function(_bm_lf_expect tgt token should_have)
 	endif()
 	_bm_lf_has("${_opts}" "${token}" _has)
 	if(should_have AND NOT _has)
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"LINKFLAGS: '${tgt}' missing '${token}' (have: ${_opts})")
 	endif()
 	if(NOT should_have AND _has)
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"LINKFLAGS: '${tgt}' must not carry '${token}' on this host (have: ${_opts})")
 	endif()
 endfunction()
 
 foreach(_t lf-os lf-unix lf-os-meta lf-unix-meta)
 	if(NOT TARGET "${_t}")
-		buildmaster_message(CORE FATAL "LINKFLAGS fixture '${_t}' was not materialized")
+		_bm_log_message(CORE FATAL "LINKFLAGS fixture '${_t}' was not materialized")
 	endif()
 endforeach()
 
@@ -72,8 +72,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
 	_bm_lf_expect(lf-unix "${_linux}" FALSE)
 	_bm_lf_expect(lf-unix-meta "${_unix}" TRUE)
 else()
-	buildmaster_message(CORE FATAL
+	_bm_log_message(CORE FATAL
 		"LINKFLAGS check: unhandled CMAKE_SYSTEM_NAME '${CMAKE_SYSTEM_NAME}'")
 endif()
 
-buildmaster_message(CORE STATUS "LINKFLAGS groups: OK (${CMAKE_SYSTEM_NAME})")
+_bm_log_message(CORE STATUS "LINKFLAGS groups: OK (${CMAKE_SYSTEM_NAME})")

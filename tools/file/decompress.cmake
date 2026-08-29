@@ -18,15 +18,15 @@
 ##       if `name` is built. Call after file_download_cached in the same
 ##       CMakeLists so the archive is already on disk.
 function(file_decompress name archive out_dir)
-	buildmaster_message(FILE LOWLEVEL "Entering file_decompress")
+	_bm_log_message(FILE LOWLEVEL "Entering file_decompress")
 	if("${name}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_decompress: empty name")
+		_bm_log_message(FILE FATAL "file_decompress: empty name")
 	endif()
 	if("${archive}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_decompress: empty archive")
+		_bm_log_message(FILE FATAL "file_decompress: empty archive")
 	endif()
 	if("${out_dir}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_decompress: empty out_dir")
+		_bm_log_message(FILE FATAL "file_decompress: empty out_dir")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -74,6 +74,6 @@ function(file_decompress name archive out_dir)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	buildmaster_message(FILE DEBUG "file_decompress target ${name}")
-	buildmaster_message(FILE LOWLEVEL "Exiting file_decompress")
+	_bm_log_message(FILE DEBUG "file_decompress target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting file_decompress")
 endfunction()

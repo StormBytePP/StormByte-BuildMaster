@@ -15,13 +15,13 @@
 ## @note Windows-only profiles: `msvc`, `clang-cl`. Non-Windows-only:
 ##       `gcc`, `clang`.
 function(buildmaster_validate_toolchain out_normalized input)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_validate_toolchain")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_validate_toolchain")
 	string(STRIP "${input}" _t)
 	string(TOLOWER "${_t}" _t)
 
 	if(_t STREQUAL "")
 		set(${out_normalized} "" PARENT_SCOPE)
-		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
 		return()
 	endif()
 
@@ -35,7 +35,7 @@ function(buildmaster_validate_toolchain out_normalized input)
 	list(FIND _known "${_t}" _idx)
 	if(_idx EQUAL -1)
 		list(JOIN _known ", " _known_pretty)
-		buildmaster_message(TOOLCHAIN FATAL
+		_bm_log_message(TOOLCHAIN FATAL
 			"Unknown TOOLCHAIN '${input}'. Known toolchains: ${_known_pretty}"
 		)
 	endif()
@@ -43,7 +43,7 @@ function(buildmaster_validate_toolchain out_normalized input)
 	if(_t STREQUAL "msvc" OR _t STREQUAL "clang-cl")
 		if(NOT WIN32)
 			list(JOIN _known ", " _known_pretty)
-			buildmaster_message(TOOLCHAIN FATAL
+			_bm_log_message(TOOLCHAIN FATAL
 				"TOOLCHAIN '${_t}' is only valid on Windows. Known toolchains: ${_known_pretty}"
 			)
 		endif()
@@ -51,13 +51,13 @@ function(buildmaster_validate_toolchain out_normalized input)
 
 	if(_t STREQUAL "gcc" OR _t STREQUAL "clang")
 		if(WIN32)
-			buildmaster_message(TOOLCHAIN FATAL
+			_bm_log_message(TOOLCHAIN FATAL
 				"TOOLCHAIN '${_t}' is not supported on Windows. On Windows use: clang-cl, msvc"
 			)
 		endif()
 	endif()
 
 	set(${out_normalized} "${_t}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN DEBUG "Validated TOOLCHAIN=${_t}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
+	_bm_log_message(TOOLCHAIN DEBUG "Validated TOOLCHAIN=${_t}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
 endfunction()

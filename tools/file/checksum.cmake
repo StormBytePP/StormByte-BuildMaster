@@ -7,13 +7,13 @@
 ## @note FATAL if the path contains ".." anywhere. Used before writing under
 ##       BUILDMASTER_DOWNLOADSDIR or extracting an archive.
 function(_file_validate_no_traversal _path)
-	buildmaster_message(FILE LOWLEVEL "Entering _file_validate_no_traversal")
+	_bm_log_message(FILE LOWLEVEL "Entering _file_validate_no_traversal")
 	if("${_path}" MATCHES "\\.\\.")
-		buildmaster_message(FILE FATAL
+		_bm_log_message(FILE FATAL
 			"Path traversal detected (contains '..'):\n  ${_path}\nRefusing to continue for security reasons."
 		)
 	endif()
-	buildmaster_message(FILE LOWLEVEL "Exiting _file_validate_no_traversal")
+	_bm_log_message(FILE LOWLEVEL "Exiting _file_validate_no_traversal")
 endfunction()
 
 ## @brief Check whether a file matches an expected checksum.
@@ -27,16 +27,16 @@ endfunction()
 ##       Algorithm names may contain underscores (SHA3_256, etc.).
 ##       Unknown algorithms → WARNING and FALSE (treated as mismatch).
 function(file_checksum_correct _result _file _hash)
-	buildmaster_message(FILE LOWLEVEL "Entering file_checksum_correct")
+	_bm_log_message(FILE LOWLEVEL "Entering file_checksum_correct")
 	if("${_hash}" STREQUAL "")
 		set(${_result} FALSE PARENT_SCOPE)
-		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
 	if(NOT EXISTS "${_file}")
 		set(${_result} FALSE PARENT_SCOPE)
-		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
@@ -60,11 +60,11 @@ function(file_checksum_correct _result _file _hash)
 	)
 	list(FIND _known_algos "${_algo}" _idx)
 	if(_idx EQUAL -1)
-		buildmaster_message(FILE WARNING
+		_bm_log_message(FILE WARNING
 			"Unknown hash algorithm '${_algo}' for ${_file}. Known: ${_known_algos}. Treating as mismatch."
 		)
 		set(${_result} FALSE PARENT_SCOPE)
-		buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 		return()
 	endif()
 
@@ -74,5 +74,5 @@ function(file_checksum_correct _result _file _hash)
 	else()
 		set(${_result} FALSE PARENT_SCOPE)
 	endif()
-	buildmaster_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+	_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
 endfunction()

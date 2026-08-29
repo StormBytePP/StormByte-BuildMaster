@@ -15,10 +15,10 @@
 ##       with `WINDOWS_COMMAND` or `UNIX_COMMAND` depending on the platform.
 ## @note Paths that already contain spaces must **not** be passed through
 ##       this function a second time (use the list as-is).
-## @note Wrong arity is fatal (`buildmaster_message(CORE FATAL …)`).
+## @note Wrong arity is fatal (`_bm_log_message(CORE FATAL …)`).
 function(prepare_command _out _command_list)
 	if(NOT ARGC EQUAL 2)
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"prepare_command requires out variable and command list"
 		)
 	endif()

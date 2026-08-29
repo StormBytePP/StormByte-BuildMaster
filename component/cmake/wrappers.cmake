@@ -35,7 +35,7 @@ endfunction()
 ## @note Delegates to create_component. Stages and the fragment run at
 ##       deferred finalize. No fragment path. No include() is required.
 function(create_cmake_component _component _component_title _srcdir)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_cmake_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_cmake_component")
 
 	set(_builddir "")
 	set(_options "")
@@ -45,7 +45,7 @@ function(create_cmake_component _component _component_title _srcdir)
 	set(_legacy FALSE)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_cmake_component: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
 	endif()
 
@@ -86,7 +86,7 @@ function(create_cmake_component _component _component_title _srcdir)
 		"${_options}" "${_library_mode}" "cmake" "${_produced}"
 		"${_options_string}"
 	)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_cmake_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_cmake_component")
 endfunction()
 
 ## @brief Register a header-only CMake component (INTERFACE `<id>` on return).
@@ -98,7 +98,7 @@ endfunction()
 ##            (5 or 6 args).
 ## @note 5 arguments are always the path form (existing callers).
 function(create_cmake_headers_component _component _component_title _srcdir)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_cmake_headers_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_cmake_headers_component")
 
 	set(_builddir "")
 	set(_options "")
@@ -106,7 +106,7 @@ function(create_cmake_headers_component _component _component_title _srcdir)
 	set(_legacy FALSE)
 
 	if(ARGC LESS 4 OR ARGC GREATER 6)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_cmake_headers_component: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
 	endif()
 
@@ -132,5 +132,5 @@ function(create_cmake_headers_component _component _component_title _srcdir)
 		"${_options}" "headers" "cmake" ""
 		"${_options_string}"
 	)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_cmake_headers_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_cmake_headers_component")
 endfunction()

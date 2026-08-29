@@ -56,7 +56,7 @@
 ##       (`-I`/`-L` or `/I`/`/LIBPATH:`, plus Windows `INCLUDE`/`LIB`
 ##       on per-component runners).
 function(create_cmake_stages _file_configure _file_compile _file_install _component _component_title _srcdir _builddir _options _library_mode _output_libraries)
-	buildmaster_message(CMAKE LOWLEVEL "Entering create_cmake_stages")
+	_bm_log_message(CMAKE LOWLEVEL "Entering create_cmake_stages")
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
 		string(REPEAT "\t" ${_indent_level} _CMAKE_INDENT_)
@@ -200,7 +200,7 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(_BM_NESTED_TOOLCHAIN_FILE "${BUILDMASTER_TOOLCHAIN_FILE}")
 
 	if(NOT _toolchain_name STREQUAL "")
-		buildmaster_message(CMAKE DEBUG "create_cmake_stages(${_component}): TOOLCHAIN=${_toolchain_name}")
+		_bm_log_message(CMAKE DEBUG "create_cmake_stages(${_component}): TOOLCHAIN=${_toolchain_name}")
 		buildmaster_load_toolchain_profile("${_toolchain_name}")
 
 		get_filename_component(_cmake_dir "${CMAKE_COMMAND}" DIRECTORY)
@@ -369,7 +369,7 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	elseif(${_library_mode} STREQUAL "headers")
 		set(_CMAKE_SHARED_MODE "OFF")
 	else()
-		buildmaster_message(CMAKE FATAL "Unknown library mode '${_library_mode}' in create_cmake_stages (expected static, shared, or headers)")
+		_bm_log_message(CMAKE FATAL "Unknown library mode '${_library_mode}' in create_cmake_stages (expected static, shared, or headers)")
 	endif()
 
 	set(_CMAKE_COMPONENT_TITLE "${_component_title}")
@@ -438,5 +438,5 @@ function(create_cmake_stages _file_configure _file_compile _file_install _compon
 	set(${_file_configure} "${_CMAKE_CONFIGURE_FILE}" PARENT_SCOPE)
 	set(${_file_compile} "${_CMAKE_BUILD_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_CMAKE_INSTALL_FILE}" PARENT_SCOPE)
-	buildmaster_message(CMAKE LOWLEVEL "Exiting create_cmake_stages")
+	_bm_log_message(CMAKE LOWLEVEL "Exiting create_cmake_stages")
 endfunction()

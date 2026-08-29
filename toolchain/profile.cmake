@@ -13,14 +13,14 @@
 ## @note Does **not** modify the parent project toolchain or the global env
 ##       runner. Empty `name` or a missing profile file is fatal.
 function(buildmaster_load_toolchain_profile name)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_load_toolchain_profile")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_load_toolchain_profile")
 	if(name STREQUAL "")
-		buildmaster_message(TOOLCHAIN FATAL "buildmaster_load_toolchain_profile: empty name")
+		_bm_log_message(TOOLCHAIN FATAL "buildmaster_load_toolchain_profile: empty name")
 	endif()
 
 	set(_profile_file "${BUILDMASTER_TOOLCHAIN_PROFILES_DIR}/${name}.cmake")
 	if(NOT EXISTS "${_profile_file}")
-		buildmaster_message(TOOLCHAIN FATAL
+		_bm_log_message(TOOLCHAIN FATAL
 			"Missing toolchain profile file: ${_profile_file}"
 		)
 	endif()
@@ -36,6 +36,6 @@ function(buildmaster_load_toolchain_profile name)
 	set(BM_TC_RANLIB "${BM_TC_RANLIB}" PARENT_SCOPE)
 	set(BM_TC_NM "${BM_TC_NM}" PARENT_SCOPE)
 	set(BM_TC_FORCE_LLD "${BM_TC_FORCE_LLD}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN DEBUG "Loaded profile ${name}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_load_toolchain_profile")
+	_bm_log_message(TOOLCHAIN DEBUG "Loaded profile ${name}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_load_toolchain_profile")
 endfunction()

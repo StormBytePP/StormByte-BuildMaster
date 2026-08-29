@@ -4,7 +4,7 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 
 if(NOT DEFINED EXE OR EXE STREQUAL "")
-	buildmaster_message(CORE FATAL "expect_nonzero: EXE is required")
+	_bm_log_message(CORE FATAL "expect_nonzero: EXE is required")
 endif()
 
 execute_process(
@@ -12,7 +12,7 @@ execute_process(
 	RESULT_VARIABLE _rc
 )
 if(_rc EQUAL 0)
-	buildmaster_message(CORE FATAL
+	_bm_log_message(CORE FATAL
 		"expect_nonzero: ${EXE} exited 0 (expected non-zero)")
 endif()
-buildmaster_message(CORE INFO "expect_nonzero: ${EXE} exited ${_rc} (OK)")
+_bm_log_message(CORE INFO "expect_nonzero: ${EXE} exited ${_rc} (OK)")

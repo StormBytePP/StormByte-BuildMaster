@@ -69,14 +69,14 @@ endfunction()
 ##       `CMAKE_SHARED_LINKER_FLAGS`, `CMAKE_MODULE_LINKER_FLAGS`, `CFLAGS`,
 ##       `CXXFLAGS`, `LDFLAGS`, `INCLUDE`, `LIB` to the parent scope.
 function(buildmaster_apply_install_search_paths)
-	buildmaster_message(ENV LOWLEVEL "Entering buildmaster_apply_install_search_paths")
+	_bm_log_message(ENV LOWLEVEL "Entering buildmaster_apply_install_search_paths")
 
 	if(NOT DEFINED BUILDMASTER_INSTALL_INCLUDEDIR OR BUILDMASTER_INSTALL_INCLUDEDIR STREQUAL "")
-		buildmaster_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no INCLUDEDIR)")
+		_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no INCLUDEDIR)")
 		return()
 	endif()
 	if(NOT DEFINED BUILDMASTER_INSTALL_LIBDIR OR BUILDMASTER_INSTALL_LIBDIR STREQUAL "")
-		buildmaster_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no LIBDIR)")
+		_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no LIBDIR)")
 		return()
 	endif()
 
@@ -154,7 +154,7 @@ function(buildmaster_apply_install_search_paths)
 	set(INCLUDE "${INCLUDE}" PARENT_SCOPE)
 	set(LIB "${LIB}" PARENT_SCOPE)
 
-	buildmaster_message(ENV DEBUG
+	_bm_log_message(ENV DEBUG
 		"prefix search: inc=${_inc} lib=${_lib} msvc_like=${_msvc_like}")
-	buildmaster_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths")
+	_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths")
 endfunction()

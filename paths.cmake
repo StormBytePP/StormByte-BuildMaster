@@ -14,9 +14,9 @@
 ##       Use for values passed to cmd.exe / bat. For paths consumed by
 ##       CMake itself, prefer normalize_cmake_path().
 function(windows_path _out_path _input_path)
-	buildmaster_message(CORE LOWLEVEL "Entering windows_path")
+	_bm_log_message(CORE LOWLEVEL "Entering windows_path")
 	if(NOT ARGC EQUAL 2)
-		buildmaster_message(CORE FATAL "windows_path requires output variable name and input path")
+		_bm_log_message(CORE FATAL "windows_path requires output variable name and input path")
 	endif()
 
 	if(WIN32)
@@ -24,11 +24,11 @@ function(windows_path _out_path _input_path)
 		string(REGEX REPLACE "^\"(.*)\"$" "\\1" _p "${_p}")
 		string(REPLACE "/" "\\" _out "${_p}")
 		set(${_out_path} "${_out}" PARENT_SCOPE)
-		buildmaster_message(CORE DEBUG "windows_path → ${_out}")
+		_bm_log_message(CORE DEBUG "windows_path → ${_out}")
 	else()
 		set(${_out_path} "${_input_path}" PARENT_SCOPE)
 	endif()
-	buildmaster_message(CORE LOWLEVEL "Exiting windows_path")
+	_bm_log_message(CORE LOWLEVEL "Exiting windows_path")
 endfunction()
 
 ## @brief Normalize a filesystem path for use inside CMake (forward slashes).
@@ -38,15 +38,15 @@ endfunction()
 ##       Use for ENV-derived paths (BUILDMASTER_DOWNLOADSDIR, cache dirs, etc.)
 ##       so they are safe in toolchain.cmake and CMake string expansion.
 function(normalize_cmake_path _out _input)
-	buildmaster_message(CORE LOWLEVEL "Entering normalize_cmake_path")
+	_bm_log_message(CORE LOWLEVEL "Entering normalize_cmake_path")
 	if(NOT ARGC EQUAL 2)
-		buildmaster_message(CORE FATAL "normalize_cmake_path requires output variable name and input path")
+		_bm_log_message(CORE FATAL "normalize_cmake_path requires output variable name and input path")
 	endif()
 	set(_p "${_input}")
 	string(REGEX REPLACE "^\"(.*)\"$" "\\1" _p "${_p}")
 	file(TO_CMAKE_PATH "${_p}" _p)
 	set(${_out} "${_p}" PARENT_SCOPE)
-	buildmaster_message(CORE LOWLEVEL "Exiting normalize_cmake_path")
+	_bm_log_message(CORE LOWLEVEL "Exiting normalize_cmake_path")
 endfunction()
 
 ## @brief Produce a filesystem-safe string from an arbitrary input.
@@ -57,9 +57,9 @@ endfunction()
 ##       collapses repeated underscores to a single '_' and trims
 ##       leading/trailing underscores.
 function(sanitize_for_filename _out _input)
-	buildmaster_message(CORE LOWLEVEL "Entering sanitize_for_filename")
+	_bm_log_message(CORE LOWLEVEL "Entering sanitize_for_filename")
 	if(NOT ARGC EQUAL 2)
-		buildmaster_message(CORE FATAL "sanitize_for_filename requires output variable name and input string")
+		_bm_log_message(CORE FATAL "sanitize_for_filename requires output variable name and input string")
 	endif()
 
 	string(REGEX REPLACE "[^A-Za-z0-9._-]" "_" _output "${_input}")
@@ -67,7 +67,7 @@ function(sanitize_for_filename _out _input)
 	string(REGEX REPLACE "^_+|_+$" "" _output "${_output}")
 
 	set(${_out} "${_output}" PARENT_SCOPE)
-	buildmaster_message(CORE LOWLEVEL "Exiting sanitize_for_filename")
+	_bm_log_message(CORE LOWLEVEL "Exiting sanitize_for_filename")
 endfunction()
 
 ## @brief Canonical per-component build directory (2.1.x layout).
@@ -77,18 +77,18 @@ endfunction()
 ## @note Does not create the directory. `create_component` runs
 ##       `file(MAKE_DIRECTORY)` on the path it receives.
 function(_buildmaster_component_builddir _out _component)
-	buildmaster_message(CORE LOWLEVEL "Entering _buildmaster_component_builddir")
+	_bm_log_message(CORE LOWLEVEL "Entering _buildmaster_component_builddir")
 	if(NOT ARGC EQUAL 2)
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"_buildmaster_component_builddir requires output variable and component id")
 	endif()
 	if("${_component}" STREQUAL "")
-		buildmaster_message(CORE FATAL
+		_bm_log_message(CORE FATAL
 			"_buildmaster_component_builddir: empty component id")
 	endif()
 	sanitize_for_filename(_safe "${_component}")
 	set(${_out} "${CMAKE_CURRENT_BINARY_DIR}/bm/${_safe}" PARENT_SCOPE)
-	buildmaster_message(CORE LOWLEVEL "Exiting _buildmaster_component_builddir")
+	_bm_log_message(CORE LOWLEVEL "Exiting _buildmaster_component_builddir")
 endfunction()
 
 ## @brief Fill a caller variable with a conventional build path.
@@ -101,9 +101,9 @@ endfunction()
 ##       Callers that omit the builddir slot get
 ##       `_buildmaster_component_builddir` instead (`…/bm/<id>`).
 function(ensure_build_dir _out)
-	buildmaster_message(CORE LOWLEVEL "Entering ensure_build_dir")
+	_bm_log_message(CORE LOWLEVEL "Entering ensure_build_dir")
 	if(ARGC LESS 1)
-		buildmaster_message(CORE FATAL "ensure_build_dir requires an output variable name and optional component name")
+		_bm_log_message(CORE FATAL "ensure_build_dir requires an output variable name and optional component name")
 	endif()
 
 	set(_out_var "${_out}")
@@ -123,5 +123,5 @@ function(ensure_build_dir _out)
 
 	set(_builddir "${CMAKE_CURRENT_BINARY_DIR}/${_sanitized}")
 	set(${_out_var} "${_builddir}" PARENT_SCOPE)
-	buildmaster_message(CORE LOWLEVEL "Exiting ensure_build_dir")
+	_bm_log_message(CORE LOWLEVEL "Exiting ensure_build_dir")
 endfunction()

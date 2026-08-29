@@ -15,15 +15,15 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ##       are no-ops.
 ## @note Empty id is FATAL.
 function(_buildmaster_meta_ensure id)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_ensure")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_ensure")
 	if("${id}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL "meta id must be non-empty")
+		_bm_log_message(COMPONENT FATAL "meta id must be non-empty")
 	endif()
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	if(_ids)
 		list(FIND _ids "${id}" _idx)
 		if(NOT _idx EQUAL -1)
-			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_ensure")
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_ensure")
 			return()
 		endif()
 	endif()
@@ -33,8 +33,8 @@ function(_buildmaster_meta_ensure id)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_CREATED FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_INDENT 0)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN "")
-	buildmaster_message(COMPONENT DEBUG "Lazy-registered meta ${id}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_ensure")
+	_bm_log_message(COMPONENT DEBUG "Lazy-registered meta ${id}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_ensure")
 endfunction()
 
 ## @brief Whether `id` is a registered meta (including lazy-only adds).
@@ -43,18 +43,18 @@ endfunction()
 ## @note Does not require `create_meta_component()`; `meta_component_add`
 ##       alone is enough for this to return TRUE.
 function(_buildmaster_meta_is id out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_is")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_is")
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	if(_ids)
 		list(FIND _ids "${id}" _idx)
 		if(NOT _idx EQUAL -1)
 			set(${out_var} TRUE PARENT_SCOPE)
-			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_is")
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_is")
 			return()
 		endif()
 	endif()
 	set(${out_var} FALSE PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_is")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_is")
 endfunction()
 
 ## @brief Register a meta collection (no sources; membership + INTERFACE).
@@ -98,18 +98,18 @@ endfunction()
 ## @note If never called, lazy ids from meta_component_add() still materialize
 ##       with title = id, WHOLE off, TOOLCHAIN empty, LINK empty, LINKFLAGS empty.
 function(create_meta_component _id _title)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meta_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_meta_component")
 	if(ARGC GREATER 3)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meta_component: too many arguments (expected at most one options string).")
 	endif()
 	if("${_id}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL "create_meta_component: empty id")
+		_bm_log_message(COMPONENT FATAL "create_meta_component: empty id")
 	endif()
 
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meta_component('${_id}'): called after finalize")
 	endif()
 
@@ -117,7 +117,7 @@ function(create_meta_component _id _title)
 	if(_comp_ids)
 		list(FIND _comp_ids "${_id}" _cidx)
 		if(NOT _cidx EQUAL -1)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"create_meta_component: '${_id}' is already a create_*_component id")
 		endif()
 	endif()
@@ -125,7 +125,7 @@ function(create_meta_component _id _title)
 	_buildmaster_meta_ensure("${_id}")
 	get_property(_created GLOBAL PROPERTY BUILDMASTER_META_${_id}_CREATED)
 	if(_created)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meta_component: duplicate id '${_id}'")
 	endif()
 
@@ -141,19 +141,19 @@ function(create_meta_component _id _title)
 	buildmaster_parse_component_link("${_optstr}" _meta_link)
 	buildmaster_parse_component_linkflags("${_optstr}" _meta_linkflags)
 	if(_pc_present)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_meta_component('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
 	endif()
 	if(_buildonly)
-		buildmaster_message(COMPONENT INFO
+		_bm_log_message(COMPONENT INFO
 			"create_meta_component('${_id}'): BUILDONLY ignored (meta does not install artifacts)")
 	endif()
 	if("${_optstr}" MATCHES "[Rr][Ee][Nn][Aa][Mm][Ee]")
-		buildmaster_message(COMPONENT INFO
+		_bm_log_message(COMPONENT INFO
 			"create_meta_component('${_id}'): RENAME ignored (meta has no produced archives)")
 	endif()
 	if("${_optstr}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
-		buildmaster_message(COMPONENT INFO
+		_bm_log_message(COMPONENT INFO
 			"create_meta_component('${_id}'): STRIPRES ignored (meta has no produced archives)")
 	endif()
 
@@ -177,12 +177,12 @@ function(create_meta_component _id _title)
 
 	_buildmaster_component_defer_arm()
 	if(_meta_link OR _meta_linkflags)
-		buildmaster_message(COMPONENT DEBUG
+		_bm_log_message(COMPONENT DEBUG
 			"Registered meta ${_id} LINK=${_meta_link} LINKFLAGS=${_meta_linkflags}")
 	else()
-		buildmaster_message(COMPONENT DEBUG "Registered meta ${_id}")
+		_bm_log_message(COMPONENT DEBUG "Registered meta ${_id}")
 	endif()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_meta_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_meta_component")
 endfunction()
 
 ## @brief Declare membership of one or more ids in a meta collection.
@@ -194,18 +194,18 @@ endfunction()
 ##       some consumer component_link / component_dependency / host
 ##       target_link_libraries points at the meta.
 function(meta_component_add meta)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering meta_component_add")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering meta_component_add")
 	if("${meta}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL "meta_component_add: empty meta id")
+		_bm_log_message(COMPONENT FATAL "meta_component_add: empty meta id")
 	endif()
 	if(ARGC LESS 2)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"meta_component_add: need at least one member")
 	endif()
 
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"meta_component_add: called after finalize")
 	endif()
 
@@ -213,7 +213,7 @@ function(meta_component_add meta)
 	if(_comp_ids)
 		list(FIND _comp_ids "${meta}" _cidx)
 		if(NOT _cidx EQUAL -1)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"meta_component_add: '${meta}' is a create_*_component id, not a meta")
 		endif()
 	endif()
@@ -243,7 +243,7 @@ function(meta_component_add meta)
 			continue()
 		endif()
 		if(_m STREQUAL "${meta}")
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"meta_component_add('${meta}', '${_m}'): a meta cannot contain itself")
 		endif()
 		if(_members)
@@ -257,8 +257,8 @@ function(meta_component_add meta)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${meta}_MEMBERS "${_members}")
 
 	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "meta_component_add ${meta} members=${_members}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting meta_component_add")
+	_bm_log_message(COMPONENT DEBUG "meta_component_add ${meta} members=${_members}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting meta_component_add")
 endfunction()
 
 ## @brief DFS: expand meta membership to real component leaves; FATAL on cycles.
@@ -266,11 +266,11 @@ endfunction()
 ## @param[in]  stack    Semicolon list of ancestors (cycle path).
 ## @param[out] out_var  Parent-scope list of component ids (declaration order).
 function(_buildmaster_meta_collect_leaves id stack out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_collect_leaves")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_collect_leaves")
 	_buildmaster_meta_is("${id}" _is_meta)
 	if(NOT _is_meta)
 		set(${out_var} "${id}" PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
 		return()
 	endif()
 
@@ -278,7 +278,7 @@ function(_buildmaster_meta_collect_leaves id stack out_var)
 		list(FIND stack "${id}" _hit)
 		if(NOT _hit EQUAL -1)
 			string(REPLACE ";" " → " _path "${stack}")
-			buildmaster_message(COMPONENT FATAL "meta cycle: ${_path} → ${id}")
+			_bm_log_message(COMPONENT FATAL "meta cycle: ${_path} → ${id}")
 		endif()
 	endif()
 	list(APPEND stack "${id}")
@@ -303,7 +303,7 @@ function(_buildmaster_meta_collect_leaves id stack out_var)
 		list(REMOVE_DUPLICATES _leaves)
 	endif()
 	set(${out_var} "${_leaves}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
 endfunction()
 
 ## @brief Materialize meta stage anchors; create INTERFACE only if missing.
@@ -322,10 +322,10 @@ endfunction()
 ##       INTERFACE via `target_link_options`. Empty or unset is a no-op.
 ## @note Does not wire member link lines yet (leaf IMPORTED targets do not exist).
 function(_buildmaster_materialize_metas)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_metas")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_metas")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	if(NOT _metas)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_metas")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_metas")
 		return()
 	endif()
 
@@ -336,12 +336,12 @@ function(_buildmaster_materialize_metas)
 		foreach(_leaf IN LISTS _leaves)
 			_buildmaster_component_is_registered("${_leaf}" _is_comp)
 			if(NOT _is_comp)
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"meta_component_add('${_id}', '${_leaf}'): cannot resolve member. Accepted: registered component id or another meta id.")
 			endif()
 			_buildmaster_component_is_buildonly("${_leaf}" _bo)
 			if(_bo)
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"meta_component_add('${_id}', '${_leaf}'): BUILDONLY components cannot be meta members")
 			endif()
 		endforeach()
@@ -352,12 +352,12 @@ function(_buildmaster_materialize_metas)
 		get_property(_meta_link GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINK)
 		if(_meta_link)
 			target_link_libraries(${_id} INTERFACE ${_meta_link})
-			buildmaster_message(COMPONENT DEBUG "${_id}: LINK (raw) → ${_meta_link}")
+			_bm_log_message(COMPONENT DEBUG "${_id}: LINK (raw) → ${_meta_link}")
 		endif()
 		get_property(_meta_linkflags GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS)
 		if(_meta_linkflags)
 			target_link_options(${_id} INTERFACE ${_meta_linkflags})
-			buildmaster_message(COMPONENT DEBUG "${_id}: LINKFLAGS (raw) → ${_meta_linkflags}")
+			_bm_log_message(COMPONENT DEBUG "${_id}: LINKFLAGS (raw) → ${_meta_linkflags}")
 		endif()
 		if(NOT TARGET "${_id}_install")
 			add_custom_target(${_id}_install)
@@ -372,8 +372,8 @@ function(_buildmaster_materialize_metas)
 			add_dependencies(${_id}_build ${_id}_configure)
 		endif()
 	endforeach()
-	buildmaster_message(COMPONENT DEBUG "Materialized metas: ${_metas}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_metas")
+	_bm_log_message(COMPONENT DEBUG "Materialized metas: ${_metas}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_metas")
 endfunction()
 
 ## @brief After real components exist: wire `<meta>_install` and INTERFACE.
@@ -384,10 +384,10 @@ endfunction()
 ## @note Without WHOLE: `target_link_libraries(<meta> INTERFACE <leaf>)`.
 ## @note WHOLE with no static produced archives among members → INFO.
 function(_buildmaster_meta_wire)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_wire")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_wire")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	if(NOT _metas)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_wire")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_wire")
 		return()
 	endif()
 
@@ -447,7 +447,7 @@ function(_buildmaster_meta_wire)
 					endif()
 				endforeach()
 				if(NOT _any_static)
-					buildmaster_message(COMPONENT INFO
+					_bm_log_message(COMPONENT INFO
 						"meta '${_id}': WHOLE ignored (no static produced archives among members)")
 				endif()
 			endif()
@@ -459,7 +459,7 @@ function(_buildmaster_meta_wire)
 			endforeach()
 		endif()
 	endforeach()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_wire")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_wire")
 endfunction()
 
 ## @brief Warn once about registered components/metas with no consumer.
@@ -474,7 +474,7 @@ endfunction()
 ##         <id>_install, <id>_build or <id>_configure counts (smoke,
 ##         BUILDONLY stages that never enter a link line).
 function(_buildmaster_warn_orphans)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_warn_orphans")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_warn_orphans")
 	get_property(_comps GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	get_property(_dsrc GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
@@ -633,8 +633,8 @@ function(_buildmaster_warn_orphans)
 	if(_orphans)
 		list(REMOVE_DUPLICATES _orphans)
 		string(REPLACE ";" ", " _list "${_orphans}")
-		buildmaster_message(COMPONENT WARNING
+		_bm_log_message(COMPONENT WARNING
 			"orphan component(s) / meta(s) (not consumed by component_link / component_dependency / host link / host DEPENDS / used repack): ${_list}")
 	endif()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_warn_orphans")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_warn_orphans")
 endfunction()

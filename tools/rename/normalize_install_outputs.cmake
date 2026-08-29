@@ -32,10 +32,10 @@ if(NOT DEFINED BINDIR)
 	set(BINDIR "")
 endif()
 
-buildmaster_message(RENAME LOWLEVEL "Entering normalize_install_outputs")
-buildmaster_message(RENAME LOWLEVEL "OUTPUTS='${OUTPUTS}'")
-buildmaster_message(RENAME LOWLEVEL "BINDIR='${BINDIR}'")
-buildmaster_message(RENAME LOWLEVEL "VARIANTS='${BUILDMASTER_RENAME_VARIANTS}'")
+_bm_log_message(RENAME LOWLEVEL "Entering normalize_install_outputs")
+_bm_log_message(RENAME LOWLEVEL "OUTPUTS='${OUTPUTS}'")
+_bm_log_message(RENAME LOWLEVEL "BINDIR='${BINDIR}'")
+_bm_log_message(RENAME LOWLEVEL "VARIANTS='${BUILDMASTER_RENAME_VARIANTS}'")
 
 # ---- helpers ----
 
@@ -93,26 +93,26 @@ endfunction()
 
 ## @brief Locate a non-canonical source file to rename onto a produced path.
 function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
-	buildmaster_message(RENAME LOWLEVEL
+	_bm_log_message(RENAME LOWLEVEL
 		"Entering _bm_rename_find_source dir='${dir}' stem='${stem}' suffix='${suffix}'")
 
 	set(_found "")
 	set(_token "")
 	_bm_rename_candidate_names("${stem}" "${suffix}" _patterns)
-	buildmaster_message(RENAME LOWLEVEL "candidate patterns='${_patterns}'")
+	_bm_log_message(RENAME LOWLEVEL "candidate patterns='${_patterns}'")
 
 	foreach(_pat IN LISTS _patterns)
 		file(GLOB _hits "${dir}/${_pat}")
-		buildmaster_message(RENAME LOWLEVEL "glob '${dir}/${_pat}' hits='${_hits}'")
+		_bm_log_message(RENAME LOWLEVEL "glob '${dir}/${_pat}' hits='${_hits}'")
 		foreach(_f IN LISTS _hits)
 			if(IS_DIRECTORY "${_f}")
-				buildmaster_message(RENAME LOWLEVEL "skip directory '${_f}'")
+				_bm_log_message(RENAME LOWLEVEL "skip directory '${_f}'")
 				continue()
 			endif()
 			get_filename_component(_bn "${_f}" NAME)
 			string(TOLOWER "${_bn}" _bn_l)
 			if(_bn_l MATCHES "\\.pdb$")
-				buildmaster_message(RENAME LOWLEVEL "skip pdb '${_f}'")
+				_bm_log_message(RENAME LOWLEVEL "skip pdb '${_f}'")
 				continue()
 			endif()
 			_bm_rename_split_name("${_bn}" _hs _hx)
@@ -120,7 +120,7 @@ function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
 				get_filename_component(_want "${dir}/${stem}${suffix}" ABSOLUTE)
 				get_filename_component(_have "${_f}" ABSOLUTE)
 				if(_want STREQUAL _have)
-					buildmaster_message(RENAME LOWLEVEL
+					_bm_log_message(RENAME LOWLEVEL
 						"skip exact canonical '${_f}'")
 					continue()
 				endif()
@@ -137,7 +137,7 @@ function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
 			else()
 				set(_token "")
 			endif()
-			buildmaster_message(RENAME DEBUG
+			_bm_log_message(RENAME DEBUG
 				"find_source: picked '${_found}' token='${_token}' for stem='${stem}' suffix='${suffix}'")
 			break()
 		endforeach()
@@ -147,13 +147,13 @@ function(_bm_rename_find_source dir stem suffix out_src out_variant_token)
 	endforeach()
 
 	if(_found STREQUAL "")
-		buildmaster_message(RENAME DEBUG
+		_bm_log_message(RENAME DEBUG
 			"find_source: no hit in '${dir}' for stem='${stem}' suffix='${suffix}'")
 	endif()
 
 	set(${out_src} "${_found}" PARENT_SCOPE)
 	set(${out_variant_token} "${_token}" PARENT_SCOPE)
-	buildmaster_message(RENAME LOWLEVEL "Exiting _bm_rename_find_source")
+	_bm_log_message(RENAME LOWLEVEL "Exiting _bm_rename_find_source")
 endfunction()
 
 ## @brief Alternate static-archive suffixes for a missing canonical file.
@@ -174,10 +174,10 @@ foreach(_out IN LISTS OUTPUTS)
 		continue()
 	endif()
 
-	buildmaster_message(RENAME DEBUG "consider '${_out}'")
+	_bm_log_message(RENAME DEBUG "consider '${_out}'")
 
 	if(EXISTS "${_out}")
-		buildmaster_message(RENAME INFO "rename: ${_out} already present (skip)")
+		_bm_log_message(RENAME INFO "rename: ${_out} already present (skip)")
 		continue()
 	endif()
 
@@ -185,42 +185,42 @@ foreach(_out IN LISTS OUTPUTS)
 	get_filename_component(_fn "${_out}" NAME)
 	_bm_rename_split_name("${_fn}" _stem _suffix)
 	if(_stem STREQUAL "" OR _suffix STREQUAL "")
-		buildmaster_message(RENAME FATAL "rename: cannot parse stem/suffix from '${_fn}'")
+		_bm_log_message(RENAME FATAL "rename: cannot parse stem/suffix from '${_fn}'")
 	endif()
 
-	buildmaster_message(RENAME DEBUG
+	_bm_log_message(RENAME DEBUG
 		"missing '${_out}' → search dir='${_dir}' stem='${_stem}' suffix='${_suffix}'")
 
 	if(NOT IS_DIRECTORY "${_dir}")
-		buildmaster_message(RENAME FATAL "rename: directory missing for '${_out}': ${_dir}")
+		_bm_log_message(RENAME FATAL "rename: directory missing for '${_out}': ${_dir}")
 	endif()
 
 	_bm_rename_find_source("${_dir}" "${_stem}" "${_suffix}" _src _vtok)
 	if(_src STREQUAL "")
 		_bm_rename_archive_alt_suffixes("${_suffix}" _alt_sufs)
-		buildmaster_message(RENAME DEBUG
+		_bm_log_message(RENAME DEBUG
 			"no candidate with suffix='${_suffix}', trying alts='${_alt_sufs}'")
 		foreach(_alt IN LISTS _alt_sufs)
 			_bm_rename_find_source("${_dir}" "${_stem}" "${_alt}" _src _vtok)
 			if(NOT _src STREQUAL "")
-				buildmaster_message(RENAME INFO
+				_bm_log_message(RENAME INFO
 					"rename: using alternate suffix '${_alt}' for '${_fn}'")
 				break()
 			endif()
 		endforeach()
 	endif()
 	if(_src STREQUAL "")
-		buildmaster_message(RENAME FATAL
+		_bm_log_message(RENAME FATAL
 			"rename: no candidate for '${_out}' (stem='${_stem}' suffix='${_suffix}') in ${_dir}")
 	endif()
 
 	file(RENAME "${_src}" "${_out}")
-	buildmaster_message(RENAME INFO "rename: ${_src} → ${_out}")
+	_bm_log_message(RENAME INFO "rename: ${_src} → ${_out}")
 
 	if(_suffix STREQUAL ".lib" AND NOT BINDIR STREQUAL "")
 		set(_dll_dst "${BINDIR}/${_stem}.dll")
 		if(NOT EXISTS "${_dll_dst}")
-			buildmaster_message(RENAME DEBUG
+			_bm_log_message(RENAME DEBUG
 				"pair dll: missing '${_dll_dst}' token='${_vtok}'")
 			set(_dll_src "")
 			if(NOT _vtok STREQUAL "")
@@ -238,13 +238,13 @@ foreach(_out IN LISTS OUTPUTS)
 			endif()
 			if(NOT _dll_src STREQUAL "" AND NOT EXISTS "${_dll_dst}")
 				file(RENAME "${_dll_src}" "${_dll_dst}")
-				buildmaster_message(RENAME INFO "rename: ${_dll_src} → ${_dll_dst}")
+				_bm_log_message(RENAME INFO "rename: ${_dll_src} → ${_dll_dst}")
 			else()
-				buildmaster_message(RENAME DEBUG
+				_bm_log_message(RENAME DEBUG
 					"pair dll: no source for '${_dll_dst}'")
 			endif()
 		endif()
 	endif()
 endforeach()
 
-buildmaster_message(RENAME LOWLEVEL "Exiting normalize_install_outputs")
+_bm_log_message(RENAME LOWLEVEL "Exiting normalize_install_outputs")

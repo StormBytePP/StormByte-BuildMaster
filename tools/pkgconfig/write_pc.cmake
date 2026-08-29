@@ -18,7 +18,7 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 
 if(NOT PC_NAME OR NOT PC_VERSION OR NOT PREFIX OR NOT OUT OR NOT LIBDIR)
-	buildmaster_message(COMPONENT FATAL
+	_bm_log_message(COMPONENT FATAL
 		"write_pc: need -DPC_NAME= -DPC_VERSION= -DPREFIX= -DLIBDIR= -DOUT=")
 endif()
 
@@ -39,7 +39,7 @@ if(NOT PC_CFLAGS)
 endif()
 
 if(EXISTS "${OUT}")
-	buildmaster_message(COMPONENT FATAL
+	_bm_log_message(COMPONENT FATAL
 		"write_pc: '${OUT}' already exists (upstream .pc). BuildMaster will not overwrite it. Use PC={ENABLED=FALSE} or drop PC={…}.")
 endif()
 
@@ -68,4 +68,4 @@ if(NOT PC_CFLAGS STREQUAL "")
 endif()
 
 file(WRITE "${OUT}" "${_body}")
-buildmaster_message(COMPONENT INFO "wrote helper .pc ${OUT}")
+_bm_log_message(COMPONENT INFO "wrote helper .pc ${OUT}")

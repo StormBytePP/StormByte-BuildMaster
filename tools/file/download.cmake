@@ -17,7 +17,7 @@
 ## @param[in]  indent_level Status indentation tabs (default 0).
 function(_file_generate_download_script out_script url title expected_hash
 										max_retries current_try indent_level)
-	buildmaster_message(FILE LOWLEVEL "Entering _file_generate_download_script")
+	_bm_log_message(FILE LOWLEVEL "Entering _file_generate_download_script")
 	if("${title}" STREQUAL "")
 		get_filename_component(title "${url}" NAME)
 	endif()
@@ -56,8 +56,8 @@ function(_file_generate_download_script out_script url title expected_hash
 	)
 
 	set(${out_script} "${_script}" PARENT_SCOPE)
-	buildmaster_message(FILE DEBUG "Generated download script ${_script}")
-	buildmaster_message(FILE LOWLEVEL "Exiting _file_generate_download_script")
+	_bm_log_message(FILE DEBUG "Generated download script ${_script}")
+	_bm_log_message(FILE LOWLEVEL "Exiting _file_generate_download_script")
 endfunction()
 
 ## @brief Create a file prerequisite target and run its -P script now.
@@ -70,9 +70,9 @@ endfunction()
 ##       The custom target remains for incremental rebuilds / graph edges.
 ##       The script must be idempotent (cached download, extract-if-missing).
 function(_file_add_prerequisite_target name script comment depends)
-	buildmaster_message(FILE LOWLEVEL "Entering _file_add_prerequisite_target")
+	_bm_log_message(FILE LOWLEVEL "Entering _file_add_prerequisite_target")
 	if(TARGET "${name}")
-		buildmaster_message(FILE FATAL
+		_bm_log_message(FILE FATAL
 			"file helper: target '${name}' already exists")
 	endif()
 	if("${comment}" STREQUAL "")
@@ -100,11 +100,11 @@ function(_file_add_prerequisite_target name script comment depends)
 		RESULT_VARIABLE _file_rc
 	)
 	if(NOT _file_rc EQUAL 0)
-		buildmaster_message(FILE FATAL
+		_bm_log_message(FILE FATAL
 			"file helper '${name}' failed at configure (exit ${_file_rc})")
 	endif()
 
-	buildmaster_message(FILE LOWLEVEL "Exiting _file_add_prerequisite_target")
+	_bm_log_message(FILE LOWLEVEL "Exiting _file_add_prerequisite_target")
 endfunction()
 
 ## @brief Always download a file (retries + optional hash); creates a target.
@@ -119,12 +119,12 @@ endfunction()
 ## @note No out-variable and no include(). The -P script runs during this
 ##       call (configure) and again if `name` is built.
 function(file_download name url)
-	buildmaster_message(FILE LOWLEVEL "Entering file_download")
+	_bm_log_message(FILE LOWLEVEL "Entering file_download")
 	if("${name}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_download: empty name")
+		_bm_log_message(FILE FATAL "file_download: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_download: empty url")
+		_bm_log_message(FILE FATAL "file_download: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -153,8 +153,8 @@ function(file_download name url)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	buildmaster_message(FILE DEBUG "file_download target ${name}")
-	buildmaster_message(FILE LOWLEVEL "Exiting file_download")
+	_bm_log_message(FILE DEBUG "file_download target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting file_download")
 endfunction()
 
 ## @brief Cache-aware download; creates a target named `name`.
@@ -171,12 +171,12 @@ endfunction()
 ##       before create_*_component. Building `name` re-runs the same
 ##       idempotent wrapper. No out-variable / include().
 function(file_download_cached name url)
-	buildmaster_message(FILE LOWLEVEL "Entering file_download_cached")
+	_bm_log_message(FILE LOWLEVEL "Entering file_download_cached")
 	if("${name}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_download_cached: empty name")
+		_bm_log_message(FILE FATAL "file_download_cached: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		buildmaster_message(FILE FATAL "file_download_cached: empty url")
+		_bm_log_message(FILE FATAL "file_download_cached: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -233,6 +233,6 @@ function(file_download_cached name url)
 
 	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	buildmaster_message(FILE DEBUG "file_download_cached target ${name}")
-	buildmaster_message(FILE LOWLEVEL "Exiting file_download_cached")
+	_bm_log_message(FILE DEBUG "file_download_cached target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting file_download_cached")
 endfunction()

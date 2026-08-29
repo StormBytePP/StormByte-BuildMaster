@@ -33,6 +33,21 @@ fragment to `include()`, no public dependant factories. A 1.x
 - **Eager INTERFACE stub.** `add_library(<id> INTERFACE)` at
   `create_*` time so a sibling `ALIAS` / `target_link_libraries` before
   DEFER does not see a missing target.
+- **`buildmaster_component`.** Same arity as `create_cmake_component` /
+  `create_meson_component`. Backend is inferred from `srcdir`
+  (`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
+  `options` is a CMake list of `KEY=value`: `CFLAGS`, `CXXFLAGS`,
+  `CPPFLAGS`, `LDFLAGS`, `INCLUDES`, `DEFINITIONS`. Those flags are
+  private to the nested compile and append to the parent job /
+  toolchain (they do not replace it, and they are not `ENV{CFLAGS}`).
+  Other keys FATAL. optstr (`LINK=`, `PC=`, …) unchanged.
+- **`create_*_component` optional build directory.**
+  Library: `id title srcdir options mode produced [optstr]`.
+  Headers: `id title srcdir options [optstr]`.
+  BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`.
+  The path form is still accepted and still uses the caller directory.
+  `create_component` creates whichever path it receives
+  (`file(MAKE_DIRECTORY)`, idempotent).
 - **`LINK=` / `LINK={…}`.** Raw system linker names (`shlwapi`, `ws2_32`)
   on the component or meta INTERFACE. They propagate to whoever links
   that id, including the final `.dll` / `.so`. Not BM nodes. Revives the
@@ -60,39 +75,29 @@ fragment to `include()`, no public dependant factories. A 1.x
   over the same empty dest is FATAL.
 - **Subcomponent libdir paths.** Specs may be `<name>` or
   `<subdir>/<name>` under `BUILDMASTER_INSTALL_LIBDIR`.
-- **Unified logging.** `buildmaster_message(<module> <level> "<text>"
-  [<indent>])`. Levels: `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`,
-  `STATUS`, `FATAL`. `BUILDMASTER_LOGLEVEL` (default `STATUS`).
-  `WARNING` is never filtered. Without `BUILDMASTER_VERBOSE` it is one
-  yellow `message(NOTICE)` line; with verbose, `message(WARNING)` keeps
-  the CMake banner. Module `USER` is for parent projects.
-- **Silent env runner** replays nested `[BuildMaster/…]` lines live;
-  the full child log is dumped on failure. `BUILDMASTER_VERBOSE` still
-  uses the unfiltered runner.
-- **`create_*_component` optional build directory.**
-  Library: `id title srcdir options mode produced [optstr]`.
-  Headers: `id title srcdir options [optstr]`.
-  BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`.
-  The path form is still accepted and still uses the caller directory.
-  `create_component` creates whichever path it receives
-  (`file(MAKE_DIRECTORY)`, idempotent).
 - **Hooks.** `buildmaster_on_component_materialize(id fn alias
   [CAPTURE …])` / `buildmaster_on_graph_finalized(fn alias [CAPTURE …])`.
   `fn` must exist at registration. Alias is the only order key (ASCII
   ascending). `CAPTURE` snapshots by copy. An id that never
   materializes is FATAL.
+- **Unified logging.** `_bm_log_message(<module> <level> "<text>"
+  [<indent>])` is internal. Public `buildmaster_message(<level> "<text>"
+  [<indent>])` always uses module `USER` (it cannot be overridden).
+  Levels: `LOWLEVEL`, `DEBUG`, `INFO`, `WARNING`, `STATUS`, `FATAL`.
+  `BUILDMASTER_LOGLEVEL` (default `STATUS`). `WARNING` and `FATAL` are
+  never filtered. Without `BUILDMASTER_VERBOSE`, a warning is one yellow
+  `message(NOTICE)` line; with verbose, `message(WARNING)`. Module
+  `USER` is for parent projects. CMake `message()` is forbidden inside
+  BuildMaster except `log.cmake`.
+- **Silent env runner** replays nested `[BuildMaster/…]` lines live;
+  the full child log is dumped on failure. `BUILDMASTER_VERBOSE` still
+  uses the unfiltered runner.
 - Prefix search injection (`-I`/`-L` or `/I`/`/LIBPATH:` + `INCLUDE`/`LIB`)
   so nested compiles see the shared install tree.
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
-  meta-toolchain, LINKFLAGS, and a sibling-layout consumer.
-- **`buildmaster_component`.** Same arity as `create_cmake_component` /
-  `create_meson_component`. Backend is inferred from `srcdir`
-  (`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
-  `options` is a CMake list of `KEY=value`: `CFLAGS`, `CXXFLAGS`,
-  `CPPFLAGS`, `LDFLAGS`, `INCLUDES`, `DEFINITIONS`. Those flags are
-  private to the nested compile and append to the parent job /
-  toolchain (they do not replace it, and they are not `ENV{CFLAGS}`).
-  Other keys FATAL. optstr (`LINK=`, `PC=`, …) unchanged.
+  meta-toolchain, LINKFLAGS, hooks, late `component_link`, raw `LINK=`,
+  duplicate edges, reset-then-patch, PC clobber (install FATAL), and a
+  sibling-layout consumer.
 
 ### Changed
 
@@ -110,6 +115,8 @@ fragment to `include()`, no public dependant factories. A 1.x
 - **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged
   (compiler/linker output only).
+- **Breaking — `buildmaster_message`.** Public arity is
+  `<level> "<text>" [<indent>]`. Module is always `USER`.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
   `PC={…}`, `LINK=`, `LINKFLAGS=`). `;` inside `{…}` is not a pair
@@ -127,16 +134,19 @@ fragment to `include()`, no public dependant factories. A 1.x
 
 - Git patch lost the race with eager configure: flush runs at
   registration and again *before* materialize (reset then patch once
-  per root).
-- Cached download under `cmake -P` did not see `buildmaster_message` /
+  per root). A second flush for the same root is a no-op.
+- `create_git_patch_file` then `create_git_reset_file` used to apply
+  and immediately `reset --hard`. Ops flush as reset + clean, then
+  apply.
+- Cached download under `cmake -P` did not see the log helper /
   `file_checksum_correct`; templates now include log + checksum.
+- Dead second `function(component_dependency)` in `graph.cmake`.
 - `RENAME` ignored Unix-style `.a` on Windows when the contract asked
   for `.lib`.
 - `TOOLCHAIN=` rejected valid names when the dump was not a CMake list.
 - Meson `--native-file` followed the outer job instead of the component
   profile.
-- `buildmaster_message(COMPONENT …)` during DEFER with an empty module
-  list.
+- Log modules empty during DEFER (`unknown log module 'COMPONENT'`).
 - Produced paths `${prefix}//libfoo.a` when the host skipped
   `GNUInstallDirs`.
 - Component id equal to produced name (`add_library` twice).
@@ -151,9 +161,7 @@ fragment to `include()`, no public dependant factories. A 1.x
 - Empty `@NPROC@` at DEFER (`-j` without an argument).
 - File helpers only created a target; the `-P` script now also runs at
   the call so the artifact exists before `create_*`.
-- `create_git_patch_file` then `create_git_reset_file` used to apply
-  and immediately `reset --hard`. Ops flush as reset + clean, then
-  apply.
+- Initialization now uses logging.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 

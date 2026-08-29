@@ -19,11 +19,11 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ## @note Escapes embedded single quotes as `\'`. Result looks like
 ##       `'C:/Program Files/ccache/ccache'`. Used inside `[binaries]` lists.
 function(buildmaster_meson_native_quote out_var path)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_quote")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_quote")
 	string(REPLACE "\\" "/" path "${path}")
 	string(REPLACE "'" "\\'" path "${path}")
 	set(${out_var} "'${path}'" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_quote")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_quote")
 endfunction()
 
 ## @brief Build one Meson [binaries] assignment line.
@@ -33,10 +33,10 @@ endfunction()
 ## @param[in] compiler Compiler path or short name (must not be empty).
 ## @param[in] launcher Optional ccache/sccache path or name; empty = no launcher.
 function(buildmaster_meson_native_bin_line out_var name compiler launcher)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_bin_line")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_bin_line")
 	if(compiler STREQUAL "")
 		set(${out_var} "" PARENT_SCOPE)
-		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_bin_line")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_bin_line")
 		return()
 	endif()
 	buildmaster_meson_native_quote(_comp "${compiler}")
@@ -46,7 +46,7 @@ function(buildmaster_meson_native_bin_line out_var name compiler launcher)
 	else()
 		set(${out_var} "${name} = [${_comp}]" PARENT_SCOPE)
 	endif()
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_bin_line")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_bin_line")
 endfunction()
 
 ## @brief Resolve the active compiler launcher (ccache or sccache).
@@ -54,7 +54,7 @@ endfunction()
 ## @note Prefers CMAKE_C_COMPILER_LAUNCHER, then CMAKE_CXX_COMPILER_LAUNCHER,
 ##       then the matching ENV values. Uses the first list element when set.
 function(buildmaster_meson_native_resolve_launcher out_var)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_resolve_launcher")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_meson_native_resolve_launcher")
 	set(_l "")
 	if(NOT "${CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		list(GET CMAKE_C_COMPILER_LAUNCHER 0 _l)
@@ -66,7 +66,7 @@ function(buildmaster_meson_native_resolve_launcher out_var)
 		set(_l "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}")
 	endif()
 	set(${out_var} "${_l}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_resolve_launcher")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_meson_native_resolve_launcher")
 endfunction()
 
 ## @brief Write (or overwrite) one Meson native file for a profile key.
@@ -77,11 +77,11 @@ endfunction()
 ## @note Sets BUILDMASTER_MESON_NATIVE_FILE or BUILDMASTER_MESON_NATIVE_FILE_<key>
 ##       in the parent scope and registers them in the toolchain export registry.
 function(buildmaster_write_meson_native_file profile_key c_compiler cxx_compiler)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_write_meson_native_file")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_write_meson_native_file")
 	cmake_parse_arguments(ARG "" "LAUNCHER" "" ${ARGN})
 
 	if(NOT DEFINED BUILDMASTER_SCRIPTSDIR OR BUILDMASTER_SCRIPTSDIR STREQUAL "")
-		buildmaster_message(TOOLCHAIN FATAL
+		_bm_log_message(TOOLCHAIN FATAL
 			"BUILDMASTER_SCRIPTSDIR is required to write Meson native files")
 	endif()
 
@@ -135,8 +135,8 @@ function(buildmaster_write_meson_native_file profile_key c_compiler cxx_compiler
 	set(${_var} "${_path}" PARENT_SCOPE)
 	buildmaster_toolchain_export("${_var}" "${_path}")
 
-	buildmaster_message(TOOLCHAIN DEBUG "Meson native file (${_label}) → ${_path}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_write_meson_native_file")
+	_bm_log_message(TOOLCHAIN DEBUG "Meson native file (${_label}) → ${_path}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_write_meson_native_file")
 endfunction()
 
 ## @brief Resolve which native-file path a Meson component should use.
@@ -144,7 +144,7 @@ endfunction()
 ## @param[in] ARGN Optional `TOOLCHAIN <name>`. Empty = this process's compiler
 ##            family (`CMAKE_C_COMPILER_ID` / clang-cl), then the default file.
 function(buildmaster_get_meson_native_file out_var)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_get_meson_native_file")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_get_meson_native_file")
 	cmake_parse_arguments(ARG "" "TOOLCHAIN" "" ${ARGN})
 	set(_path "")
 	set(_key "")
@@ -179,8 +179,8 @@ function(buildmaster_get_meson_native_file out_var)
 		set(_path "${BUILDMASTER_MESON_NATIVE_FILE}")
 	endif()
 	set(${out_var} "${_path}" PARENT_SCOPE)
-	buildmaster_message(TOOLCHAIN DEBUG "Meson native file for key '${_key}' → ${_path}")
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_get_meson_native_file")
+	_bm_log_message(TOOLCHAIN DEBUG "Meson native file for key '${_key}' → ${_path}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_get_meson_native_file")
 endfunction()
 
 ## @brief Generate native files for the parent job and every known profile.
@@ -190,10 +190,10 @@ endfunction()
 ##       and Meson do not treat bare `cl` as relative to the build dir.
 ##       Safe to call again; files are overwritten.
 function(buildmaster_init_meson_native_files)
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_init_meson_native_files")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_init_meson_native_files")
 	if(NOT DEFINED BUILDMASTER_SCRIPTSDIR OR BUILDMASTER_SCRIPTSDIR STREQUAL "")
-		buildmaster_message(TOOLCHAIN DEBUG "Skipping Meson native files (BUILDMASTER_SCRIPTSDIR unset)")
-		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
+		_bm_log_message(TOOLCHAIN DEBUG "Skipping Meson native files (BUILDMASTER_SCRIPTSDIR unset)")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
 		return()
 	endif()
 
@@ -213,12 +213,12 @@ function(buildmaster_init_meson_native_files)
 		buildmaster_write_meson_native_file("default" "${_c}" "${_cxx}" LAUNCHER "${_launch}")
 		set(BUILDMASTER_MESON_NATIVE_FILE "${BUILDMASTER_MESON_NATIVE_FILE}" PARENT_SCOPE)
 	else()
-		buildmaster_message(TOOLCHAIN DEBUG "Skipping default Meson native file (compilers not set yet)")
+		_bm_log_message(TOOLCHAIN DEBUG "Skipping default Meson native file (compilers not set yet)")
 	endif()
 
 	# One file per known profile (platform-filtered)
 	if(NOT DEFINED BUILDMASTER_KNOWN_TOOLCHAINS)
-		buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
 		return()
 	endif()
 
@@ -280,5 +280,5 @@ function(buildmaster_init_meson_native_files)
 				"${BUILDMASTER_MESON_NATIVE_FILE_${_prof}}" PARENT_SCOPE)
 		endif()
 	endforeach()
-	buildmaster_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_init_meson_native_files")
 endfunction()

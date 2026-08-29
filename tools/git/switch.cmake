@@ -9,7 +9,7 @@
 ## @param[in] _git_branch   Branch name.
 ## @note Generates the script and include()s it immediately. No out-variable.
 function(create_git_switch_branch _component_id _title _git_repo_dir _git_branch)
-	buildmaster_message(GIT LOWLEVEL "Entering create_git_switch_branch")
+	_bm_log_message(GIT LOWLEVEL "Entering create_git_switch_branch")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(GIT_BRANCH "${_git_branch}")
 	sanitize_for_filename(_safe "${_component_id}_${_title}")
@@ -21,6 +21,6 @@ function(create_git_switch_branch _component_id _title _git_repo_dir _git_branch
 	)
 	include("${_GIT_SWITCH_FILE}")
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
-	buildmaster_message(GIT DEBUG "Switched ${_component_id} to ${_git_branch}")
-	buildmaster_message(GIT LOWLEVEL "Exiting create_git_switch_branch")
+	_bm_log_message(GIT DEBUG "Switched ${_component_id} to ${_git_branch}")
+	_bm_log_message(GIT LOWLEVEL "Exiting create_git_switch_branch")
 endfunction()

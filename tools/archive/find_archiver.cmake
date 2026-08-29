@@ -16,11 +16,11 @@
 ##       5. else: `llvm-ar`, `gcc-ar`, `ar`
 ## @note Style is derived from the resolved binary name (`llvm-lib` / `lib` /
 ##       `lib.exe` → `msvc_lib`; everything else → `gnu_ar`).
-## @note Missing archiver is fatal (`buildmaster_message(ARCHIVE FATAL …)`).
+## @note Missing archiver is fatal (`_bm_log_message(ARCHIVE FATAL …)`).
 ## @note Safe to include from `cmake -P` scripts after `log.cmake` (the archive
 ##       helpers stub already does that).
 function(buildmaster_find_archiver out_path out_style)
-	buildmaster_message(ARCHIVE LOWLEVEL "Entering buildmaster_find_archiver")
+	_bm_log_message(ARCHIVE LOWLEVEL "Entering buildmaster_find_archiver")
 	if(ARGC GREATER 2)
 		set(_hint "${ARGV2}")
 	else()
@@ -63,7 +63,7 @@ function(buildmaster_find_archiver out_path out_style)
 	endforeach()
 
 	if(_found STREQUAL "")
-		buildmaster_message(ARCHIVE FATAL
+		_bm_log_message(ARCHIVE FATAL
 			"buildmaster_find_archiver: no archiver found (CMAKE_AR, ENV{AR}, llvm-lib/lib, llvm-ar/gcc-ar/ar)")
 	endif()
 
@@ -76,8 +76,8 @@ function(buildmaster_find_archiver out_path out_style)
 		set(_style "msvc_lib")
 	endif()
 
-	buildmaster_message(ARCHIVE DEBUG "archiver=${_found} style=${_style}")
+	_bm_log_message(ARCHIVE DEBUG "archiver=${_found} style=${_style}")
 	set(${out_path} "${_found}" PARENT_SCOPE)
 	set(${out_style} "${_style}" PARENT_SCOPE)
-	buildmaster_message(ARCHIVE LOWLEVEL "Exiting buildmaster_find_archiver")
+	_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_find_archiver")
 endfunction()

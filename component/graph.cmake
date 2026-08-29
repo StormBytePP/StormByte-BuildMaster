@@ -13,16 +13,16 @@
 ##       component_dependency/link/repack calls in the tree are seen first.
 ##       Requires CMake >= 3.19.
 function(_buildmaster_component_defer_arm)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_defer_arm")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_defer_arm")
 	get_property(_armed GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEFER_ARMED)
 	if(_armed)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
 		return()
 	endif()
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEFER_ARMED TRUE)
 	cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
 		CALL _buildmaster_finalize_components)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
 endfunction()
 
 ## @brief Register a component. Creates an empty INTERFACE `<id>` before return.
@@ -80,23 +80,23 @@ endfunction()
 ## @note create_*_stages is internal; backends call it from materialize only.
 function(create_component _component _component_title _srcdir _builddir
 						_options _library_mode _build_system _produced)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering create_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering create_component")
 	if(ARGC GREATER 9)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component: too many arguments (expected at most one options string).")
 	endif()
 
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component('${_component}'): called after components were finalized")
 	endif()
 
 	if("${_component}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL "create_component: empty component id")
+		_bm_log_message(COMPONENT FATAL "create_component: empty component id")
 	endif()
 	if("${_builddir}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component('${_component}'): empty build directory")
 	endif()
 	file(MAKE_DIRECTORY "${_builddir}")
@@ -105,14 +105,14 @@ function(create_component _component _component_title _srcdir _builddir
 	if(_ids)
 		list(FIND _ids "${_component}" _idx)
 		if(NOT _idx EQUAL -1)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"create_component: duplicate id '${_component}'")
 		endif()
 	endif()
 
 	_buildmaster_meta_is("${_component}" _is_meta)
 	if(_is_meta)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component: '${_component}' is already a meta id")
 	endif()
 
@@ -136,12 +136,12 @@ function(create_component _component _component_title _srcdir _builddir
 	if(NOT _library_mode STREQUAL "static"
 			AND NOT _library_mode STREQUAL "shared"
 			AND NOT _library_mode STREQUAL "headers")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component: unknown library mode '${_library_mode}' (expected static, shared, or headers)")
 	endif()
 
 	if(NOT _build_system STREQUAL "cmake" AND NOT _build_system STREQUAL "meson")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component: unknown build system '${_build_system}' (expected cmake or meson)")
 	endif()
 
@@ -154,30 +154,30 @@ function(create_component _component _component_title _srcdir _builddir
 			endif()
 		endforeach()
 		if(NOT _has_prod)
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"create_component '${_component}': static/shared mode requires at least one produced library spec")
 		endif()
 	endif()
 
 	if("${_options_string}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]"
 			AND NOT _library_mode STREQUAL "static")
-		buildmaster_message(COMPONENT INFO
+		_bm_log_message(COMPONENT INFO
 			"create_component('${_component}'): STRIPRES ignored (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
 	endif()
 
 	if(_library_mode STREQUAL "headers" AND _reg_link)
-		buildmaster_message(COMPONENT INFO
+		_bm_log_message(COMPONENT INFO
 			"create_component('${_component}'): LINK ignored (headers mode has no link line)")
 		set(_reg_link "")
 	endif()
 	if(_library_mode STREQUAL "headers" AND _reg_linkflags)
-		buildmaster_message(COMPONENT WARNING
+		_bm_log_message(COMPONENT WARNING
 			"create_component('${_component}'): LINKFLAGS ignored (headers mode has no link line)")
 		set(_reg_linkflags "")
 	endif()
 
 	if(_pc_enabled AND _reg_buildonly)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"create_component('${_component}'): PC={…} cannot be used with BUILDONLY (helper .pc files are for internal consumers of the shared BM prefix)")
 	endif()
 
@@ -250,8 +250,8 @@ function(create_component _component _component_title _srcdir _builddir
 	add_library("${_component}" INTERFACE)
 
 	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_component")
+	_bm_log_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_component")
 endfunction()
 
 ## @brief Whether `(source, dest)` is already stored in two parallel GLOBAL lists.
@@ -261,7 +261,7 @@ endfunction()
 ## @param[in]  dest       Right side of the pair.
 ## @param[out] out_var    Parent-scope TRUE if the pair exists.
 function(_buildmaster_pair_in_lists _srcs_prop _dsts_prop source dest out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_pair_in_lists")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_pair_in_lists")
 	get_property(_srcs GLOBAL PROPERTY ${_srcs_prop})
 	get_property(_dsts GLOBAL PROPERTY ${_dsts_prop})
 	set(_i 0)
@@ -270,12 +270,12 @@ function(_buildmaster_pair_in_lists _srcs_prop _dsts_prop source dest out_var)
 		math(EXPR _i "${_i} + 1")
 		if(_src STREQUAL "${source}" AND _dst STREQUAL "${dest}")
 			set(${out_var} TRUE PARENT_SCOPE)
-			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
 			return()
 		endif()
 	endforeach()
 	set(${out_var} FALSE PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_pair_in_lists")
 endfunction()
 
 ## @brief Record an order-only edge if the pair is new. No user WARNING.
@@ -285,15 +285,15 @@ endfunction()
 ##       `component_dependency` after the duplicate check. A second
 ##       internal record of the same pair is a silent no-op.
 function(_buildmaster_record_dependency source dest)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_record_dependency")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_record_dependency")
 	_buildmaster_pair_in_lists(
 		BUILDMASTER_COMPONENT_DEP_SOURCES
 		BUILDMASTER_COMPONENT_DEP_DESTS
 		"${source}" "${dest}" _have)
 	if(_have)
-		buildmaster_message(COMPONENT DEBUG
+		_bm_log_message(COMPONENT DEBUG
 			"record_dependency ${source} → ${dest} (already present)")
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
 		return()
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES
@@ -301,8 +301,8 @@ function(_buildmaster_record_dependency source dest)
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS
 		"${dest}")
 	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "record_dependency ${source} → ${dest}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
+	_bm_log_message(COMPONENT DEBUG "record_dependency ${source} → ${dest}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_record_dependency")
 endfunction()
 
 ## @brief Declare an order-only edge (no link line).
@@ -317,18 +317,18 @@ endfunction()
 ##       a no-op (including when `component_link` already recorded the pair).
 ##       Unresolvable dest at finalize stays FATAL.
 function(component_dependency source dest)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering component_dependency")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering component_dependency")
 	if(ARGC GREATER 2)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_dependency: expected exactly two arguments")
 	endif()
 	if("${source}" STREQUAL "" OR "${dest}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_dependency: source and dest must be non-empty")
 	endif()
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_dependency: called after finalize")
 	endif()
 	_buildmaster_pair_in_lists(
@@ -336,14 +336,14 @@ function(component_dependency source dest)
 		BUILDMASTER_COMPONENT_DEP_DESTS
 		"${source}" "${dest}" _have)
 	if(_have)
-		buildmaster_message(COMPONENT WARNING
+		_bm_log_message(COMPONENT WARNING
 			"component_dependency('${source}', '${dest}'): edge already recorded — extra call ignored")
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting component_dependency")
 		return()
 	endif()
 	_buildmaster_record_dependency("${source}" "${dest}")
-	buildmaster_message(COMPONENT DEBUG "component_dependency ${source} → ${dest}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
+	_bm_log_message(COMPONENT DEBUG "component_dependency ${source} → ${dest}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting component_dependency")
 endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
@@ -364,18 +364,18 @@ endfunction()
 ##       A second explicit `component_link` with the same pair is WARNING
 ##       and a no-op. The auto-dependency does not WARN.
 function(component_link source dest)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering component_link")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering component_link")
 	if(ARGC GREATER 2)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_link: expected exactly two arguments")
 	endif()
 	if("${source}" STREQUAL "" OR "${dest}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_link: source and dest must be non-empty")
 	endif()
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_link: called after finalize")
 	endif()
 	_buildmaster_pair_in_lists(
@@ -383,9 +383,9 @@ function(component_link source dest)
 		BUILDMASTER_COMPONENT_LINK_DESTS
 		"${source}" "${dest}" _have)
 	if(_have)
-		buildmaster_message(COMPONENT WARNING
+		_bm_log_message(COMPONENT WARNING
 			"component_link('${source}', '${dest}'): edge already recorded — extra call ignored")
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting component_link")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting component_link")
 		return()
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES
@@ -396,8 +396,8 @@ function(component_link source dest)
 	_buildmaster_record_dependency("${source}" "${dest}")
 
 	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "component_link ${source} → ${dest}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_link")
+	_bm_log_message(COMPONENT DEBUG "component_link ${source} → ${dest}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting component_link")
 endfunction()
 
 ## @brief Declare a custom prerequisite target (download, unpack, codegen, …).
@@ -412,13 +412,13 @@ endfunction()
 ## @note If SCRIPT is set and COMMAND is not, COMMAND becomes
 ##       `${CMAKE_COMMAND} -P <SCRIPT>`.
 function(component_prerequisite name)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering component_prerequisite")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering component_prerequisite")
 	if("${name}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_prerequisite: empty name")
 	endif()
 	if(TARGET "${name}")
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_prerequisite: target '${name}' already exists")
 	endif()
 
@@ -433,7 +433,7 @@ function(component_prerequisite name)
 		set(ARG_COMMAND "${CMAKE_COMMAND}" -P "${ARG_SCRIPT}")
 	endif()
 	if(NOT ARG_COMMAND)
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_prerequisite('${name}'): need COMMAND and/or SCRIPT")
 	endif()
 	if(NOT ARG_COMMENT)
@@ -463,8 +463,8 @@ function(component_prerequisite name)
 	endif()
 
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_PREREQUISITE_IDS "${name}")
-	buildmaster_message(COMPONENT DEBUG "prerequisite target ${name}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_prerequisite")
+	_bm_log_message(COMPONENT DEBUG "prerequisite target ${name}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting component_prerequisite")
 endfunction()
 
 ## @brief Whether `id` was registered with create_component.
@@ -472,18 +472,18 @@ endfunction()
 ## @param[out] out_var Parent-scope TRUE/FALSE.
 ## @note Meta ids are not included; use `_buildmaster_meta_is()`.
 function(_buildmaster_component_is_registered id out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_is_registered")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_is_registered")
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
 		list(FIND _ids "${id}" _idx)
 		if(NOT _idx EQUAL -1)
 			set(${out_var} TRUE PARENT_SCOPE)
-			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_registered")
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_registered")
 			return()
 		endif()
 	endif()
 	set(${out_var} FALSE PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_registered")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_registered")
 endfunction()
 
 ## @brief Whether a registered component is BUILDONLY.
@@ -491,14 +491,14 @@ endfunction()
 ## @param[out] out_var Parent-scope TRUE if the BUILDONLY flag is set, else FALSE.
 ## @note Unregistered ids yield FALSE (property unset).
 function(_buildmaster_component_is_buildonly id out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_is_buildonly")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_is_buildonly")
 	get_property(_bo GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_BUILDONLY)
 	if(_bo)
 		set(${out_var} TRUE PARENT_SCOPE)
 	else()
 		set(${out_var} FALSE PARENT_SCOPE)
 	endif()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_buildonly")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_is_buildonly")
 endfunction()
 
 ## @brief Whether this component must use build-time configure.
@@ -508,18 +508,18 @@ endfunction()
 ##       incoming edges; otherwise configure runs as a build step (dependant
 ##       template) so artifacts from dest can exist first.
 function(_buildmaster_component_has_deferred_configure id out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_has_deferred_configure")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_has_deferred_configure")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	if(_srcs)
 		list(FIND _srcs "${id}" _idx)
 		if(NOT _idx EQUAL -1)
 			set(${out_var} TRUE PARENT_SCOPE)
-			buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_has_deferred_configure")
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_has_deferred_configure")
 			return()
 		endif()
 	endif()
 	set(${out_var} FALSE PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_has_deferred_configure")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_has_deferred_configure")
 endfunction()
 
 ## @brief Resolve one dependency dest to a CMake target name.
@@ -529,36 +529,36 @@ endfunction()
 ## @note Resolution order: registered component → meta → `*_install` /
 ##       `*_configure` / `*_build` → existing CMake target.
 function(_buildmaster_resolve_dep_dest dest out_tgt out_ok)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_resolve_dep_dest")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_resolve_dep_dest")
 	_buildmaster_component_is_registered("${dest}" _is_comp)
 	if(_is_comp)
 		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 		return()
 	endif()
 	_buildmaster_meta_is("${dest}" _is_meta)
 	if(_is_meta)
 		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 		return()
 	endif()
 	if("${dest}" MATCHES "^(.+)_(install|configure|build)$")
 		set(${out_tgt} "${dest}" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 		return()
 	endif()
 	if(TARGET "${dest}")
 		set(${out_tgt} "${dest}" PARENT_SCOPE)
 		set(${out_ok} TRUE PARENT_SCOPE)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 		return()
 	endif()
 	set(${out_tgt} "" PARENT_SCOPE)
 	set(${out_ok} FALSE PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_resolve_dep_dest")
 endfunction()
 
 ## @brief Space-separated prerequisite targets for the dependant template.
@@ -569,7 +569,7 @@ endfunction()
 ##       `component_link` (spec or on-disk archive: link-only, no wait target).
 ##       FATAL if a non-BUILDONLY `id` depends on a BUILDONLY dest.
 function(_buildmaster_component_dep_targets id out_var)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_dep_targets")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_dep_targets")
 	set(_dep_targets "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
@@ -587,7 +587,7 @@ function(_buildmaster_component_dep_targets id out_var)
 		if(_dst_comp)
 			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo AND NOT _src_bo)
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"component_dependency('${id}', '${_dst}'): a non-BUILDONLY component cannot depend on BUILDONLY '${_dst}' (use component_repack to publish, or make '${id}' BUILDONLY too)")
 			endif()
 		endif()
@@ -599,11 +599,11 @@ function(_buildmaster_component_dep_targets id out_var)
 				BUILDMASTER_COMPONENT_LINK_DESTS
 				"${id}" "${_dst}" _also_link)
 			if(_also_link)
-				buildmaster_message(COMPONENT DEBUG
+				_bm_log_message(COMPONENT DEBUG
 					"component_dependency('${id}', '${_dst}'): dest is link-only (spec or archive), no wait target")
 				continue()
 			endif()
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_dependency('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install; meta id → <id>_install; <id>_install / _configure / _build; existing CMake target (e.g. component_prerequisite / file_* target).")
 		endif()
 		list(APPEND _dep_targets "${_tgt}")
@@ -613,5 +613,5 @@ function(_buildmaster_component_dep_targets id out_var)
 	endif()
 	string(REPLACE ";" " " _joined "${_dep_targets}")
 	set(${out_var} "${_joined}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_dep_targets")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_dep_targets")
 endfunction()

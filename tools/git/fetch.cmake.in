@@ -14,14 +14,14 @@ execute_process(
 )
 
 if(NOT GIT_RESULT EQUAL 0)
-	buildmaster_message(GIT FATAL
+	_bm_log_message(GIT FATAL
 		"Git fetch failed (exit ${GIT_RESULT}) in @GIT_REPO@\n--- stdout ---\n${GIT_OUT}\n--- stderr ---\n${GIT_ERROR}")
 endif()
 
-buildmaster_message(GIT STATUS "Fetched origin in @GIT_REPO@")
+_bm_log_message(GIT STATUS "Fetched origin in @GIT_REPO@")
 if(GIT_OUT)
-	buildmaster_message(GIT DEBUG "git fetch stdout:\n${GIT_OUT}")
+	_bm_log_message(GIT DEBUG "git fetch stdout:\n${GIT_OUT}")
 endif()
 if(GIT_ERROR)
-	buildmaster_message(GIT DEBUG "git fetch stderr:\n${GIT_ERROR}")
+	_bm_log_message(GIT DEBUG "git fetch stderr:\n${GIT_ERROR}")
 endif()

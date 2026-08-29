@@ -27,7 +27,7 @@
 ##       ENABLED is `1` only when `PC={…}` is on and not BUILDONLY (already FATAL
 ##       at create_component).
 function(_buildmaster_component_collect_outputs _component)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
@@ -139,7 +139,7 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_BM_PC_OUT "${_BM_PC_OUT}" PARENT_SCOPE)
 	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_collect_outputs")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_collect_outputs")
 endfunction()
 
 ## @brief configure_file + include the shared component fragment template.
@@ -171,7 +171,7 @@ endfunction()
 ## @note STRIPRES / WHOLE ignored on a non-static mode are INFO. STRIPRES
 ##       INFO only when the user wrote the key (default is ON).
 function(_buildmaster_component_write_fragment _component _deferred)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_write_fragment")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_write_fragment")
 	_buildmaster_component_collect_outputs("${_component}")
 
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -186,7 +186,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 
 	if(_sr AND NOT _library_mode STREQUAL "static")
 		if("${_options_string}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
-			buildmaster_message(COMPONENT INFO
+			_bm_log_message(COMPONENT INFO
 				"STRIPRES ignored for '${_component}' (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
 		endif()
 	endif()
@@ -213,7 +213,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	get_property(_whole_prop GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE)
 	if(_whole_prop)
 		if(NOT _library_mode STREQUAL "static")
-			buildmaster_message(COMPONENT INFO
+			_bm_log_message(COMPONENT INFO
 				"WHOLE ignored for '${_component}' (mode '${_library_mode}'; only static is supported)")
 		elseif(_LIBRARY_COMPONENT_FILES)
 			set(_BM_WHOLE "1")
@@ -228,7 +228,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		set(_BM_LINK_ITEMS "")
 	endif()
 	if(_BM_LINK_ITEMS)
-		buildmaster_message(COMPONENT DEBUG
+		_bm_log_message(COMPONENT DEBUG
 			"${_component}: LINK (raw) → ${_BM_LINK_ITEMS}")
 	endif()
 
@@ -237,7 +237,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		set(_BM_LINKFLAGS_ITEMS "")
 	endif()
 	if(_BM_LINKFLAGS_ITEMS)
-		buildmaster_message(COMPONENT DEBUG
+		_bm_log_message(COMPONENT DEBUG
 			"${_component}: LINKFLAGS (raw) → ${_BM_LINKFLAGS_ITEMS}")
 	endif()
 
@@ -302,7 +302,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 				COMMENT "[BuildMaster/Ninja    ]: Waiting for ${_component}_install to publish ${_file}"
 				VERBATIM
 			)
-			buildmaster_message(COMPONENT DEBUG
+			_bm_log_message(COMPONENT DEBUG
 				"Ninja file rule for spec-link '${_file}' via '${_component}_install'")
 		endforeach()
 	endif()
@@ -311,8 +311,8 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		"${_LIBRARY_COMPONENT_NAMES}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES
 		"${_LIBRARY_COMPONENT_FILES}")
-	buildmaster_message(COMPONENT DEBUG "Wrote fragment ${_LIBRARY_CREATE_FILE} (${_tpl})")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_write_fragment")
+	_bm_log_message(COMPONENT DEBUG "Wrote fragment ${_LIBRARY_CREATE_FILE} (${_tpl})")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_write_fragment")
 endfunction()
 
 ## @brief Apply recorded component_link edges after all fragments are included.
@@ -327,11 +327,11 @@ endfunction()
 ##       not here.
 ## @note FATAL if source is not a target or dest is BUILDONLY.
 function(_buildmaster_apply_links)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_apply_links")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_apply_links")
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 	get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 	if(NOT _lsrcs)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
 		return()
 	endif()
 	set(_i 0)
@@ -340,7 +340,7 @@ function(_buildmaster_apply_links)
 		math(EXPR _i "${_i} + 1")
 
 		if(NOT TARGET "${_src}")
-			buildmaster_message(COMPONENT FATAL
+			_bm_log_message(COMPONENT FATAL
 				"component_link: source '${_src}' is not a target (missing create_*_component?)")
 		endif()
 
@@ -356,7 +356,7 @@ function(_buildmaster_apply_links)
 		if(_dst_comp)
 			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo)
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"component_link: cannot link to BUILDONLY component '${_dst}' (order only via component_dependency between BUILDONLY phases, or component_repack to publish)")
 			endif()
 			# WHOLE dest: INTERFACE already carries whole-archive items; do not
@@ -411,16 +411,16 @@ function(_buildmaster_apply_links)
 				_spec_names _spec_files _spec_dlls)
 			if(_spec_files)
 				target_link_libraries(${_src} INTERFACE ${_spec_files})
-				buildmaster_message(COMPONENT DEBUG
+				_bm_log_message(COMPONENT DEBUG
 					"component_link '${_src}' → spec '${_dst}' → ${_spec_files}")
 				continue()
 			endif()
 		endif()
 
-		buildmaster_message(COMPONENT FATAL
+		_bm_log_message(COMPONENT FATAL
 			"component_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, on-disk archive, or library spec (<name> or <subdir>/<name>). Raw system libraries belong in LINK= / LINK={…}.")
 	endforeach()
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
 endfunction()
 
 ## @brief Deferred materialize: metas, toolchain inherit, components, repacks,
@@ -438,10 +438,10 @@ endfunction()
 ##       (alias order).
 ## @note Git flush is first so eager nested configure sees patched sources.
 function(_buildmaster_finalize_components)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
 		return()
 	endif()
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
@@ -462,7 +462,7 @@ function(_buildmaster_finalize_components)
 			elseif(_sys STREQUAL "meson")
 				_buildmaster_materialize_meson("${_id}")
 			else()
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"finalize: unknown system '${_sys}' for '${_id}'")
 			endif()
 		endforeach()
@@ -480,7 +480,7 @@ function(_buildmaster_finalize_components)
 			get_property(_hook_done GLOBAL PROPERTY
 				BUILDMASTER_ON_MATERIALIZE_${_hid}_DONE)
 			if(NOT _hook_done)
-				buildmaster_message(COMPONENT FATAL
+				_bm_log_message(COMPONENT FATAL
 					"buildmaster_on_component_materialize('${_hid}'): component was never materialized")
 			endif()
 		endforeach()
@@ -488,6 +488,6 @@ function(_buildmaster_finalize_components)
 
 	_buildmaster_hook_run_sorted("BUILDMASTER_ON_GRAPH_FINALIZED")
 
-	buildmaster_message(COMPONENT DEBUG "Component graph finalized")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
+	_bm_log_message(COMPONENT DEBUG "Component graph finalized")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
 endfunction()

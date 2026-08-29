@@ -5,8 +5,8 @@ if(COMMAND buildmaster_loglevel_init)
 endif()
 
 if(EXISTS "@BUILDMASTER_FAIL_MARKER@")
-	buildmaster_message(CMAKE STATUS "Skipped @_CMAKE_COMPONENT_TITLE@")
-	buildmaster_message(CMAKE FATAL "Skipped @_CMAKE_COMPONENT_TITLE@")
+	_bm_log_message(CMAKE STATUS "Skipped @_CMAKE_COMPONENT_TITLE@")
+	_bm_log_message(CMAKE FATAL "Skipped @_CMAKE_COMPONENT_TITLE@")
 endif()
 
 execute_process(
@@ -21,5 +21,5 @@ if(NOT _BM_STAGE_RC EQUAL 0)
 		file(WRITE "@BUILDMASTER_FAIL_MARKER@" "@_CMAKE_COMPONENT_SAFE@\n")
 		file(WRITE "@BUILDMASTER_MARKERS_DIR@/@_CMAKE_COMPONENT_SAFE@.failed" "")
 	endif()
-	buildmaster_message(CMAKE FATAL "Compiling @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
+	_bm_log_message(CMAKE FATAL "Compiling @_CMAKE_COMPONENT_TITLE@ failed (exit ${_BM_STAGE_RC})")
 endif()
