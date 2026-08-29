@@ -54,7 +54,9 @@ endfunction()
 ##       `target_link_libraries` to the final artefact that consumes that id.
 ##       They do not repair a third-party archive that was linked without
 ##       going through this INTERFACE. Not a substitute for `component_link()`.
-## @note Headers mode: `LINK` is WARNING and ignored.
+## @note Headers mode: `LINK` is INFO and ignored (no link line).
+## @note `STRIPRES` default is ON. INFO only when the user wrote the key and
+##       mode is not static (shared/headers have nothing to strip).
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
 ##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
 ##       FATAL (no shared prefix). An upstream `.pc` already at the canonical
@@ -138,13 +140,14 @@ function(create_component _component _component_title _srcdir _builddir
 		endif()
 	endif()
 
-	if(_reg_stripres AND NOT _library_mode STREQUAL "static")
-		buildmaster_message(COMPONENT WARNING
+	if("${_options_string}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]"
+			AND NOT _library_mode STREQUAL "static")
+		buildmaster_message(COMPONENT INFO
 			"create_component('${_component}'): STRIPRES ignored (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
 	endif()
 
 	if(_library_mode STREQUAL "headers" AND _reg_link)
-		buildmaster_message(COMPONENT WARNING
+		buildmaster_message(COMPONENT INFO
 			"create_component('${_component}'): LINK ignored (headers mode has no link line)")
 		set(_reg_link "")
 	endif()
@@ -218,7 +221,6 @@ function(create_component _component _component_title _srcdir _builddir
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_DESCRIPTION
 		"${_pc_description}")
 
-	# Empty INTERFACE now; finalize attaches includes / IMPORTED / WHOLE / LINK.
 	add_library("${_component}" INTERFACE)
 
 	_buildmaster_component_defer_arm()

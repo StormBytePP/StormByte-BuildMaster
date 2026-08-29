@@ -69,8 +69,8 @@ endfunction()
 ##       `_buildmaster_materialize_metas` wires members / WHOLE / LINK onto
 ##       that existing target (`if(NOT TARGET)` only covers lazy metas that
 ##       never called create_meta_component).
-## @note RENAME / BUILDONLY / STRIPRES → WARNING, ignored (meta produces no
-##       archives). STRIPRES default is ON; the warning fires only when the
+## @note RENAME / BUILDONLY / STRIPRES → INFO, ignored (meta produces no
+##       archives). STRIPRES default is ON; the INFO fires only when the
 ##       user actually wrote the key, same as RENAME.
 ## @note `LINK` is accepted. Items are raw linker names, applied INTERFACE on
 ##       `<id>` at materialize so every consumer of the meta (and the final
@@ -137,16 +137,15 @@ function(create_meta_component _id _title)
 			"create_meta_component('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
 	endif()
 	if(_buildonly)
-		buildmaster_message(COMPONENT WARNING
+		buildmaster_message(COMPONENT INFO
 			"create_meta_component('${_id}'): BUILDONLY ignored (meta does not install artifacts)")
 	endif()
-	# RENAME / STRIPRES default ON; only warn when the user actually set the key.
 	if("${_optstr}" MATCHES "[Rr][Ee][Nn][Aa][Mm][Ee]")
-		buildmaster_message(COMPONENT WARNING
+		buildmaster_message(COMPONENT INFO
 			"create_meta_component('${_id}'): RENAME ignored (meta has no produced archives)")
 	endif()
 	if("${_optstr}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
-		buildmaster_message(COMPONENT WARNING
+		buildmaster_message(COMPONENT INFO
 			"create_meta_component('${_id}'): STRIPRES ignored (meta has no produced archives)")
 	endif()
 
@@ -165,7 +164,6 @@ function(create_meta_component _id _title)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE FALSE)
 	endif()
 
-	# Empty INTERFACE now; materialize attaches members / WHOLE / LINK.
 	add_library("${_id}" INTERFACE)
 
 	_buildmaster_component_defer_arm()
@@ -367,7 +365,7 @@ endfunction()
 ##       whole-archive group; already-WHOLE children keep their own INTERFACE
 ##       region; shared/headers children are linked as INTERFACE only.
 ## @note Without WHOLE: `target_link_libraries(<meta> INTERFACE <leaf>)`.
-## @note WHOLE with no static produced archives among members → WARNING.
+## @note WHOLE with no static produced archives among members → INFO.
 function(_buildmaster_meta_wire)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_meta_wire")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -398,7 +396,6 @@ function(_buildmaster_meta_wire)
 					endif()
 					continue()
 				endif()
-				# Child already WHOLE: inherit its INTERFACE (its own region).
 				if(_lwhole)
 					if(TARGET "${_leaf}")
 						target_link_libraries(${_id} INTERFACE ${_leaf})
@@ -433,7 +430,7 @@ function(_buildmaster_meta_wire)
 					endif()
 				endforeach()
 				if(NOT _any_static)
-					buildmaster_message(COMPONENT WARNING
+					buildmaster_message(COMPONENT INFO
 						"meta '${_id}': WHOLE ignored (no static produced archives among members)")
 				endif()
 			endif()

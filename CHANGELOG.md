@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`LINK=` / `LINK={…}`:** raw system linker names (`shlwapi`, `ws2_32`) on the component or meta INTERFACE. They propagate to whoever links that id, including the final `.dll` / `.so`. Not BM nodes and not a fix for a third-party link done outside this INTERFACE. Revives the 1.x `LINK_EXTRA` idea under a shorter name; `component_link` stays the graph (unknown dest is now fatal instead of inventing a prefix spec).
+- Logging: `WARNING` is no longer filtered. Default `BUILDMASTER_LOGLEVEL=STATUS`
+  shows STATUS, WARNING and FATAL. Policy ignores (STRIPRES/WHOLE/LINK on a
+  mode that cannot use them, ignored keys on a meta) are INFO; unknown options,
+  `LINK_EXTRA`, and orphan components stay WARNING.
 
 ### Fixed
 - **Git patch applied twice at configure:** `create_git_patch_file` then `create_git_reset_file` flushed on every register, so the log was apply → `reset --hard` → apply again. Patch is only queued; flush runs reset then patch once (on reset, or DEFER at end of `CMAKE_SOURCE_DIR` when there is no reset). A second flush for the same root is a no-op.

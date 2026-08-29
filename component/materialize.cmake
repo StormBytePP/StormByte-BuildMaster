@@ -164,6 +164,8 @@ endfunction()
 ##       a side effect of the nested install. The rule exists so Ninja has
 ##       a producer for `<file>` when a host target links the IMPORTED
 ##       location. Do not drop this because Make passed locally.
+## @note STRIPRES / WHOLE ignored on a non-static mode are INFO. STRIPRES
+##       INFO only when the user wrote the key (default is ON).
 function(_buildmaster_component_write_fragment _component _deferred)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_write_fragment")
 	_buildmaster_component_collect_outputs("${_component}")
@@ -179,8 +181,10 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	endif()
 
 	if(_sr AND NOT _library_mode STREQUAL "static")
-		buildmaster_message(COMPONENT WARNING
-			"STRIPRES ignored for '${_component}' (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
+		if("${_options_string}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
+			buildmaster_message(COMPONENT INFO
+				"STRIPRES ignored for '${_component}' (mode '${_library_mode}'; only static MSVC/clang-cl archives are stripped)")
+		endif()
 	endif()
 
 	if(DEFINED BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND)
@@ -205,7 +209,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	get_property(_whole_prop GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE)
 	if(_whole_prop)
 		if(NOT _library_mode STREQUAL "static")
-			buildmaster_message(COMPONENT WARNING
+			buildmaster_message(COMPONENT INFO
 				"WHOLE ignored for '${_component}' (mode '${_library_mode}'; only static is supported)")
 		elseif(_LIBRARY_COMPONENT_FILES)
 			set(_BM_WHOLE "1")
@@ -213,6 +217,15 @@ function(_buildmaster_component_write_fragment _component _deferred)
 				${_LIBRARY_COMPONENT_FILES})
 			string(REPLACE ";" " " _BM_WHOLE_LINK_ITEMS "${_whole_list}")
 		endif()
+	endif()
+
+	get_property(_BM_LINK_ITEMS GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINK)
+	if(NOT _BM_LINK_ITEMS)
+		set(_BM_LINK_ITEMS "")
+	endif()
+	if(_BM_LINK_ITEMS)
+		buildmaster_message(COMPONENT DEBUG
+			"${_component}: LINK (raw) → ${_BM_LINK_ITEMS}")
 	endif()
 
 	if(_deferred)

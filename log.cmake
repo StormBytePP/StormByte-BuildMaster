@@ -169,8 +169,10 @@ endfunction()
 ## @param[in] _level  LOWLEVEL, DEBUG, INFO, WARNING, STATUS, or FATAL.
 ## @param[in] _message Text after the header.
 ## @param[in] _indent Optional tab count after the header (default 0).
-## @note FATAL is never filtered. WARNING is hidden when current > INFO.
-##       STATUS lines have no [LEVEL] tag. Header is never indented.
+## @note FATAL and WARNING are never filtered. Default `BUILDMASTER_LOGLEVEL`
+##       is STATUS: STATUS + WARNING + FATAL are visible; INFO / DEBUG /
+##       LOWLEVEL are not. Setting the filter to INFO (or lower) reveals
+##       those. STATUS lines have no [LEVEL] tag. Header is never indented.
 ## @note This file is the only BuildMaster source allowed to call message().
 ## @note Tables live in GLOBAL properties so deferred finalize in the parent
 ##       CMAKE_SOURCE_DIR (consumer add_subdirectory pattern) still resolves
@@ -203,12 +205,8 @@ function(buildmaster_message _module _level _message)
 	get_property(_n_msg GLOBAL PROPERTY BUILDMASTER_LOG_LEVEL_${_lvl})
 	get_property(_n_cur GLOBAL PROPERTY BUILDMASTER_LOG_LEVEL_${_cur})
 
-	if(NOT _lvl STREQUAL "FATAL")
+	if(NOT _lvl STREQUAL "FATAL" AND NOT _lvl STREQUAL "WARNING")
 		if(_n_msg LESS _n_cur)
-			return()
-		endif()
-		get_property(_n_info GLOBAL PROPERTY BUILDMASTER_LOG_LEVEL_INFO)
-		if(_lvl STREQUAL "WARNING" AND _n_cur GREATER ${_n_info})
 			return()
 		endif()
 	endif()

@@ -276,14 +276,13 @@ a download that is not a library, a host target that writes files).
 Records a link on the component `INTERFACE`.
 
 `dest` is a **BuildMaster graph node**: another component, a meta, an
-existing CMake target, or an archive that already exists on disk. If it
+existing CMake target, an archive that already exists on disk, or a
+library spec (`<name>` / `<subdir>/<name>`) under the BM prefix. If it
 is a graph node, BuildMaster also records `component_dependency`.
 
 It is **not** where you list `shlwapi`. A dest that matches none of the
 kinds above is **FATAL** — that name belongs in `LINK=` on the producer
-(see the next section). 2.0 used to treat an unknown dest as a produced
-spec under the install prefix. That was the wrong model for a system
-library, and it is gone.
+(see the next section).
 
 Host binaries are not graph nodes. Link them the ordinary way:
 
@@ -342,12 +341,12 @@ without going through the BM `INTERFACE`. If someone runs
 `lld-link … mariadbclient.lib` by hand, `LINK` does not exist. That is
 the point of the contract, not a bug.
 
-Headers mode has no link line: `LINK` is **WARNING**, ignored.
+Headers mode has no link line: `LINK` is **INFO**, ignored.
 A meta **accepts** `LINK` and puts the names on the collection
 `INTERFACE`, so you declare the syslibs once instead of on every member.
 
 `LINK_EXTRA` from 1.x is gone. Same idea, shorter name, no graph
-confusion.
+confusion. Using the old key is a **WARNING**.
 
 ---
 
@@ -366,9 +365,9 @@ already have `TOOLCHAIN` set. An explicit `TOOLCHAIN` on the child is
 kept. Two metas inheriting **different** profiles onto the same empty
 destination is **FATAL**.
 
-`RENAME`, `BUILDONLY` and `STRIPRES` on a meta are ignored with a warning
+`RENAME`, `BUILDONLY` and `STRIPRES` on a meta are ignored with **INFO**
 when the key is actually written (there is nothing to install or strip).
-The default-on `STRIPRES` does not warn on a meta that never mentioned it.
+The default-on `STRIPRES` does not log on a meta that never mentioned it.
 
 `PC={…}` on a meta is **FATAL**. A collection has no single library
 contract. Generating one `.pc` from an unbounded member set would invent
@@ -406,10 +405,10 @@ and `MyApp`.
 
 After materialize, components and metas that were never consumed — no link,
 no dependency, no host `target_link_libraries`, no **used** `component_repack`
-— are listed in a single **WARNING**.
-
-Membership in an *unused* meta does not count. A `BUILDONLY` phase that only
-feeds an unused repack is still an orphan (and so is that repack).
+— are listed in a single **WARNING**. That line is visible at the default
+log level (`STATUS`). Membership in an *unused* meta does not count. A
+`BUILDONLY` phase that only feeds an unused repack is still an orphan
+(and so is that repack).
 
 ---
 
@@ -463,7 +462,7 @@ KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};PC={VERSION=1.0.0;NAME=fo
 | `LINK=` / `LINK={…}` | Raw system linker names on the component or meta `INTERFACE` |
 | `PC={…}` | After install, write a **helper** `.pc` under the shared prefix (see below) |
 
-`LINK_EXTRA` is not a key. It warns and is ignored.
+`LINK_EXTRA` is not a key. It **WARNING**s and is ignored.
 
 ---
 
@@ -481,8 +480,9 @@ One linear group per consumer (never nested `--whole-archive` sandwiches):
 -WHOLEARCHIVE:A.lib  -WHOLEARCHIVE:B.lib              # MSVC (Ninja-safe spelling)
 ```
 
-On shared, headers, or `BUILDONLY`, `WHOLE` is **ignored with a warning**.
-A non-WHOLE library linked next to a WHOLE meta stays outside the group.
+On shared, headers, or a meta with no static members, `WHOLE` is **ignored
+with INFO**. A non-WHOLE library linked next to a WHOLE meta stays outside
+the group.
 
 `WHOLE` is why `STRIPRES` exists. Forcing every object out of two static
 `.lib` files also forces every `.res` those archives still carry. Two
@@ -520,8 +520,8 @@ is left alone.
 | Static + MSVC / clang-cl + `STRIPRES` on (default) | Strip after rename / contract |
 | Static + `BUILDONLY` | Same, against the component build dir |
 | Static + other toolchain | Silent no-op (no warning) |
-| Shared / headers | **WARNING**, ignored |
-| Meta | **WARNING** only if you wrote the `STRIPRES` key |
+| Shared / headers | **INFO** only if you wrote the `STRIPRES` key (default is ON) |
+| Meta | **INFO** only if you wrote the `STRIPRES` key |
 | `STRIPRES=OFF` | Skip. Use this if you actually need the resources |
 
 You do not list members. You do not write a per-library script. If a
@@ -631,70 +631,39 @@ group. Turn it back on without rewriting the rest of the options string.
 
 Some upstreams are not “the library you ship”. They are intermediate
 static archives you later merge (several bit-depth builds, a main lib plus
-an extra helper built from the same tree).
+a plugin pack). Mark them `BUILDONLY`: they compile into the component
+build dir and never enter the shared prefix. `component_repack` then
+publishes one archive from those inputs.
 
-`BUILDONLY`:
-
-- still has `_configure` / `_build` / `_install` anchors (`_install` is a
-  coherence target — it does not publish to the shared prefix)
-- artifacts live in **that component’s build directory**
-- `RENAME` is allowed and runs against the build dir
-- `STRIPRES` is allowed and runs against the same build-dir archives
-- `PC={…}` with `ENABLED=TRUE` is **FATAL** (helper `.pc` files belong on
-  the shared prefix)
-- `component_link` *from a normal component to a BUILDONLY* is **FATAL**
-  (you cannot link a tree that was never installed)
-
-`component_repack(id title output inputs…)` merges listed archives with the
-host archiver (`ar` / `llvm-ar` / `lib.exe` / `libtool`) into one file under
-the shared prefix and exposes it as an IMPORTED target. Inputs may be
-BUILDONLY components. The repack waits on each input’s **`_build`**, not
-`_install`, so BUILDONLY works. A custom host target that only has artifacts
-(no `_build`) is accepted as a corner case.
-
-A repack that nothing consumes does **not** mark its inputs as used.
+A `BUILDONLY` component is not a link dest (`component_link` to it is
+**FATAL**). Wait on its stages with `component_dependency`, or consume it
+only as a repack input.
 
 ---
 
 ## Subcomponent specs
 
-One component can produce several archives. List them on `create_*`:
-
-| Spec | File | IMPORTED target |
-|------|------|-----------------|
-| `mylib` | `${BUILDMASTER_INSTALL_LIBDIR}/libmylib.a` | `mylib` |
-| `vendor/foo/foolib` | `${BUILDMASTER_INSTALL_LIBDIR}/vendor/foo/libfoolib.a` | `vendor_foo_foolib` |
-
-```cmake
-library_import_static_hint(out name prefix [subdir])
-library_import_hint(out name prefix [subdir])
-```
-
-A static `.a` does not pull sibling static archives. List every required
-spec on the outermost component, or `component_link` them.
+Produced libraries are `<name>` or `<subdir>/<name>`. The install layout
+keeps the subdirectory (`lib/recursive/cmake/midlib.a`). `component_link`
+accepts the same spec form when the dest is not a registered id — the
+archive need not exist at configure. Stage `OUTPUT` lists only the specs
+declared on `create_*`; extra spec-link files get a Ninja wait-rule on
+`<id>_install`. Unix Makefiles often hide the missing rule. Ninja does not.
 
 ---
 
 ## Header-only components
 
-`create_cmake_headers_component` / `create_meson_headers_component`:
-
-- no IMPORTED archive
-- install stamp under the include tree
-- `INTERFACE` + `SYSTEM` include of `BUILDMASTER_INSTALL_INCLUDEDIR`
-- `LINK` is **WARNING**, ignored — there is nothing to hang a link line on
-
-Useful for SDKs and for graphs that only need headers before a later
-compile.
+`create_cmake_headers_component` / `create_meson_headers_component` still
+run configure / build / install for the include tree. There is no produced
+archive and no link line. `LINK` on a headers component is **INFO**,
+ignored.
 
 ---
 
 ## Per-component toolchains
 
-`TOOLCHAIN=` pins **that component** (and nested BuildMaster under it).
-The parent job’s compiler does not change.
-
-| Name | Drivers | Linker |
+| Profile | Compilers | Notes |
 |------|---------|--------|
 | `gcc` | `gcc` / `g++` | System default |
 | `clang` | `clang` / `clang++` | LLD required on **Linux**; not forced on **macOS** |
@@ -770,29 +739,36 @@ buildmaster_message(USER FATAL "extra data hash missing")
 
 ### Levels
 
-Higher number = quieter filter threshold:
+Higher number = quieter filter threshold for the *optional* levels.
+`WARNING` and `FATAL` ignore the threshold.
 
 | Level | Role |
 |-------|------|
 | `LOWLEVEL` | Function enter/exit and path plumbing |
 | `DEBUG` | Useful when debugging BuildMaster or a consumer graph |
-| `INFO` | Optional progress (rename skip, unpack OK, `.res` strip skip) |
-| `WARNING` | Shown at `INFO` or more verbose; hidden at `STATUS` and `FATAL` |
-| `STATUS` | Default. Stage titles (`Configuring` / `Compiling` / `Installing`) |
+| `INFO` | Policy that was ignored because it cannot apply (STRIPRES/WHOLE/LINK on the wrong mode, ignored keys on a meta, rename already done) |
+| `WARNING` | Something you should fix: unknown option, `LINK_EXTRA`, orphan component. **Always printed.** |
+| `STATUS` | Default narrative. Stage titles (`Configuring` / `Compiling` / `Installing`) |
 | `FATAL` | Always printed. Stops configure/script. Never filtered |
 
-`BUILDMASTER_LOGLEVEL=FATAL` is the quietest user setting. Allowed;
-discouraged.
+Default `BUILDMASTER_LOGLEVEL` is `STATUS`. You see STATUS, WARNING and
+FATAL. You do not see INFO / DEBUG / LOWLEVEL until you lower the filter.
+
+`BUILDMASTER_LOGLEVEL=FATAL` still prints WARNING (and FATAL). Allowed;
+discouraged if you wanted silence — there is no `SILENT` level.
 
 An unknown level (typo `DEHBUG`) is **FATAL** and lists accepted names.
 
 ### Filter
 
-A line is printed when its level number is **≥** the current
-`BUILDMASTER_LOGLEVEL`, except:
+| Level | When it prints |
+|-------|----------------|
+| `FATAL` | Always |
+| `WARNING` | Always |
+| `STATUS` / `INFO` / `DEBUG` / `LOWLEVEL` | When its number is **≥** current `BUILDMASTER_LOGLEVEL` |
 
-- `FATAL` is never dropped
-- `WARNING` is dropped when the current level is stricter than `INFO`
+Set `BUILDMASTER_LOGLEVEL=INFO` (cache or env) to see ignored-policy lines
+and rename skips. `LOWLEVEL` is the firehose.
 
 ### Format
 
@@ -801,6 +777,8 @@ level tag with **no space** between the two brackets:
 
 ```text
 -- [BuildMaster/CMake    ]:	Configuring My Library
+-- [WARNING ][BuildMaster/Component]:	orphan component(s) / meta(s): leftover
+-- [INFO    ][BuildMaster/Rename   ]:	rename: already present (skip)
 -- [DEBUG   ][BuildMaster/File     ]:	cache hit
 ```
 
