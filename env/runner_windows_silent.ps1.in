@@ -1,5 +1,11 @@
-# Silent runner: same env, capture streams, dump on failure.
-# Payload: leftover argv after --, or --argfile <path>.
+# Silent runner (Windows PowerShell 5.1): same env as runner.ps1,
+# keep the full log, replay BuildMaster lines live.
+# Do not wrap powershell -File runner.ps1 — -File extra args with
+# spaces are unsafe (5.1). Payload is --argfile or raw argv; we
+# start that executable ourselves.
+#
+# Invocation: ... -File this.ps1 -- <payload...>
+#        or:  ... -File this.ps1 -- --argfile <utf8 lines>
 
 $ErrorActionPreference = 'Continue'
 
@@ -16,6 +22,32 @@ function Prepend-IfNonEmpty([string]$Name, [string]$Prefix, [string]$Sep) {
 		Set-Item -Path "Env:$Name" -Value ($Prefix + $Sep + $cur)
 	} else {
 		Set-Item -Path "Env:$Name" -Value $Prefix
+	}
+}
+
+function Escape-Win32Arg([string]$Arg) {
+	if ($null -eq $Arg) { return '""' }
+	if ($Arg -notmatch '[ \t"]') { return $Arg }
+	$escaped = $Arg -replace '\\','\\' -replace '"','\"'
+	return '"' + $escaped + '"'
+}
+
+function Replay-BuildMasterLine([string]$Raw) {
+	$s = $Raw
+	if ($s.StartsWith('-- ')) {
+		$s = $s.Substring(3)
+	}
+	if ($s.StartsWith('[BuildMaster/')) {
+		[Console]::Out.WriteLine($Raw)
+		return
+	}
+	$idx = $s.IndexOf('][BuildMaster/')
+	if ($idx -gt 0 -and $s.StartsWith('[')) {
+		if ($s.StartsWith('[WARNING ') -or $s.StartsWith('[FATAL ')) {
+			[Console]::Error.WriteLine($Raw)
+		} else {
+			[Console]::Out.WriteLine($Raw)
+		}
 	}
 }
 
@@ -71,15 +103,43 @@ if ($payload.Count -gt 1) {
 }
 
 $log = Join-Path $env:TEMP ('buildmaster.' + [guid]::NewGuid().ToString('N') + '.log')
-$rc = 0
-try {
-	& $cmd @cmdArgs *> $log
-	$rc = $LASTEXITCODE
-	if ($null -eq $rc) { $rc = 0 }
-} catch {
-	$rc = 1
-	$_ | Out-File -FilePath $log -Append -Encoding utf8
+$logLock = New-Object object
+
+$psi = New-Object System.Diagnostics.ProcessStartInfo
+$psi.FileName = $cmd
+$psi.Arguments = ($cmdArgs | ForEach-Object { Escape-Win32Arg $_ }) -join ' '
+$psi.UseShellExecute = $false
+$psi.RedirectStandardOutput = $true
+$psi.RedirectStandardError = $true
+$psi.CreateNoWindow = $true
+
+$p = New-Object System.Diagnostics.Process
+$p.StartInfo = $psi
+
+$handler = {
+	if ($null -eq $EventArgs.Data) { return }
+	$line = $EventArgs.Data
+	[System.Threading.Monitor]::Enter($logLock)
+	try {
+		Add-Content -LiteralPath $log -Value $line -Encoding UTF8
+	} finally {
+		[System.Threading.Monitor]::Exit($logLock)
+	}
+	Replay-BuildMasterLine $line
 }
+
+Register-ObjectEvent -InputObject $p -EventName OutputDataReceived -Action $handler | Out-Null
+Register-ObjectEvent -InputObject $p -EventName ErrorDataReceived -Action $handler | Out-Null
+
+[void]$p.Start()
+$p.BeginOutputReadLine()
+$p.BeginErrorReadLine()
+$p.WaitForExit()
+$rc = $p.ExitCode
+if ($null -eq $rc) { $rc = 0 }
+
+Get-EventSubscriber | Where-Object { $_.SourceObject -eq $p } | Unregister-Event
+$p.Dispose()
 
 if ($rc -ne 0) {
 	if (Test-Path -LiteralPath $log) {

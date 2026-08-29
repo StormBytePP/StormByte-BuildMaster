@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shows STATUS, WARNING and FATAL. Policy ignores (STRIPRES/WHOLE/LINK on a
   mode that cannot use them, ignored keys on a meta) are INFO; unknown options,
   `LINK_EXTRA`, and orphan components stay WARNING.
+- Silent env runner replays nested BuildMaster lines live. The full child
+  log is still kept and dumped on failure. Matching uses both header
+  shapes (`[BuildMaster/…]` and `[LEVEL][BuildMaster/…]`); WARNING/FATAL
+  stay on stderr, the rest on stdout. Unix silent scripts run under bash.
+  Stage `-P` configure no longer captures child streams, so the replay
+  reaches the TTY as it happens. `BUILDMASTER_VERBOSE` still uses the
+  normal runner (entire child output, unfiltered).
 
 ### Fixed
 - **Git patch applied twice at configure:** `create_git_patch_file` then `create_git_reset_file` flushed on every register, so the log was apply → `reset --hard` → apply again. Patch is only queued; flush runs reset then patch once (on reset, or DEFER at end of `CMAKE_SOURCE_DIR` when there is no reset). A second flush for the same root is a no-op.

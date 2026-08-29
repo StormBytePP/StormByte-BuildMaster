@@ -1,15 +1,42 @@
-#!/bin/sh
-# Silent runner: capture all output; on failure dump to stderr and re-exit.
+#!/usr/bin/env bash
+# Silent runner: keep the full log; replay BuildMaster lines live.
+# Bash is required (PIPESTATUS). Do not invoke with sh.
+#
 # IMPORTANT: do not use `if cmd; then; fi` + `$?` after it — a failed
 # condition makes the if-compound exit 0, swallowing the real status.
+
+set +e
 
 _log="$(mktemp "${TMPDIR:-/tmp}/buildmaster.XXXXXX")"
 trap 'rm -f "$_log"' EXIT HUP INT TERM
 
-@ENV_RUNNER_CMD@ "$@" >"$_log" 2>&1
-_rc=$?
+# CMake prefixes message() with "-- ". Strip that only for matching.
+_bm_replay_line() {
+	local _raw="$1"
+	local _s="$_raw"
+	if [[ $_s == --\ * ]]; then
+		_s="${_s:3}"
+	fi
+	if [[ $_s == '[BuildMaster/'* ]]; then
+		printf '%s\n' "$_raw"
+		return
+	fi
+	if [[ $_s == '['*'][BuildMaster/'* ]]; then
+		if [[ $_s == '[WARNING '* || $_s == '[FATAL '* ]]; then
+			printf '%s\n' "$_raw" >&2
+		else
+			printf '%s\n' "$_raw"
+		fi
+	fi
+}
 
-if [ "$_rc" -ne 0 ]; then
+@ENV_RUNNER_CMD@ "$@" 2>&1 | while IFS= read -r _line || [[ -n $_line ]]; do
+	printf '%s\n' "$_line" >>"$_log"
+	_bm_replay_line "$_line"
+done
+_rc=${PIPESTATUS[0]}
+
+if [[ $_rc -ne 0 ]]; then
 	cat "$_log" >&2
 	exit "$_rc"
 fi

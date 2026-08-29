@@ -76,21 +76,17 @@ if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
 			COMMAND ${_bm_runner} --argfile "${_bm_argfile}"
 			WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
 			RESULT_VARIABLE CMAKE_RESULT
-			OUTPUT_VARIABLE CMAKE_OUT
-			ERROR_VARIABLE CMAKE_ERROR
 		)
 	else()
 		execute_process(
 			COMMAND ${_bm_runner} ${_bm_cfg_cmd}
 			WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
 			RESULT_VARIABLE CMAKE_RESULT
-			OUTPUT_VARIABLE CMAKE_OUT
-			ERROR_VARIABLE CMAKE_ERROR
 		)
 	endif()
 
 	if(NOT CMAKE_RESULT EQUAL 0)
 		buildmaster_message(CMAKE FATAL
-			"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT})\nWorking directory: @_CMAKE_BUILD_DIR@\n--- stdout ---\n${CMAKE_OUT}\n--- stderr ---\n${CMAKE_ERROR}")
+			"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT}). Working directory: @_CMAKE_BUILD_DIR@. Nested output was already written by the env runner.")
 	endif()
 endif()

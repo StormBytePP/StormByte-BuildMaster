@@ -701,6 +701,10 @@ Third-party trees that themselves vendor BuildMaster must sit as **sibling
 directories** of the BuildMaster checkout the parent added. Nested projects
 expect that layout.
 
+The nested graph speaks with `buildmaster_message` like the parent. Under
+the default silent runner those lines are replayed **live** (see
+[Logging](#logging)). Extra indent for nested depth is not applied here.
+
 ---
 
 ## Logging
@@ -770,6 +774,35 @@ An unknown level (typo `DEHBUG`) is **FATAL** and lists accepted names.
 Set `BUILDMASTER_LOGLEVEL=INFO` (cache or env) to see ignored-policy lines
 and rename skips. `LOWLEVEL` is the firehose.
 
+Parent configure calls `message()` directly. Nested CMake/Meson/Ninja go
+through an env runner (next section).
+
+### Nested / recursive lines
+
+A child project that `add_subdirectory(buildmaster)` again emits the same
+headers. The **silent** runner keeps the full child log and, **line by
+line**, reprints BuildMaster lines as they appear so a long nested
+configure does not look hung.
+
+A line is BM when, after stripping CMake’s optional `-- ` prefix, it is
+one of:
+
+```text
+[BuildMaster/<Mod>]: …                 STATUS (stdout)
+[<LEVEL padded>][BuildMaster/<Mod>]: … INFO/DEBUG/LOWLEVEL (stdout),
+                                       WARNING/FATAL (stderr)
+```
+
+Both pieces of the tagged header must be present. Upstream `CMake Warning`
+noise is not replayed.
+
+On child failure the runner dumps the **entire** log to stderr (BM lines
+may repeat). `FAIL_FAST` is unchanged: that stage is dead either way;
+the marker only decides whether later stages run.
+
+Stage `-P` scripts do not capture `OUTPUT_VARIABLE` / `ERROR_VARIABLE`.
+Capturing would hold the pipe until exit and undo the live replay.
+
 ### Format
 
 `STATUS` lines use only the module header. Other levels prefix a padded
@@ -788,16 +821,25 @@ level tag with **no space** between the two brackets:
 
 ## Verbosity of tool output
 
-`BUILDMASTER_VERBOSE` is independent of the log level. It controls whether
-nested CMake / Meson / Ninja stdout is shown on success. Failures always
-print captured output.
+`BUILDMASTER_VERBOSE` is independent of the log level. It selects the
+**runner**, not which BM lines exist.
+
+| `BUILDMASTER_VERBOSE` | Runner | What you see |
+|-----------------------|--------|----------------|
+| OFF (default) | silent (bash on Unix, PowerShell on Windows) | Full child log on disk. Live TTY: BM headers only. Failure: full dump. |
+| ON | normal | Entire child stdout/stderr live, including CMake checks **and** nested BM. |
+
+Failures always surface. The normal runner is not filtered: VERBOSE means
+VERBOSE.
 
 ---
 
 ## Fail-fast
 
 `BUILDMASTER_FAIL_FAST=ON` writes a marker after a stage failure so later
-stages skip instead of cascading.
+stages skip instead of cascading. A nested BM `FATAL` already fails that
+child CMake (`exit ≠ 0`). Fail-fast does not revive it; it only stops
+siblings that have not started.
 
 ---
 

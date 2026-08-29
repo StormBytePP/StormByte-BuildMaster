@@ -110,6 +110,7 @@ endfunction()
 ## @note On WIN32 the silent template receives `ENV_RUNNER_CMD` as the
 ##       absolute path of that `.ps1`; CMake launches both via
 ##       `powershell -ExecutionPolicy Bypass -File` (process-local).
+## @note On Unix the silent script is bash (`PIPESTATUS` + live BM replay).
 ## @note Empty `component` or `toolchain_name` is fatal.
 macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
@@ -226,7 +227,7 @@ macro(buildmaster_create_component_env_runners out_runner out_runner_silent comp
 			ERROR_QUIET
 		)
 		set(_bm_tc_runner_cmd /bin/sh "${_bm_tc_runner_path}")
-		set(_bm_tc_silent_cmd /bin/sh "${_bm_tc_silent_path}")
+		set(_bm_tc_silent_cmd bash "${_bm_tc_silent_path}")
 	endif()
 
 	set(${out_runner} ${_bm_tc_runner_cmd})

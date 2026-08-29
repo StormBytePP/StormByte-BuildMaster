@@ -24,9 +24,9 @@ if(NOT BUILDMASTER_CONFIGURED)
 		)
 	else()
 		set(ENV_RUNNER /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
-		set(ENV_RUNNER_SILENT /bin/sh "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
+		set(ENV_RUNNER_SILENT bash "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
 		set(ENV_RUNNER_CMD "/bin/sh ${BUILDMASTER_SCRIPTS_ENVDIR}/runner.sh")
-		set(ENV_RUNNER_SILENT_CMD "/bin/sh ${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
+		set(ENV_RUNNER_SILENT_CMD "bash ${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh")
 		configure_file(
 			"${BUILDMASTER_ENV_SRCDIR}/runner_linux_silent.sh.in"
 			"${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent.sh"
