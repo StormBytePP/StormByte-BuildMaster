@@ -85,6 +85,14 @@ fragment to `include()`, no public dependant factories. A 1.x
   so nested compiles see the shared install tree.
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
   meta-toolchain, LINKFLAGS, and a sibling-layout consumer.
+- **`buildmaster_component`.** Same arity as `create_cmake_component` /
+  `create_meson_component`. Backend is inferred from `srcdir`
+  (`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
+  `options` is a CMake list of `KEY=value`: `CFLAGS`, `CXXFLAGS`,
+  `CPPFLAGS`, `LDFLAGS`, `INCLUDES`, `DEFINITIONS`. Those flags are
+  private to the nested compile and append to the parent job /
+  toolchain (they do not replace it, and they are not `ENV{CFLAGS}`).
+  Other keys FATAL. optstr (`LINK=`, `PC=`, …) unchanged.
 
 ### Changed
 

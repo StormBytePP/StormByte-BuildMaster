@@ -14,6 +14,7 @@ create_meson_component
 create_meson_headers_component
 create_meta_component
 meta_component_add
+buildmaster_component
 
 # File helpers
 file_checksum_correct
