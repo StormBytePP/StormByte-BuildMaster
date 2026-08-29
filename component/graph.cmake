@@ -129,6 +129,11 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 		_pc_present _pc_enabled _pc_name _pc_version _pc_description)
 	_bm_opt_parse_link("${_options_string}" _reg_link)
 	_bm_opt_parse_linkflags("${_options_string}" _reg_linkflags)
+	_bm_opt_parse_repack("${_options_string}" _reg_repack)
+	if(_reg_repack)
+		_bm_log_message(COMPONENT FATAL
+			"REPACK is only valid on buildmaster_meta(). A component publishes its own artifacts; to merge several components into one archive, put REPACK on the meta and buildmaster_meta_add those ids.")
+	endif()
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -591,7 +596,7 @@ function(_bm_graph_dep_targets id out_var)
 			_bm_comp_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo AND NOT _src_bo)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_depend('${id}', '${_dst}'): a non-BUILDONLY component cannot depend on BUILDONLY '${_dst}' (use buildmaster_repack to publish, or make '${id}' BUILDONLY too)")
+					"buildmaster_depend('${id}', '${_dst}'): a non-BUILDONLY component cannot depend on BUILDONLY '${_dst}' (publish it with a REPACK meta, or make '${id}' BUILDONLY too)")
 			endif()
 		endif()
 

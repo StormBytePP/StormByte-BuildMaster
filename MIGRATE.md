@@ -31,7 +31,7 @@ Baseline: last published tag
 [`1.0.1`](https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/1.0.1)
 (`b630c1b`). Target: `master` (forthcoming **2.0.0**).
 
-Public surface on `master` is eighteen `buildmaster_*` commands
+Public surface on `master` is twelve `buildmaster_*` commands
 (see `.github/tests/expected/public_functions.txt`). Everything else
 is `_bm_<craft>_*` and is **not** a supported API.
 
@@ -64,7 +64,7 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 | `create_cmake_dependant_component` | `buildmaster_component` + `buildmaster_depend` |
 | `create_meson_dependant_component` | `buildmaster_component` + `buildmaster_depend` |
 | `create_*_headers_dependant_component` | `buildmaster_component` + `headers` + `buildmaster_depend` |
-| `create_bundle_static_libraries` | `buildmaster_repack` |
+| `create_bundle_static_libraries` | `BUILDONLY` leaves + `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add` |
 | `create_cmake_stages` / `create_meson_stages` | Internal (`_bm_tools_*_stages`) |
 | First-argument **out-file** on `create_*` / `file_*` / `create_git_*` | Gone. Do **not** `include()` a generated fragment |
 | Positional `[indent_level] [toolchain]` | Trailing options string `INDENT=…;TOOLCHAIN=…` |
@@ -74,7 +74,8 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 | `library_import_hint` / `library_import_static_hint` | Internal |
 | `file_checksum_correct` | Internal |
 | `file_download` / `file_download_cached` / `file_decompress` | `buildmaster_download{,_cached}` / `buildmaster_decompress` |
-| `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` | `buildmaster_git_{reset,patch,fetch,switch}` |
+| `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` | `GIT={…}` on `buildmaster_component` |
+| `buildmaster_repack` / `component_repack` | Same as `create_bundle_static_libraries`: a `REPACK` meta |
 
 ### Public commands on master
 
@@ -84,14 +85,15 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 | `buildmaster_depend(source dest)` | Order-only edge |
 | `buildmaster_link(source dest)` | Link on the component `INTERFACE` + wait if `dest` is a graph node |
 | `buildmaster_prerequisite(id target)` | Wait on a host / download / custom target before `<id>_configure` |
-| `buildmaster_meta(id title [, options])` | `INTERFACE` collection (no sources, no install) |
+| `buildmaster_meta(id title [, options])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
 | `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
-| `buildmaster_repack(id title output input…)` | Merge static archives (including `BUILDONLY` inputs) |
 | `buildmaster_hook_component(id fn alias [CAPTURE …])` | Run `fn` after that id materializes |
 | `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
 | `buildmaster_message(level text [, indent])` | Only supported log API. Module is always `USER` |
 | `buildmaster_download` / `buildmaster_download_cached` / `buildmaster_decompress` | File helpers (no out-var) |
-| `_bm_tools_git_fetch` / `_bm_tools_git_switch` / `_bm_tools_git_reset` / `_bm_tools_git_patch` | Git helpers (no out-var) |
+
+There is **no** `buildmaster_repack`. Git work is `GIT={…}` on the
+component, not four public commands.
 
 `buildmaster_link` always records `buildmaster_depend` when `dest` is a
 graph node. A spec or on-disk archive is link-only. Duplicate
@@ -155,7 +157,7 @@ Neutral `options` entries the factory understands
 `DEFINITIONS`) are **private** to the nested compile and **append**
 to the parent job / toolchain. They are not `ENV{CFLAGS}`.
 Everything else in that list is FATAL. The trailing optstr is
-unchanged (`LINK=`, `PC=`, …).
+unchanged (`LINK=`, `PC=`, `GIT=`, `REPACK`, …).
 
 ### Options string
 
@@ -168,7 +170,8 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 - First `=` in each pair splits key from value.
 - `;` inside `{…}` is **not** a pair break.
 - Keys are case-insensitive, stored uppercase.
-- Bare flag (`RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`) means `KEY=ON`.
+- Bare flag (`RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`, `REPACK`)
+  means `KEY=ON`.
 - Unknown keys: **WARNING**, ignored.
 - Extra positionals: **FATAL**.
 
@@ -180,19 +183,18 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | `WHOLE` | OFF | Whole-archive link of **static** produced archives |
 | `BUILDONLY` | OFF | Do not publish into the shared prefix |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives after `RENAME` |
+| `REPACK` | OFF | **Meta only.** Merge every produced static archive of the members. Stem = meta id |
 | `PC={…}` | off unless the group is present | Helper `.pc` for **this** prefix. Bare `PC` / `PC=ON` is **FATAL** |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names (`shlwapi`, `ws2_32`) on the id `INTERFACE` |
-| `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker flags. Groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux + macOS). Unknown platform key is **FATAL**. A group that does not apply is skipped at INFO |
+| `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker flags. Groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` |
+| `GIT={…}` | off | Srcdir git. Empty group is WARNING. Meta + ops is FATAL |
 
 `PC` on a **meta** is **FATAL**. `BUILDONLY` + enabled `PC` is **FATAL**.
-If the library already installs a `.pc` at the canonical path, do not
-set `PC={…}` (collision is **FATAL**).
+`REPACK` on a **component** is **FATAL**. `BUILDONLY` + shared as a
+`REPACK` member is **FATAL**. Shared members that *do* install stay
+INTERFACE (WARNING: they are not folded into the pack).
 
 `LINK=` is **not** a graph node. `buildmaster_link` is.
-`LINKFLAGS` ride the same `INTERFACE` as `LINK=` (they propagate to
-whoever links that id, including the final `.dll` / `.so`). Put
-flags that must **not** leak to the application on a leaf you never
-link from the app, or keep them off BuildMaster.
 
 ### Graph instead of “dependant” + `POST_BUILD`
 
@@ -205,31 +207,44 @@ link from the app, or keep them off BuildMaster.
 | `POST_BUILD` rename / copy `zsd.lib` → `z.lib` | `RENAME` (usually leave default ON) |
 | `POST_BUILD` `lib /REMOVE:….res` | `STRIPRES` (default ON; silent on non-MSVC) |
 | Parent `/WHOLEARCHIVE:` / `-force_load` / `--whole-archive` loop | `WHOLE` on the component or on the meta you link |
-| `create_bundle_static_libraries` + `POST_BUILD` merge | `BUILDONLY` phases + `buildmaster_repack` |
+| `create_bundle_static_libraries` + `POST_BUILD` merge | `BUILDONLY` phases + `buildmaster_meta(pack "…" "REPACK")` + `buildmaster_meta_add(pack a b)` |
+| `buildmaster_repack(id OUTPUT stem INPUTS a;b)` | Same: the meta id **is** the stem; members **are** the inputs |
 | `file(WRITE) …pc` + copy into `libdir/pkgconfig` | `PC={VERSION=…;NAME=…}` on the **leaf** that owns the archive |
 | `LINK_EXTRA=shlwapi` | `LINK=shlwapi` or `LINK={shlwapi;ws2_32}` |
 | Hand-written `target_link_options` for `/FORCE:MULTIPLE` | `LINKFLAGS=/FORCE:MULTIPLE` or `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE};UNIX={-Wl,-Bsymbolic}}` |
 
-Host-only libraries (`ws2_32`, Apple frameworks) can live in `LINK=`
-when every consumer of that id needs them. Otherwise keep them on the
-final `target_link_libraries` of the application.
+**1.0.1 / early 2.x draft**
+
+```cmake
+create_bundle_static_libraries(FOO_BUNDLE "foo" "merged" "a;b")
+# or
+buildmaster_repack(merged OUTPUT mergedlib INPUTS enc-8;enc-10)
+```
+
+**master**
+
+```cmake
+buildmaster_component(enc-8  "enc 8"  "${ENC_SRC}" "${ENC8}"  static enc "BUILDONLY")
+buildmaster_component(enc-10 "enc 10" "${ENC_SRC}" "${ENC10}" static enc "BUILDONLY")
+buildmaster_meta(enc "encoder" "REPACK")
+buildmaster_meta_add(enc enc-8 enc-10)
+buildmaster_link(engine enc)
+```
 
 ### File / git helpers
 
-Out-file + `include()` is gone. Bind the operation to a **name** you
-later pass to `buildmaster_prerequisite`.
+Out-file + `include()` is gone. Bind the download to a **name** you
+later pass to `buildmaster_prerequisite`. Git is an optstr on the
+component.
 
 | 1.0.1 | master |
 |-------|--------|
 | `file_download_cached(OUT url …)` + `include(${OUT})` | `buildmaster_download_cached(<name> <url> [EXPECTED_HASH …] [TITLE …])` then `buildmaster_prerequisite(<id> <name>)` |
 | `file_decompress(OUT archive dest …)` + `include` | `buildmaster_decompress(<name> <archive> <dest> [TITLE …])` |
-| `create_git_reset_file(OUT id title repo)` + `include` | `_bm_tools_git_reset(<id> <title> <repo>)` |
-| `create_git_patch_file(OUT id title repo patches)` + `include` | `_bm_tools_git_patch(<id> <title> <repo> <patch>)` |
-| `create_git_fetch` / `create_git_switch_branch` | `_bm_tools_git_fetch` / `_bm_tools_git_switch` |
+| `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` | `GIT={FETCH;SWITCH=…;RESET;PATCH=…;TITLE=…}` on `buildmaster_component` |
 
-Call `buildmaster_git_*` **before** `buildmaster_component` for that
-id. Post-install reset of registered roots is still automatic.
-Patch is queued; flush is reset-then-apply once per root.
+Flush order is FETCH → SWITCH → RESET → PATCH. Post-install
+`reset --hard` + `clean -fd` runs only when a PATCH was queued.
 
 ### Logging
 
@@ -269,9 +284,10 @@ adds it) is enough. Do not `include(…/helpers.cmake)` after that.
 - [ ] Replace `create_*_dependant_*` with `buildmaster_depend` or
       `buildmaster_link`.
 - [ ] Replace `LINK_EXTRA` with `buildmaster_link` or `LINK=`.
-- [ ] Replace `create_bundle_static_libraries` with
-      `BUILDONLY` + `buildmaster_repack`.
-- [ ] Replace `create_git_*` / `file_*` with `buildmaster_git_*` /
+- [ ] Replace `create_bundle_static_libraries` /
+      `buildmaster_repack` with `BUILDONLY` +
+      `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
+- [ ] Replace `create_git_*` / `file_*` with `GIT={…}` /
       `buildmaster_download*` / `buildmaster_decompress`.
 - [ ] Drop `ensure_build_dir` unless you still need the path variable
       for something advanced; the factory creates the directory.

@@ -21,7 +21,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/meta.cmake")
 # Meta TOOLCHAIN → members / graph dests (empty child inherits).
 include("${CMAKE_CURRENT_LIST_DIR}/toolchain_inherit.cmake")
 
-# Static archive merge (buildmaster_repack).
+# Static archive merge (REPACK on buildmaster_meta).
 include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 
 # Deferred materialize + fragment emit + finalize.

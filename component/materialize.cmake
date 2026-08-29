@@ -357,10 +357,8 @@ function(_bm_comp_apply_links)
 			_bm_comp_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_link: cannot link to BUILDONLY component '${_dst}' (order only via buildmaster_depend between BUILDONLY phases, or buildmaster_repack to publish)")
+					"buildmaster_link: cannot link to BUILDONLY component '${_dst}' (order only via buildmaster_depend between BUILDONLY phases, or publish it with a REPACK meta)")
 			endif()
-			# WHOLE dest: INTERFACE already carries whole-archive items; do not
-			# also link plain IMPORTED names (would drop whole or double-link).
 			get_property(_dst_whole GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_WHOLE)
 			if(_dst_whole)
 				if(TARGET "${_dst}")
@@ -390,8 +388,6 @@ function(_bm_comp_apply_links)
 			continue()
 		endif()
 
-		# Library spec: <name> or <subdir>/<name> → canonical import path.
-		# File may appear only after dest install; do not require EXISTS.
 		set(_spec_ok FALSE)
 		if(_dst MATCHES "/")
 			set(_spec_ok TRUE)

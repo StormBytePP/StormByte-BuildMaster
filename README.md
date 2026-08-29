@@ -17,7 +17,7 @@ toolchain and environment that actually reach nested Meson.
 This is not a wrapper around `ExternalProject_Add`. It is not FetchContent
 with extra macros. It is a small language for **graphs of third-party builds**.
 
-The public surface is fourteen `buildmaster_*` commands. Everything else
+The public surface is twelve `buildmaster_*` commands. Everything else
 is `_bm_<craft>_*` and is not a supported API. Coming from 1.0.x?
 [`MIGRATE.md`](MIGRATE.md).
 
@@ -49,6 +49,7 @@ BuildMaster is that layer, written once:
 | `shlwapi` on every consumer because a static `.lib` does not record it | Optional `LINK={…}` on the producer (or the meta) |
 | `/FORCE:MULTIPLE` / `-Bsymbolic` on the parent because the WHOLE pack needs it | Optional `LINKFLAGS={WINDOWS={…};UNIX={…}}` on the producer |
 | Hand-written `.pc` so the next Meson node finds this prefix | Optional helper `PC={…}` on the component |
+| Three bit-depth `.a` files and a `ar` script in `POST_BUILD` | `BUILDONLY` leaves + `REPACK` on the meta |
 | `cmake_language(DEFER)` so a summary line appears *after* the graph | Optional **hooks** |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
@@ -77,7 +78,7 @@ a product, not a build blog.
 - [Whole-archive linking (`WHOLE`)](#whole-archive-linking-whole)
 - [Stripping `.res` members (`STRIPRES`)](#stripping-res-members-stripres)
 - [Helper pkg-config files (`PC`)](#helper-pkg-config-files-pc)
-- [Build-only components and repack](#build-only-components-and-repack)
+- [Build-only components and `REPACK`](#build-only-components-and-repack)
 - [Subcomponent specs](#subcomponent-specs)
 - [Header-only components](#header-only-components)
 - [Per-component toolchains](#per-component-toolchains)
@@ -119,14 +120,15 @@ After that, each real component is a small machine:
    <id>  (INTERFACE — this is what you link)
 ```
 
-A **meta** uses the same anchor names (`<id>_install` waits on members)
-but has no sources and installs nothing of its own.
+A **meta** uses the same anchor names (`<id>_install` waits on members).
+Without `REPACK` it installs nothing of its own. With `REPACK` it
+publishes one merged static archive under the prefix.
 
 Sources can be a git checkout, a cached tarball, a submodule, or any
 tree you already have on disk.
 
 Typical shapes: a bundled third-party stack, several bit-depth builds of
-the same encoder that you later **repack**, a header-only SDK, a mixed
+the same encoder that a `REPACK` meta merges, a header-only SDK, a mixed
 CMake + Meson graph on Linux / Windows / macOS, a plugin pack that a
 larger library links as one `WHOLE` node.
 
@@ -158,7 +160,7 @@ larger library links as one `WHOLE` node.
 | Raw system libs on the INTERFACE | Manual on every consumer | Manual | **Optional (`LINK={…}`)** |
 | Raw linker flags on the INTERFACE | Manual on every consumer | Manual | **Optional (`LINKFLAGS={…}`)** |
 | Helper `.pc` for the shared prefix | Manual | Manual | **Optional (`PC={…}`)** |
-| Build-only + static repack | No | Manual | **Yes** |
+| Build-only + static merge | No | Manual | **Yes (`BUILDONLY` + meta `REPACK`)** |
 | Unified log API (`buildmaster_message`) | No | No | **Yes** |
 | Safe recursive nesting | Fragile | Fragile | **Designed for it** |
 | Fail-fast after a stage failure | No | Manual | **Optional** |
@@ -302,59 +304,22 @@ The warning is for you. Unresolvable dest at finalize stays **FATAL**.
 
 ### `buildmaster_link(source, dest)`
 
-Records a link on the component `INTERFACE`.
+Records a wait edge **and** a link line. `dest` may be a component
+(all produced libraries), a meta, a library spec (`name` /
+`subdir/name`), an existing target, or an archive path.
 
-`dest` is a **BuildMaster graph node**: another component, a meta, an
-existing CMake target, an archive that already exists on disk, or a
-library spec (`<name>` / `<subdir>/<name>`) under the BM prefix.
-
-**Link already waits.** Every `buildmaster_link(A B)` records the same
-order-only edge as `buildmaster_depend(A B)`, even if `B` is
-registered later in the file. You do not add a second
-`buildmaster_depend(png zlib)` unless you enjoy the warning.
-
-A spec or an on-disk archive stays **link-only** (no wait target).
-Raw system libraries do **not** belong here — that is `LINK=`.
+`buildmaster_link` to a `BUILDONLY` component is **FATAL**. Publish
+that archive with a `REPACK` meta, or wait with
+`buildmaster_depend` between two `BUILDONLY` phases.
 
 ---
 
 ## Raw system libraries (`LINK`)
 
-A static archive does not “contain” `shlwapi`. The `.obj` files inside
-it have unresolved imports, and the linker of **your** DLL is the one
-that has to see `shlwapi.lib`. Repeating that on every consumer is how
-the line rots.
+`LINK={shlwapi;ws2_32}` is a list of **raw linker names**. They go on
+the component (or meta) `INTERFACE`. Whoever links that id pulls them
+into the final artefact.
 
-`LINK` is the declaration on the **producer** (or on a meta that groups
-producers): whoever links this `INTERFACE` also links these names.
-
-```cmake
-buildmaster_component(
-	dbclient
-	"DB client"
-	${CLIENT_SRCDIR}
-	"${CLIENT_OPTIONS}"
-	static
-	"dbclient"
-	"INDENT=1;LINK={shlwapi;ws2_32;advapi32}"
-)
-
-target_link_libraries(MyDatabase PRIVATE dbclient)
-```
-
-CMake then carries `shlwapi` through the chain to `MyDatabase.dll`.
-You did not repair the upstream CMake. You told the BM target the
-truth about what a consumer of that target must pass to the linker.
-
-| Form | Meaning |
-|------|---------|
-| omitted | nothing extra |
-| `LINK=shlwapi` | one raw linker name |
-| `LINK={shlwapi;ws2_32}` | several — `;` inside `{…}` is not a pair break |
-| `LINK=` / bare `LINK` | **FATAL** |
-| several items without braces | **FATAL** |
-
-Items are **external to BuildMaster**. They go to the linker as written.
 They are not component ids, not metas, not CMake targets, and not specs
 under the install prefix. A name that collides with an existing
 `TARGET` may be resolved by CMake as that target — do not pick
@@ -384,8 +349,8 @@ same propagation: whoever links this id also gets those
 This is a sharp tool. Flags on a leaf you later link from the
 application **will** reach that application. If `-Bsymbolic` on a
 codec pack would poison the final `.so`, do not put it on a node the
-app links. Put it on a `BUILDONLY` leaf you only feed to
-`buildmaster_repack`, or keep it off BuildMaster.
+app links. Put it on a `BUILDONLY` leaf that only a `REPACK` meta
+consumes, or keep it off BuildMaster.
 
 | Form | Meaning |
 |------|---------|
@@ -417,11 +382,14 @@ buildmaster_meta_add(plugins codec-a codec-b)
 buildmaster_link(engine plugins)
 ```
 
-No sources, no install of its own. `<id>_install` waits on members.
-`TOOLCHAIN` on the meta copies onto members (and onto empty dests)
-that do not already have one. Two metas fighting over the same empty
-dest is **FATAL**. `PC={…}` on a meta is **FATAL**. `GIT={…}` with
-FETCH / SWITCH / RESET / PATCH on a meta is **FATAL** (no srcdir).
+No sources. `<id>_install` waits on members. `TOOLCHAIN` on the meta
+copies onto members (and onto empty dests) that do not already have
+one. Two metas fighting over the same empty dest is **FATAL**.
+`PC={…}` on a meta is **FATAL**. `GIT={…}` with FETCH / SWITCH /
+RESET / PATCH on a meta is **FATAL** (no srcdir).
+
+`REPACK` is the one meta flag that **does** write an archive. See
+[Build-only components and `REPACK`](#build-only-components-and-repack).
 
 `buildmaster_meta_add` may run before `buildmaster_meta`.
 
@@ -472,7 +440,7 @@ the file during setup, say so with a dependency — not with hope.
 A registered component or meta that nothing links and nothing waits
 on produces one **WARNING** after materialize. That is the “did
 anyone actually use this plugin?” line. Fix the graph or accept the
-noise.
+noise. Members of a consumed `REPACK` meta are not orphans.
 
 ---
 
@@ -498,6 +466,7 @@ One optional trailing `KEY=value;…` on `buildmaster_component` /
 | `WHOLE` | OFF | Whole-archive link of **static** produced archives |
 | `BUILDONLY` | OFF | Do not publish into the shared prefix |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives after `RENAME` |
+| `REPACK` | OFF | **Meta only.** Merge member static archives into one prefix archive named after the meta id |
 | `PC={…}` | off | Helper `.pc` for **this** prefix |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker flags, optional platform groups |
@@ -506,6 +475,9 @@ One optional trailing `KEY=value;…` on `buildmaster_component` /
 Unknown keys: **WARNING**, ignored. Extra positionals: **FATAL**.
 `;` inside `{…}` is not a pair break.
 
+`REPACK` on `buildmaster_component` is **FATAL**. Members come from
+`buildmaster_meta_add`, not from `REPACK={a;b}`.
+
 ---
 
 ## Whole-archive linking (`WHOLE`)
@@ -513,6 +485,9 @@ Unknown keys: **WARNING**, ignored. Extra positionals: **FATAL**.
 Static archives the linker would otherwise drop (plugin object files
 with no referenced root symbol). One linear group per consumer
 (ELF / Mach-O / MSVC). Put it on the leaf or on the meta you link.
+
+`WHOLE` on a `REPACK` meta wraps the **merged** archive, not the
+individual `BUILDONLY` inputs.
 
 ---
 
@@ -568,16 +543,46 @@ PC is **FATAL**. Meta + `PC` is **FATAL**. Bare `PC` / `PC=ON` is
 
 ---
 
-## Build-only components and repack
+## Build-only components and `REPACK`
 
 Some upstreams are not “the library you ship”. They are intermediate
-static archives you later merge. Mark them `BUILDONLY`: they compile
-into the component build dir and never enter the shared prefix.
-`buildmaster_repack` then publishes one archive from those inputs.
+static archives you later merge — three bit depths of the same
+encoder is the textbook case. Mark those leaves `BUILDONLY`: they
+compile into the component build dir and never enter the shared
+prefix.
 
 A `BUILDONLY` component is not a link dest (`buildmaster_link` to it
-is **FATAL**). Wait on its stages with `buildmaster_depend`, or
-consume it only as a repack input.
+is **FATAL**). You either wait on its stages with
+`buildmaster_depend` between two `BUILDONLY` phases, or you put it
+on a meta that has `REPACK`.
+
+```cmake
+buildmaster_component(enc-8  "encoder 8-bit"  ${ENC_SRC} "${ENC8_OPTS}"  static "enc" "BUILDONLY")
+buildmaster_component(enc-10 "encoder 10-bit" ${ENC_SRC} "${ENC10_OPTS}" static "enc" "BUILDONLY")
+buildmaster_component(enc-12 "encoder 12-bit" ${ENC_SRC} "${ENC12_OPTS}" static "enc" "BUILDONLY")
+
+buildmaster_meta(enc "encoder" "REPACK")
+buildmaster_meta_add(enc enc-8 enc-10 enc-12)
+buildmaster_link(engine enc)
+```
+
+There is no second list of inputs. The members **are** the inputs.
+The published archive is named after the meta id (`enc` →
+`libenc.a` / `enc.lib`). Wait edge per leaf: `_build` if that leaf
+is `BUILDONLY`, `_install` if it publishes.
+
+Shared members that **do** install stay on the meta `INTERFACE` and
+emit a **WARNING**: a `.so` / DLL cannot be folded into one archive.
+Consumers get the merged `.a` *and* those shared libraries as
+separate links. That is working as designed — not a single fat
+shared object.
+
+`BUILDONLY` + **shared** as a `REPACK` member is **FATAL**. The
+`.so` / DLL never reaches the prefix, and the build directory is
+not a public path. You would be linking a ghost.
+
+`REPACK` on `buildmaster_component` is **FATAL**. A component
+publishes what it builds. Only a meta merges several ids.
 
 ---
 
@@ -725,7 +730,8 @@ compilers.
 
 - **Windows shared:** DLLs under `CMAKE_INSTALL_BINDIR`, import libs
   under `CMAKE_INSTALL_LIBDIR`. `RENAME` treats both and keeps the
-  produced case.
+  produced case. A `REPACK` merge is always the **import / static
+  `.lib`**, never the DLL.
 - **Windows static:** archives under `LIBDIR` only.
 - **Unix:** `lib` / `lib64` from `GNUInstallDirs` (BuildMaster loads
   it).
@@ -788,13 +794,12 @@ file target must precede configure.
 | Components | `buildmaster_component` |
 | Graph | `buildmaster_depend`, `buildmaster_link`, `buildmaster_prerequisite` |
 | Hooks | `buildmaster_hook_component`, `buildmaster_hook_graph` |
-| Meta | `buildmaster_meta`, `buildmaster_meta_add` |
-| Repack | `buildmaster_repack` |
+| Meta | `buildmaster_meta`, `buildmaster_meta_add` (`REPACK` is an optstr flag) |
 | Files | `buildmaster_download`, `buildmaster_download_cached`, `buildmaster_decompress` |
 | Git | `GIT={…}` on `buildmaster_component` |
 | Log | `buildmaster_message` |
 
-Fourteen commands. `_bm_*` is internal. Stage generators, parse
+Twelve commands. `_bm_*` is internal. Stage generators, parse
 helpers, import hints, `ensure_build_dir`, checksum and git marker
 are not part of the supported surface.
 

@@ -9,7 +9,6 @@ buildmaster_link
 buildmaster_meta
 buildmaster_meta_add
 buildmaster_prerequisite
-buildmaster_repack
 
 # File helpers
 buildmaster_decompress

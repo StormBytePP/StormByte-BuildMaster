@@ -27,13 +27,16 @@
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
-## @note `PC`, `LINK`, `LINKFLAGS` and `GIT` are recognized so they are not
-##       “unknown keys”. Details: `_bm_opt_parse_pc()`,
+## @note `PC`, `LINK`, `LINKFLAGS`, `GIT` and `REPACK` are recognized so they
+##       are not “unknown keys”. Details: `_bm_opt_parse_pc()`,
 ##       `_bm_opt_parse_link()`, `_bm_opt_parse_linkflags()`,
-##       `_bm_opt_parse_git()`. Meta + PC is FATAL in create_meta_*.
+##       `_bm_opt_parse_git()`, `_bm_opt_parse_repack()`.
+##       Meta + PC is FATAL in `buildmaster_meta`.
 ##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
 ##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
 ##       meta at materialize.
+##       `REPACK` on a component is FATAL in `_bm_comp_create`.
+##       `REPACK` on a meta merges member archives (see `buildmaster_meta`).
 function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -73,6 +76,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_linkflags()
 			elseif(_key STREQUAL "GIT")
 				# parsed by _bm_opt_parse_git()
+			elseif(_key STREQUAL "REPACK")
+				# parsed by _bm_opt_parse_repack()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
 					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")
@@ -104,4 +109,33 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 	set(${out_whole} "${_whole}" PARENT_SCOPE)
 	set(${out_stripres} "${_stripres}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse")
+endfunction()
+
+## @brief Parse `REPACK` / `REPACK=ON|OFF` from an options string.
+## @param[in]  options_string Raw optstr (may be empty).
+## @param[out] out_repack     Parent-scope TRUE if REPACK is enabled.
+## @note Bare `REPACK`, `REPACK=` and `REPACK=ON` enable. `REPACK={…}` is
+##       not a member list (members come from `buildmaster_meta_add`); a
+##       brace group is treated as an unrecognized flag value → OFF + WARNING
+##       via `_bm_opt_flag`.
+function(_bm_opt_parse_repack options_string out_repack)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_repack")
+	set(_repack FALSE)
+	if(NOT "${options_string}" STREQUAL "")
+		_bm_opt_split_pairs("${options_string}" _pairs)
+		foreach(_pair IN LISTS _pairs)
+			if(_pair STREQUAL "")
+				continue()
+			endif()
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
+			if(NOT _ok)
+				continue()
+			endif()
+			if(_key STREQUAL "REPACK")
+				_bm_opt_flag("${_val}" _repack)
+			endif()
+		endforeach()
+	endif()
+	set(${out_repack} "${_repack}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_repack")
 endfunction()

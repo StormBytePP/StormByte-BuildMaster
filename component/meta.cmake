@@ -30,6 +30,7 @@ function(_bm_meta_ensure id)
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_META_IDS "${id}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_TITLE "${id}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_WHOLE FALSE)
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_REPACK FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_CREATED FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_INDENT 0)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN "")
@@ -61,44 +62,22 @@ endfunction()
 ## @param[in] _id              Identifier (INTERFACE target name after this call).
 ## @param[in] _title           Human-readable title (STATUS only).
 ## @param[in] options_string   Optional "KEY=value;…". Keys: INDENT / INDENT_LEVEL,
-##            WHOLE (flag), TOOLCHAIN (inherited by members without their own),
-##            LINK=<name> / LINK={name;name2} (raw linker names on the meta
-##            INTERFACE; same contract as on a concrete component),
-##            LINKFLAGS=<flag> / LINKFLAGS={…} (raw linker flags on the meta
-##            INTERFACE via target_link_options; platform groups WINDOWS /
-##            LINUX / MAC / UNIX).
+##            WHOLE (flag), REPACK (flag), TOOLCHAIN (inherited by members
+##            without their own), LINK= / LINK={…}, LINKFLAGS= / LINKFLAGS={…}.
+## @note `REPACK`: merge every produced *static* archive of the member leaves
+##       into one prefix archive named after `_id`. Shared/DLL members are
+##       not merged (WARNING); they stay INTERFACE links on the meta.
+##       Wait edge per leaf: `_install` if the leaf publishes; `_build` if
+##       `BUILDONLY`. `REPACK` on `buildmaster_component` is FATAL.
 ## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see the target.
-##       `_bm_meta_materialize` wires members / WHOLE / LINK /
-##       LINKFLAGS onto that existing target (`if(NOT TARGET)` only covers
-##       lazy metas that never called buildmaster_meta).
 ## @note RENAME / BUILDONLY / STRIPRES → INFO, ignored (meta produces no
-##       archives). STRIPRES default is ON; the INFO fires only when the
-##       user actually wrote the key, same as RENAME.
-## @note `LINK` is accepted. Items are raw linker names, applied INTERFACE on
-##       `<id>` at materialize so every consumer of the meta (and the final
-##       artefact) pulls them. They do not rewrite member archives. Use this
-##       to declare syslibs once for a collection instead of repeating LINK
-##       on every member.
-## @note `LINKFLAGS` is accepted. Items are raw linker flags, applied
-##       INTERFACE on `<id>` via `target_link_options` at materialize so
-##       every consumer of the meta pulls them. They do not rewrite member
-##       archives.
-## @note `PC` / `PC={…}` is FATAL on a meta. A collection has no single library
-##       contract; flattening members into one `.pc` would invent an unbounded
-##       Requires list and collide with upstream `.pc` files the author did
-##       not choose. Put `PC={…}` on the concrete components you want.
-## @note TOOLCHAIN does not compile the meta. Finalize copies it onto
-##       `buildmaster_meta_add` members and onto `buildmaster_depend` /
-##       `buildmaster_link` dests from this meta when those dests have no
-##       TOOLCHAIN yet. Two metas assigning different profiles to the same
-##       dest is FATAL.
-## @note May be called after buildmaster_meta_add() for the same id (fills title
-##       and options). A second buildmaster_meta() for the same id is FATAL.
-## @note If never called, lazy ids from buildmaster_meta_add() still materialize
-##       with title = id, WHOLE off, TOOLCHAIN empty, LINK empty, LINKFLAGS empty.
+##       archives of its own except the REPACK merge). STRIPRES default is
+##       ON; the INFO fires only when the user actually wrote the key.
+## @note `PC` / `PC={…}` is FATAL on a meta.
 ## @note `GIT={…}` with FETCH / SWITCH / RESET / PATCH is FATAL on a meta
 ##       (no srcdir). Empty `GIT` / `GIT={}` is the parser WARNING only.
+## @note A second `buildmaster_meta()` for the same id is FATAL.
 function(buildmaster_meta _id _title)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta")
 	if(ARGC GREATER 3)
@@ -120,7 +99,7 @@ function(buildmaster_meta _id _title)
 		list(FIND _comp_ids "${_id}" _cidx)
 		if(NOT _cidx EQUAL -1)
 			_bm_log_message(COMPONENT FATAL
-				"buildmaster_meta: '${_id}' is already a create_*_component id")
+				"buildmaster_meta: '${_id}' is already a component id")
 		endif()
 	endif()
 
@@ -145,6 +124,7 @@ function(buildmaster_meta _id _title)
 	_bm_opt_parse_git(
 		"${_optstr}" _git_present _git_fetch _git_switch _git_reset
 		_git_patches _git_title)
+	_bm_opt_parse_repack("${_optstr}" _repack)
 	if(_pc_present)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
@@ -155,15 +135,15 @@ function(buildmaster_meta _id _title)
 	endif()
 	if(_buildonly)
 		_bm_log_message(COMPONENT INFO
-			"buildmaster_meta('${_id}'): BUILDONLY ignored (meta does not install artifacts)")
+			"buildmaster_meta('${_id}'): BUILDONLY ignored (meta does not install member artifacts)")
 	endif()
 	if("${_optstr}" MATCHES "[Rr][Ee][Nn][Aa][Mm][Ee]")
 		_bm_log_message(COMPONENT INFO
-			"buildmaster_meta('${_id}'): RENAME ignored (meta has no produced archives)")
+			"buildmaster_meta('${_id}'): RENAME ignored (meta has no produced archives of its own)")
 	endif()
 	if("${_optstr}" MATCHES "[Ss][Tt][Rr][Ii][Pp][Rr][Ee][Ss]")
 		_bm_log_message(COMPONENT INFO
-			"buildmaster_meta('${_id}'): STRIPRES ignored (meta has no produced archives)")
+			"buildmaster_meta('${_id}'): STRIPRES ignored (meta has no produced archives of its own)")
 	endif()
 
 	set(_disp "${_title}")
@@ -181,11 +161,18 @@ function(buildmaster_meta _id _title)
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE FALSE)
 	endif()
+	if(_repack)
+		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK FALSE)
+	endif()
 
 	add_library("${_id}" INTERFACE)
 
 	_bm_graph_defer_arm()
-	if(_meta_link OR _meta_linkflags)
+	if(_repack)
+		_bm_log_message(COMPONENT DEBUG "Registered meta ${_id} REPACK")
+	elseif(_meta_link OR _meta_linkflags)
 		_bm_log_message(COMPONENT DEBUG
 			"Registered meta ${_id} LINK=${_meta_link} LINKFLAGS=${_meta_linkflags}")
 	else()
@@ -316,20 +303,15 @@ function(_bm_meta_collect_leaves id stack out_var)
 endfunction()
 
 ## @brief Materialize meta stage anchors; create INTERFACE only if missing.
-## @note Runs at the start of finalize, before `create_*` materialize, so
+## @note Runs at the start of finalize, before component materialize, so
 ##       `buildmaster_link` / `buildmaster_depend` can resolve meta ids.
-## @note DFS via `_bm_meta_collect_leaves` (cycles FATAL). Each leaf
-##       must be a registered non-BUILDONLY component.
+## @note DFS via `_bm_meta_collect_leaves` (cycles FATAL). Each leaf must
+##       be a registered component. `BUILDONLY` leaves are FATAL unless
+##       this meta has `REPACK` (merge reads those archives from BUILDDIR).
 ## @note `buildmaster_meta` already created `<id>` INTERFACE. This
-##       function does `add_library(INTERFACE)` only for lazy metas
-##       (`buildmaster_meta_add` without `buildmaster_meta`). Always
-##       creates empty `<id>_install` / `_build` / `_configure` if missing.
-## @note `BUILDMASTER_META_<id>_LINK` (raw linker names) is applied INTERFACE
-##       on `<id>` here so consumers of the meta propagate those names to the
-##       final artefact. Empty or unset LINK is a no-op.
-## @note `BUILDMASTER_META_<id>_LINKFLAGS` (raw linker flags) is applied
-##       INTERFACE via `target_link_options`. Empty or unset is a no-op.
-## @note Does not wire member link lines yet (leaf IMPORTED targets do not exist).
+##       function does `add_library(INTERFACE)` only for lazy metas.
+##       Always creates empty `<id>_install` / `_build` / `_configure`
+##       if missing.
 function(_bm_meta_materialize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_materialize")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -341,6 +323,7 @@ function(_bm_meta_materialize)
 	foreach(_id IN LISTS _metas)
 		_bm_meta_collect_leaves("${_id}" "" _leaves)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LEAVES "${_leaves}")
+		get_property(_repack GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK)
 
 		foreach(_leaf IN LISTS _leaves)
 			_bm_comp_is_registered("${_leaf}" _is_comp)
@@ -349,9 +332,14 @@ function(_bm_meta_materialize)
 					"buildmaster_meta_add('${_id}', '${_leaf}'): cannot resolve member. Accepted: registered component id or another meta id.")
 			endif()
 			_bm_comp_is_buildonly("${_leaf}" _bo)
-			if(_bo)
+			get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
+			if(_bo AND NOT _repack)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_meta_add('${_id}', '${_leaf}'): BUILDONLY components cannot be meta members")
+					"buildmaster_meta_add('${_id}', '${_leaf}'): BUILDONLY components cannot be meta members unless the meta has REPACK")
+			endif()
+			if(_bo AND _repack AND _lmode STREQUAL "shared")
+				_bm_log_message(COMPONENT FATAL
+					"buildmaster_meta_add('${_id}', '${_leaf}'): REPACK cannot take a BUILDONLY shared component (the .so/.dll is not installed and its build directory is not a public path)")
 			endif()
 		endforeach()
 
@@ -371,7 +359,6 @@ function(_bm_meta_materialize)
 		if(NOT TARGET "${_id}_install")
 			add_custom_target(${_id}_install)
 		endif()
-		# Alias names some graphs expect; no configure/build work.
 		if(NOT TARGET "${_id}_build")
 			add_custom_target(${_id}_build)
 			add_dependencies(${_id}_build ${_id}_install)
@@ -386,12 +373,13 @@ function(_bm_meta_materialize)
 endfunction()
 
 ## @brief After real components exist: wire `<meta>_install` and INTERFACE.
-## @note For each leaf, `add_dependencies(<meta>_install <leaf>_install)`.
-## @note If the meta has WHOLE: flatten static produced files into one linear
-##       whole-archive group; already-WHOLE children keep their own INTERFACE
-##       region; shared/headers children are linked as INTERFACE only.
-## @note Without WHOLE: `target_link_libraries(<meta> INTERFACE <leaf>)`.
-## @note WHOLE with no static produced archives among members → INFO.
+## @note Wait edge: leaf `_install` unless the leaf is BUILDONLY, then
+##       `_build` (end of that component's phase).
+## @note `REPACK` metas do not INTERFACE-link static leaves (the merge
+##       publishes one archive). Shared/headers leaves stay INTERFACE;
+##       shared also emits WARNING (cannot fold a .so/.dll into the pack).
+## @note Without REPACK, WHOLE flattens static produced files; otherwise
+##       `target_link_libraries(<meta> INTERFACE <leaf>)`.
 function(_bm_meta_wire)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_wire")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -403,12 +391,38 @@ function(_bm_meta_wire)
 	foreach(_id IN LISTS _metas)
 		get_property(_leaves GLOBAL PROPERTY BUILDMASTER_META_${_id}_LEAVES)
 		get_property(_whole GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE)
+		get_property(_repack GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK)
 
 		foreach(_leaf IN LISTS _leaves)
-			if(TARGET "${_leaf}_install")
-				add_dependencies(${_id}_install ${_leaf}_install)
+			_bm_comp_is_buildonly("${_leaf}" _bo)
+			if(_bo)
+				if(TARGET "${_leaf}_build")
+					add_dependencies(${_id}_install ${_leaf}_build)
+				endif()
+			else()
+				if(TARGET "${_leaf}_install")
+					add_dependencies(${_id}_install ${_leaf}_install)
+				endif()
 			endif()
 		endforeach()
+
+		if(_repack)
+			foreach(_leaf IN LISTS _leaves)
+				get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
+				if(_lmode STREQUAL "shared")
+					_bm_log_message(COMPONENT WARNING
+						"meta '${_id}': REPACK cannot fold shared '${_leaf}' into one archive; the .so/.dll stays a separate INTERFACE link (the pack is not a single shared library)")
+					if(TARGET "${_leaf}")
+						target_link_libraries(${_id} INTERFACE ${_leaf})
+					endif()
+				elseif(_lmode STREQUAL "headers")
+					if(TARGET "${_leaf}")
+						target_link_libraries(${_id} INTERFACE ${_leaf})
+					endif()
+				endif()
+			endforeach()
+			continue()
+		endif()
 
 		if(_whole)
 			set(_paths "")
@@ -475,7 +489,7 @@ endfunction()
 ## @note Membership is not consumption for the meta itself, but:
 ##       - leaves of any meta are not orphans;
 ##       - a nested meta is consumed if an ancestor meta is consumed;
-##       - buildmaster_repack *inputs* are consumed only if that repack id
+##       - REPACK meta members are consumed only if that meta id
 ##         itself is consumed; an unused repack orphans both itself and
 ##         inputs that nothing else consumes;
 ##       - host target_link_libraries to a component/meta id counts;
@@ -643,7 +657,7 @@ function(_bm_meta_warn_orphans)
 		list(REMOVE_DUPLICATES _orphans)
 		string(REPLACE ";" ", " _list "${_orphans}")
 		_bm_log_message(COMPONENT WARNING
-			"orphan component(s) / meta(s) (not consumed by buildmaster_link / buildmaster_depend / host link / host DEPENDS / used repack): ${_list}")
+			"orphan component(s) / meta(s) (not consumed by buildmaster_link / buildmaster_depend / host link / host DEPENDS / consumed REPACK meta): ${_list}")
 	endif()
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_warn_orphans")
 endfunction()

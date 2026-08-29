@@ -108,8 +108,8 @@ add_custom_target(run_buildmaster_smoke
 		recursion_cmake_link_test recursion_meson_link_test
 		# Rename
 		rename-variant_install rename_variant_link_test
-		# Repack
-		repack-a_install repack-b_install repack-merged_install
+		# Repack (BUILDONLY phases + REPACK meta)
+		repack-a_install repack-b_install mergedlib_install
 		repack_link_test
 		# Slow configure
 		slow-configure_install

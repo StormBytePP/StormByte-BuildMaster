@@ -1,159 +1,126 @@
 # =============================================================================
-# component/repack.cmake — buildmaster_repack (static merge into install prefix)
+# component/repack.cmake — meta REPACK merge into the install prefix
 # =============================================================================
 # Included from component/helpers.cmake after the component registry exists.
+# Public buildmaster_repack() is gone. Optstr REPACK on buildmaster_meta()
+# registers a merge of that meta's member leaves.
 
 include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 
-## @brief Register a static archive merge published under the install prefix.
-## @param[in] id Short pack identifier (INTERFACE target name after finalize).
-## @param[in] OUTPUT Canonical library basename without prefix/suffix
-##            (e.g. `x265`, `mergedlib`), written under BUILDMASTER_INSTALL_LIBDIR.
-## @param[in] INPUTS List of tokens (semicolon-separated or multiple args):
-##            - registered component id → all produced canons under that
-##              component BUILDDIR (post-RENAME);
-##            - existing CMake target → order only (no files);
-##            - filesystem path → that archive + file-level DEPENDS.
-## @note Does not install inputs to the prefix. Component inputs contribute
-##       BUILDDIR produced paths; custom targets contribute order only.
-## @note Creates `<id>_install` as the graph anchor (DEPENDS the merged OUTPUT)
-##       so other components can buildmaster_depend(..., id).
-## @note Static archives only (v1). Uses tools/bundle/merge_static_archives.cmake
-##       and _bm_tools_archive_find (CMAKE_AR, ENV{AR}, llvm-lib/lib, ar…).
-## @note Duplicate id vs _bm_comp_create / another repack → FATAL.
-function(buildmaster_repack id)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_repack")
-	if("${id}" STREQUAL "")
-		_bm_log_message(COMPONENT FATAL "buildmaster_repack: empty id")
-	endif()
-
-	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
-	if(_done)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_repack('${id}'): called after finalize")
-	endif()
-
-	cmake_parse_arguments(ARG "" "OUTPUT" "INPUTS" ${ARGN})
-	if(NOT ARG_OUTPUT)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_repack('${id}'): OUTPUT is required")
-	endif()
-	if(NOT ARG_INPUTS)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_repack('${id}'): INPUTS is required")
-	endif()
-
-	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
-	if(_ids)
-		list(FIND _ids "${id}" _idx)
-		if(NOT _idx EQUAL -1)
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_repack: id '${id}' already a component")
+## @brief Register merges for every meta that has REPACK.
+## @note OUTPUT stem is the meta id. INPUTS are the flattened member leaves.
+##       Called at the start of `_bm_repack_materialize` (finalize).
+function(_bm_repack_register_metas)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_register_metas")
+	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
+	foreach(_id IN LISTS _metas)
+		if("${_id}" STREQUAL "")
+			continue()
 		endif()
-	endif()
-	get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
-	if(_rids)
-		list(FIND _rids "${id}" _ridx)
-		if(NOT _ridx EQUAL -1)
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_repack: duplicate id '${id}'")
+		get_property(_repack GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK)
+		if(NOT _repack)
+			continue()
 		endif()
-	endif()
-
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_REPACK_IDS "${id}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${id}_OUTPUT "${ARG_OUTPUT}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${id}_INPUTS "${ARG_INPUTS}")
-
-	_bm_graph_defer_arm()
-	_bm_log_message(COMPONENT DEBUG "Registered repack ${id} OUTPUT=${ARG_OUTPUT}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_repack")
+		get_property(_leaves GLOBAL PROPERTY BUILDMASTER_META_${_id}_LEAVES)
+		if(NOT _leaves)
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_meta('${_id}'): REPACK requires at least one member (buildmaster_meta_add)")
+		endif()
+		get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
+		set(_hit -1)
+		if(_rids)
+			list(FIND _rids "${_id}" _hit)
+		endif()
+		if(NOT _hit EQUAL -1)
+			continue()
+		endif()
+		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_REPACK_IDS "${_id}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_OUTPUT "${_id}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS "${_leaves}")
+		_bm_log_message(COMPONENT DEBUG
+			"REPACK meta ${_id} leaves=${_leaves}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_register_metas")
 endfunction()
 
-## @brief Resolve one INPUT token into files and/or order targets.
-## @param[in]  token    Component id, CMake target name, or file path.
-## @param[out] out_files Parent-scope list of archive paths to merge.
-## @param[out] out_deps  Parent-scope list of CMake targets for ordering.
+## @brief Resolve one leaf id into archives and a wait target.
+## @param[in]  token    Registered component id.
+## @param[out] out_files Parent-scope list of static archive paths.
+## @param[out] out_deps  Parent-scope wait targets (`_build` or `_install`).
+## @note BUILDONLY → files under the component BUILDDIR, wait `_build`.
+##       Otherwise → files under BUILDMASTER_INSTALL_LIBDIR, wait `_install`.
+##       Shared / headers contribute no files (wire already warned / linked).
 function(_bm_repack_resolve_input token out_files out_deps)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_resolve_input")
 	set(_files "")
 	set(_deps "")
 
 	_bm_comp_is_registered("${token}" _is_comp)
-	if(_is_comp)
-		get_property(_builddir GLOBAL PROPERTY
-			BUILDMASTER_COMPONENT_${token}_BUILDDIR)
-		get_property(_mode GLOBAL PROPERTY
-			BUILDMASTER_COMPONENT_${token}_MODE)
-		get_property(_produced GLOBAL PROPERTY
-			BUILDMASTER_COMPONENT_${token}_PRODUCED)
-		if(_mode STREQUAL "headers")
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_repack: INPUT '${token}' is headers-only")
-		endif()
-		foreach(_spec IN LISTS _produced)
-			if(_spec STREQUAL "")
-				continue()
-			endif()
-			set(_names "")
-			set(_paths "")
-			set(_dlls "")
-			_bm_opt_append_spec(
-				"${_mode}" "${_spec}" "${_builddir}"
-				_names _paths _dlls)
-			list(APPEND _files ${_paths})
-		endforeach()
-		# Prefer install-stage target (BUILDONLY: post-RENAME; normal: still valid
-		# order node). Fall back to _build if needed.
-		if(TARGET "${token}_install")
-			list(APPEND _deps "${token}_install")
-		elseif(TARGET "${token}_build")
+	if(NOT _is_comp)
+		_bm_log_message(COMPONENT FATAL
+			"REPACK member '${token}' is not a registered component")
+	endif()
+
+	get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_MODE)
+	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_PRODUCED)
+	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_BUILDDIR)
+	_bm_comp_is_buildonly("${token}" _bo)
+
+	if(_mode STREQUAL "headers")
+		set(${out_files} "" PARENT_SCOPE)
+		set(${out_deps} "" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
+		return()
+	endif()
+	if(_mode STREQUAL "shared")
+		set(${out_files} "" PARENT_SCOPE)
+		set(${out_deps} "" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
+		return()
+	endif()
+
+	if(_bo)
+		set(_root "${_builddir}")
+		if(TARGET "${token}_build")
 			list(APPEND _deps "${token}_build")
 		endif()
-		set(${out_files} "${_files}" PARENT_SCOPE)
-		set(${out_deps} "${_deps}" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
-		return()
+	else()
+		set(_root "${BUILDMASTER_INSTALL_LIBDIR}")
+		if(TARGET "${token}_install")
+			list(APPEND _deps "${token}_install")
+		endif()
 	endif()
 
-	if(TARGET "${token}")
-		list(APPEND _deps "${token}")
-		set(${out_files} "" PARENT_SCOPE)
-		set(${out_deps} "${_deps}" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
-		return()
-	endif()
+	foreach(_spec IN LISTS _produced)
+		if(_spec STREQUAL "")
+			continue()
+		endif()
+		set(_names "")
+		set(_paths "")
+		set(_dlls "")
+		_bm_opt_append_spec(
+			"${_mode}" "${_spec}" "${_root}"
+			_names _paths _dlls)
+		list(APPEND _files ${_paths})
+	endforeach()
 
-	if(IS_ABSOLUTE "${token}" AND EXISTS "${token}" AND NOT IS_DIRECTORY "${token}")
-		list(APPEND _files "${token}")
-		set(${out_files} "${_files}" PARENT_SCOPE)
-		set(${out_deps} "" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
-		return()
-	endif()
-
-	if(EXISTS "${token}" AND NOT IS_DIRECTORY "${token}")
-		get_filename_component(_abs "${token}" ABSOLUTE)
-		list(APPEND _files "${_abs}")
-		set(${out_files} "${_files}" PARENT_SCOPE)
-		set(${out_deps} "" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
-		return()
-	endif()
-
-	_bm_log_message(COMPONENT FATAL
-		"buildmaster_repack: cannot resolve INPUT '${token}' (expected component id, CMake target, or archive path)")
+	set(${out_files} "${_files}" PARENT_SCOPE)
+	set(${out_deps} "${_deps}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
 endfunction()
 
-## @brief Create merge commands, IMPORTED archives, and `<id>_install` for every
-##        registered `buildmaster_repack`.
-## @note Called from `_bm_graph_finalize` after real components
-##       exist so INPUT component ids already have `_install` / `_build`.
-## @note OUTPUT path is `_bm_lib_import_static_hint` under
-##       BUILDMASTER_INSTALL_LIBDIR. Merge runs `merge_static_archives.cmake`
-##       with CMAKE_AR when set. Empty INPUT file list is FATAL.
-## @note Marks BUILDMASTER_REPACK_<id>_FILE for orphan / consumption checks.
+## @brief Create merge commands and attach the archive to each REPACK meta.
+## @note Called from `_bm_graph_finalize` after real components exist.
+## @note Zero static inputs: WARNING, no merge (shared members already
+##       INTERFACE-linked by `_bm_meta_wire`).
+## @note `<id>_install` already exists from `_bm_meta_materialize`. The
+##       merge file is a custom command OUTPUT; a `<id>_merge` target
+##       depends on that file and `<id>_install` depends on `<id>_merge`.
+##       `add_dependencies` cannot take a filesystem path.
 function(_bm_repack_materialize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_materialize")
+	_bm_repack_register_metas()
+
 	get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
 	if(NOT _rids)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_materialize")
@@ -182,14 +149,18 @@ function(_bm_repack_materialize)
 			list(APPEND _all_deps ${_d})
 		endforeach()
 
-		if(_all_files STREQUAL "")
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_repack('${_id}'): no archive files from INPUTS")
-		endif()
 		if(_all_deps)
 			list(REMOVE_DUPLICATES _all_deps)
 		endif()
-		list(REMOVE_DUPLICATES _all_files)
+		if(_all_files)
+			list(REMOVE_DUPLICATES _all_files)
+		endif()
+
+		if(_all_files STREQUAL "")
+			_bm_log_message(COMPONENT WARNING
+				"meta '${_id}': REPACK produced no static archive to merge (members are shared/headers only); consumers will link those members separately")
+			continue()
+		endif()
 
 		_bm_lib_import_static_hint(_out_path "${_out_name}"
 			"${BUILDMASTER_INSTALL_LIBDIR}" "")
@@ -215,11 +186,16 @@ function(_bm_repack_materialize)
 			VERBATIM
 		)
 
-		add_custom_target(${_id}_install
-			DEPENDS "${_out_path}"
-		)
+		if(NOT TARGET ${_id}_merge)
+			add_custom_target(${_id}_merge DEPENDS "${_out_path}")
+		endif()
+		if(NOT TARGET ${_id}_install)
+			add_custom_target(${_id}_install)
+		endif()
+		add_dependencies(${_id}_install ${_id}_merge)
 		if(_all_deps)
 			add_dependencies(${_id}_install ${_all_deps})
+			add_dependencies(${_id}_merge ${_all_deps})
 		endif()
 		if(TARGET buildmaster_build_init)
 			add_dependencies(${_id}_install buildmaster_build_init)
@@ -229,9 +205,11 @@ function(_bm_repack_materialize)
 			add_library(${_id} INTERFACE)
 			target_include_directories(${_id} SYSTEM INTERFACE
 				"${BUILDMASTER_INSTALL_INCLUDEDIR}")
-			add_dependencies(${_id} ${_id}_install)
+		endif()
+		add_dependencies(${_id} ${_id}_install)
 
-			set(_imp "${_id}_merged")
+		set(_imp "${_id}_merged")
+		if(NOT TARGET ${_imp})
 			add_library(${_imp} STATIC IMPORTED GLOBAL)
 			set_target_properties(${_imp} PROPERTIES
 				IMPORTED_LOCATION "${_out_path}"
@@ -245,7 +223,7 @@ function(_bm_repack_materialize)
 		endif()
 
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_FILE "${_out_path}")
-		_bm_log_message(COMPONENT DEBUG "Materialized repack ${_id} → ${_out_path}")
+		_bm_log_message(COMPONENT DEBUG "Materialized REPACK ${_id} → ${_out_path}")
 	endforeach()
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_materialize")
 endfunction()

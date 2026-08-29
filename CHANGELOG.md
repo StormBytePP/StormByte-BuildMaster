@@ -63,8 +63,16 @@ fragment to `include()`, no public dependant factories, no public
 - **`WHOLE`.** Whole-archive link of produced static archives.
 - **`STRIPRES` (flag, default ON).** After `RENAME`, strip `*.res` from
   static MSVC / clang-cl archives.
-- **`BUILDONLY` + `buildmaster_repack`.** Build without publishing to
-  the shared prefix; merge listed archives into one IMPORTED target.
+- **`BUILDONLY` + meta `REPACK`.** `BUILDONLY` builds without publishing
+  to the shared prefix. `buildmaster_meta(id title "REPACK")` plus
+  `buildmaster_meta_add` merges every produced *static* archive of the
+  member leaves into one prefix archive named after the meta id.
+  Wait edge is `_install` for a publishing leaf and `_build` for
+  `BUILDONLY`. Shared members that install stay INTERFACE (WARNING:
+  they are not folded into the pack). `BUILDONLY` + shared as a
+  `REPACK` member is FATAL (the `.so`/`.dll` is not in the prefix and
+  the builddir is not public). `REPACK` on `buildmaster_component` is
+  FATAL.
 - **Helper `.pc` (`PC={…}`).** After install, write
   `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for *this* prefix.
   FATAL if the path already exists. Not a portable package.
@@ -86,11 +94,11 @@ fragment to `include()`, no public dependant factories, no public
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
   meta-toolchain, LINKFLAGS, hooks, late link, raw `LINK=`, duplicate
   edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install
-  FATAL).
+  FATAL), `REPACK` meta.
 
 ### Changed
 
-- **Breaking — public API is `buildmaster_*` only.** Fourteen commands
+- **Breaking — public API is `buildmaster_*` only.** Twelve commands
   (see `public_functions.txt`). Internals are `_bm_<craft>_*` and are
   not a supported API. In particular:
   - `create_cmake_component` / `create_meson_component` /
@@ -99,7 +107,8 @@ fragment to `include()`, no public dependant factories, no public
   - `component_link` → `buildmaster_link`.
   - `component_dependency` → `buildmaster_depend`.
   - `component_prerequisite` → `buildmaster_prerequisite`.
-  - `component_repack` → `buildmaster_repack`.
+  - `component_repack` / `buildmaster_repack` are gone. Use
+    `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
   - `create_meta_component` → `buildmaster_meta`.
   - `meta_component_add` → `buildmaster_meta_add`.
   - `create_git_*` / `buildmaster_git_*` → `GIT={…}` on the component.
@@ -113,6 +122,11 @@ fragment to `include()`, no public dependant factories, no public
   - `ensure_build_dir`, `sanitize_for_filename`, import hints,
     toolchain profile/validate, archiver lookup, checksum and git
     marker are internal.
+- **Breaking — no `buildmaster_repack`.** There is no public merge
+  command, no `OUTPUT=` / `INPUTS=` parse arguments, no path tokens.
+  Members of a `REPACK` meta *are* the inputs. The published stem is
+  the meta id. Callers that still invoke `buildmaster_repack` get
+  CMake’s unknown-command FATAL.
 - **Breaking — no generated fragment to `include()`.** No out-variable.
 - **Breaking — dependant factories are gone.** Use
   `buildmaster_component` + `buildmaster_depend` (or
@@ -123,8 +137,9 @@ fragment to `include()`, no public dependant factories, no public
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
-  `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`). `;` inside `{…}` is not a
-  pair break. Unknown keys warn; extra positionals are fatal.
+  `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`). `;` inside
+  `{…}` is not a pair break. Unknown keys warn; extra positionals are
+  fatal.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
   use `[BuildMaster/Ninja]`.
 - Root `CMakeLists.txt` includes helpers before `init_vars`, so
@@ -163,8 +178,6 @@ fragment to `include()`, no public dependant factories, no public
 - File helpers only created a target; the `-P` script now also runs at
   the call so the artifact exists before `buildmaster_component`.
 - Initialization now uses logging.
-
-[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 
 ## [1.0.1] - 2026-08-26
 
