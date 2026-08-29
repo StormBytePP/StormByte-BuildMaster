@@ -261,10 +261,13 @@ endfunction()
 ## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE from create_*).
 ## @param[in] dest   Registered component or meta, existing CMake target,
-##            or an on-disk archive path.
+##            an on-disk archive path, or a library spec
+##            (`<name>` or `<subdir>/<name>`) under the BM prefix.
 ## @note Dest that is none of the above is FATAL at materialize. Raw system
 ##       linker names (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}`
 ##       on the producer, not here.
+## @note A spec dest is resolved with the source component’s mode against
+##       `BUILDMASTER_INSTALL_LIBDIR`. The archive need not exist yet.
 ## @note Linking to a BUILDONLY component is FATAL at materialize.
 ## @note component_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).

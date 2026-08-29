@@ -220,9 +220,13 @@ endfunction()
 ## @brief Apply recorded component_link edges after all fragments are included.
 ## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
 ## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
-##       IMPORTED names), existing CMake target, or an existing archive file.
+##       IMPORTED names), existing CMake target, an existing archive file,
+##       or a library spec (`<name>` or `<subdir>/<name>`) resolved to the
+##       canonical path under `BUILDMASTER_INSTALL_LIBDIR` using the *source*
+##       component mode. The file need not exist at configure (install later).
 ## @note Dest that is none of the above is FATAL. Raw system linker names
-##       belong in `LINK=` / `LINK={…}` on the producer, not here.
+##       (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}` on the producer,
+##       not here.
 ## @note FATAL if source is not a target or dest is BUILDONLY.
 function(_buildmaster_apply_links)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_apply_links")
@@ -288,8 +292,35 @@ function(_buildmaster_apply_links)
 			continue()
 		endif()
 
+		# Library spec: <name> or <subdir>/<name> → canonical import path.
+		# File may appear only after dest install; do not require EXISTS.
+		set(_spec_ok FALSE)
+		if(_dst MATCHES "/")
+			set(_spec_ok TRUE)
+		elseif(_dst MATCHES "\\.(a|lib|so|dll|dylib)$")
+			set(_spec_ok TRUE)
+		endif()
+		if(_spec_ok)
+			get_property(_src_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_MODE)
+			if(_src_mode STREQUAL "" OR _src_mode STREQUAL "headers")
+				set(_src_mode "static")
+			endif()
+			set(_spec_names "")
+			set(_spec_files "")
+			set(_spec_dlls "")
+			buildmaster_append_library_spec(
+				"${_src_mode}" "${_dst}" "${BUILDMASTER_INSTALL_LIBDIR}"
+				_spec_names _spec_files _spec_dlls)
+			if(_spec_files)
+				target_link_libraries(${_src} INTERFACE ${_spec_files})
+				buildmaster_message(COMPONENT DEBUG
+					"component_link '${_src}' → spec '${_dst}' → ${_spec_files}")
+				continue()
+			endif()
+		endif()
+
 		buildmaster_message(COMPONENT FATAL
-			"component_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, or on-disk archive. Raw system libraries belong in LINK= / LINK={…}.")
+			"component_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, on-disk archive, or library spec (<name> or <subdir>/<name>). Raw system libraries belong in LINK= / LINK={…}.")
 	endforeach()
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
 endfunction()
