@@ -173,6 +173,10 @@ endfunction()
 ##       is STATUS: STATUS + WARNING + FATAL are visible; INFO / DEBUG /
 ##       LOWLEVEL are not. Setting the filter to INFO (or lower) reveals
 ##       those. STATUS lines have no [LEVEL] tag. Header is never indented.
+## @note WARNING without `BUILDMASTER_VERBOSE`: one `message(NOTICE)` line
+##       on stderr, yellow/bold (CMake warning colour), no `CMake Warning
+##       at …` banner. With `BUILDMASTER_VERBOSE` ON: `message(WARNING)`.
+## @note FATAL stays `message(FATAL_ERROR)`.
 ## @note This file is the only BuildMaster source allowed to call message().
 ## @note Tables live in GLOBAL properties so deferred finalize in the parent
 ##       CMAKE_SOURCE_DIR (consumer add_subdirectory pattern) still resolves
@@ -236,7 +240,12 @@ function(buildmaster_message _module _level _message)
 	if(_lvl STREQUAL "FATAL")
 		message(FATAL_ERROR "${_line}")
 	elseif(_lvl STREQUAL "WARNING")
-		message(WARNING "${_line}")
+		if(BUILDMASTER_VERBOSE)
+			message(WARNING "${_line}")
+		else()
+			string(ASCII 27 _esc)
+			message(NOTICE "${_esc}[1;33m${_line}${_esc}[0m")
+		endif()
 	else()
 		message(STATUS "${_line}")
 	endif()

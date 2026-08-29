@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and still use the caller path. WARNING on that slot. `create_component`
   always `MAKE_DIRECTORY`s the path it receives; an already-populated
   directory is the caller’s problem.
+- **WARNING log channel:** without `BUILDMASTER_VERBOSE`, a WARNING is one
+  yellow/bold `message(NOTICE)` line on stderr — no `CMake Warning at …`
+  banner. With `BUILDMASTER_VERBOSE` ON, `message(WARNING)` is kept so
+  CMake prints file and line. WARNING is still never filtered.
 
 ### Fixed
 - **Git patch lost the race with eager configure:** `create_git_patch_file` only queued a `DEFER` on `CMAKE_SOURCE_DIR`, and component finalize was already armed first, so nested cmake/meson ran on the virgin tree (`cmake_minimum_required` too old, unknown Meson options). Flush now runs when the patch is registered, and `_buildmaster_finalize_components` flushes every queued git root *before* materialize. A second flush for the same root is still a no-op (reset then patch once).
