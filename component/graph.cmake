@@ -254,38 +254,6 @@ function(create_component _component _component_title _srcdir _builddir
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_component")
 endfunction()
 
-## @brief Declare an order-only edge (no link line).
-## @param[in] source Component id or CMake target (resolved at finalize).
-## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
-##            or `<id>_install` / `<id>_configure` / `<id>_build`.
-## @note A non-BUILDONLY component must not depend on a BUILDONLY component
-##       (checked at materialize). BUILDONLY may depend on BUILDONLY or normal.
-## @note May be called before either endpoint exists; edges are recorded and
-##       resolved in `_buildmaster_finalize_components`.
-function(component_dependency source dest)
-	buildmaster_message(COMPONENT LOWLEVEL "Entering component_dependency")
-	if(ARGC GREATER 2)
-		buildmaster_message(COMPONENT FATAL
-			"component_dependency: expected exactly two arguments")
-	endif()
-	if("${source}" STREQUAL "" OR "${dest}" STREQUAL "")
-		buildmaster_message(COMPONENT FATAL
-			"component_dependency: source and dest must be non-empty")
-	endif()
-	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
-	if(_done)
-		buildmaster_message(COMPONENT FATAL
-			"component_dependency: called after finalize")
-	endif()
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES
-		"${source}")
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS
-		"${dest}")
-	_buildmaster_component_defer_arm()
-	buildmaster_message(COMPONENT DEBUG "component_dependency ${source} → ${dest}")
-	buildmaster_message(COMPONENT LOWLEVEL "Exiting component_dependency")
-endfunction()
-
 ## @brief Whether `(source, dest)` is already stored in two parallel GLOBAL lists.
 ## @param[in]  _srcs_prop Property name of sources.
 ## @param[in]  _dsts_prop Property name of dests (same length, same order).
