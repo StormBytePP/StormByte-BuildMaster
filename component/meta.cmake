@@ -63,12 +63,15 @@ endfunction()
 ## @param[in] options_string   Optional "KEY=value;…". Keys: INDENT / INDENT_LEVEL,
 ##            WHOLE (flag), TOOLCHAIN (inherited by members without their own),
 ##            LINK=<name> / LINK={name;name2} (raw linker names on the meta
-##            INTERFACE; same contract as on a concrete component).
+##            INTERFACE; same contract as on a concrete component),
+##            LINKFLAGS=<flag> / LINKFLAGS={…} (raw linker flags on the meta
+##            INTERFACE via target_link_options; platform groups WINDOWS /
+##            LINUX / MAC / UNIX).
 ## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see the target.
-##       `_buildmaster_materialize_metas` wires members / WHOLE / LINK onto
-##       that existing target (`if(NOT TARGET)` only covers lazy metas that
-##       never called create_meta_component).
+##       `_buildmaster_materialize_metas` wires members / WHOLE / LINK /
+##       LINKFLAGS onto that existing target (`if(NOT TARGET)` only covers
+##       lazy metas that never called create_meta_component).
 ## @note RENAME / BUILDONLY / STRIPRES → INFO, ignored (meta produces no
 ##       archives). STRIPRES default is ON; the INFO fires only when the
 ##       user actually wrote the key, same as RENAME.
@@ -77,6 +80,10 @@ endfunction()
 ##       artefact) pulls them. They do not rewrite member archives. Use this
 ##       to declare syslibs once for a collection instead of repeating LINK
 ##       on every member.
+## @note `LINKFLAGS` is accepted. Items are raw linker flags, applied
+##       INTERFACE on `<id>` via `target_link_options` at materialize so
+##       every consumer of the meta pulls them. They do not rewrite member
+##       archives.
 ## @note `PC` / `PC={…}` is FATAL on a meta. A collection has no single library
 ##       contract; flattening members into one `.pc` would invent an unbounded
 ##       Requires list and collide with upstream `.pc` files the author did
@@ -89,7 +96,7 @@ endfunction()
 ## @note May be called after meta_component_add() for the same id (fills title
 ##       and options). A second create_meta_component() for the same id is FATAL.
 ## @note If never called, lazy ids from meta_component_add() still materialize
-##       with title = id, WHOLE off, TOOLCHAIN empty, LINK empty.
+##       with title = id, WHOLE off, TOOLCHAIN empty, LINK empty, LINKFLAGS empty.
 function(create_meta_component _id _title)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meta_component")
 	if(ARGC GREATER 3)
@@ -132,6 +139,7 @@ function(create_meta_component _id _title)
 	buildmaster_parse_component_pc(
 		"${_optstr}" _pc_present _pc_enabled _pc_name _pc_ver _pc_desc)
 	buildmaster_parse_component_link("${_optstr}" _meta_link)
+	buildmaster_parse_component_linkflags("${_optstr}" _meta_linkflags)
 	if(_pc_present)
 		buildmaster_message(COMPONENT FATAL
 			"create_meta_component('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
@@ -158,6 +166,7 @@ function(create_meta_component _id _title)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_INDENT "${_indent}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_TOOLCHAIN "${_tc}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINK "${_meta_link}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS "${_meta_linkflags}")
 	if(_whole)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE TRUE)
 	else()
@@ -167,8 +176,9 @@ function(create_meta_component _id _title)
 	add_library("${_id}" INTERFACE)
 
 	_buildmaster_component_defer_arm()
-	if(_meta_link)
-		buildmaster_message(COMPONENT DEBUG "Registered meta ${_id} LINK=${_meta_link}")
+	if(_meta_link OR _meta_linkflags)
+		buildmaster_message(COMPONENT DEBUG
+			"Registered meta ${_id} LINK=${_meta_link} LINKFLAGS=${_meta_linkflags}")
 	else()
 		buildmaster_message(COMPONENT DEBUG "Registered meta ${_id}")
 	endif()
@@ -308,6 +318,8 @@ endfunction()
 ## @note `BUILDMASTER_META_<id>_LINK` (raw linker names) is applied INTERFACE
 ##       on `<id>` here so consumers of the meta propagate those names to the
 ##       final artefact. Empty or unset LINK is a no-op.
+## @note `BUILDMASTER_META_<id>_LINKFLAGS` (raw linker flags) is applied
+##       INTERFACE via `target_link_options`. Empty or unset is a no-op.
 ## @note Does not wire member link lines yet (leaf IMPORTED targets do not exist).
 function(_buildmaster_materialize_metas)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_metas")
@@ -341,6 +353,11 @@ function(_buildmaster_materialize_metas)
 		if(_meta_link)
 			target_link_libraries(${_id} INTERFACE ${_meta_link})
 			buildmaster_message(COMPONENT DEBUG "${_id}: LINK (raw) → ${_meta_link}")
+		endif()
+		get_property(_meta_linkflags GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS)
+		if(_meta_linkflags)
+			target_link_options(${_id} INTERFACE ${_meta_linkflags})
+			buildmaster_message(COMPONENT DEBUG "${_id}: LINKFLAGS (raw) → ${_meta_linkflags}")
 		endif()
 		if(NOT TARGET "${_id}_install")
 			add_custom_target(${_id}_install)

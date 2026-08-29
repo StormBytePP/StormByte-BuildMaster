@@ -66,3 +66,9 @@ set(_bm_link "@_BM_LINK_ITEMS@")
 if(NOT _bm_link STREQUAL "")
 	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_link})
 endif()
+
+# LINKFLAGS: raw linker flags, INTERFACE so they propagate to the final artefact.
+set(_bm_linkflags "@_BM_LINKFLAGS_ITEMS@")
+if(NOT _bm_linkflags STREQUAL "")
+	target_link_options(@_LIBRARY_NAME@ INTERFACE ${_bm_linkflags})
+endif()

@@ -26,9 +26,9 @@ set(_BM_OPT_SEMI "__BM_SEMI__")
 ## @param[in]  options_string Raw `"KEY=value;KEY2={A=1;B=2}"` string.
 ## @param[out] out_pairs      Parent-scope CMake list of tokens. Embedded `;`
 ##            inside `{…}` are stored as `__BM_SEMI__`.
-## @note Brace depth is not nested in v1 (`{` inside `{` still increments).
-##       Unbalanced `{` / `}` is FATAL. Empty tokens are dropped.
-##       Values still must not contain a raw `;` outside braces.
+## @note Brace depth counts nested `{` / `}`. Unbalanced `{` / `}` is FATAL.
+##       Empty tokens are dropped. Values still must not contain a raw `;`
+##       outside braces.
 function(buildmaster_split_option_pairs options_string out_pairs)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_split_option_pairs")
 	set(_pairs "")
@@ -334,6 +334,169 @@ function(buildmaster_parse_component_link options_string out_items)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_link")
 endfunction()
 
+## @brief Classify one LINKFLAGS `{…}` body into flags for this host.
+## @param[in]  inner     Text inside the outermost `LINKFLAGS={…}`.
+## @param[out] out_items Parent-scope list of flags that apply here.
+## @note Platform keys: `WINDOWS` (WIN32), `LINUX` (CMAKE_SYSTEM_NAME Linux),
+##       `MAC` (APPLE), `UNIX` (UNIX AND NOT WIN32 — Linux and macOS).
+##       Matching groups are concatenated. A known group that does not apply
+##       is skipped at INFO. `FOO={…}` with an unknown key is FATAL.
+##       Tokens that are not `KEY={…}` are all-platform flags.
+function(buildmaster_parse_component_linkflags_group inner out_items)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_linkflags_group")
+	set(_items "")
+
+	buildmaster_split_option_pairs("${inner}" _toks)
+	foreach(_tok IN LISTS _toks)
+		string(REPLACE "${_BM_OPT_SEMI}" ";" _tok "${_tok}")
+		string(STRIP "${_tok}" _tok)
+		if(_tok STREQUAL "")
+			continue()
+		endif()
+
+		buildmaster_unwrap_brace_group("${_tok}" _discard _is_bare_group)
+		if(_is_bare_group)
+			buildmaster_message(COMPONENT FATAL
+				"LINKFLAGS group token '{…}' without a platform key (got '${_tok}')")
+		endif()
+
+		string(FIND "${_tok}" "=" _eq)
+		set(_is_platform FALSE)
+		set(_pkey "")
+		set(_pval "")
+		if(NOT _eq EQUAL -1)
+			string(SUBSTRING "${_tok}" 0 ${_eq} _pkey)
+			math(EXPR _vs "${_eq} + 1")
+			string(SUBSTRING "${_tok}" ${_vs} -1 _pval)
+			string(STRIP "${_pkey}" _pkey)
+			string(TOUPPER "${_pkey}" _pkey)
+			string(STRIP "${_pval}" _pval)
+			buildmaster_unwrap_brace_group("${_pval}" _pinner _pbrace)
+			if(_pbrace)
+				set(_is_platform TRUE)
+			endif()
+		endif()
+
+		if(_is_platform)
+			set(_known FALSE)
+			set(_applies FALSE)
+			if(_pkey STREQUAL "WINDOWS")
+				set(_known TRUE)
+				if(WIN32)
+					set(_applies TRUE)
+				endif()
+			elseif(_pkey STREQUAL "LINUX")
+				set(_known TRUE)
+				if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+					set(_applies TRUE)
+				endif()
+			elseif(_pkey STREQUAL "MAC")
+				set(_known TRUE)
+				if(APPLE)
+					set(_applies TRUE)
+				endif()
+			elseif(_pkey STREQUAL "UNIX")
+				set(_known TRUE)
+				if(UNIX AND NOT WIN32)
+					set(_applies TRUE)
+				endif()
+			endif()
+			if(NOT _known)
+				buildmaster_message(COMPONENT FATAL
+					"LINKFLAGS unknown platform key '${_pkey}' (want WINDOWS, LINUX, MAC, UNIX)")
+			endif()
+			if(NOT _applies)
+				buildmaster_message(COMPONENT INFO
+					"LINKFLAGS ${_pkey}={…} skipped on this host")
+				continue()
+			endif()
+			if(_pinner STREQUAL "")
+				continue()
+			endif()
+			buildmaster_split_option_pairs("${_pinner}" _flags)
+			foreach(_f IN LISTS _flags)
+				string(REPLACE "${_BM_OPT_SEMI}" ";" _f "${_f}")
+				string(STRIP "${_f}" _f)
+				if(NOT _f STREQUAL "")
+					list(APPEND _items "${_f}")
+				endif()
+			endforeach()
+		else()
+			list(APPEND _items "${_tok}")
+		endif()
+	endforeach()
+
+	set(${out_items} "${_items}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_linkflags_group")
+endfunction()
+
+## @brief Parse `LINKFLAGS=` / `LINKFLAGS={…}` from a component options string.
+## @param[in]  options_string Trailing `"KEY=value;…"` passed to create_*.
+## @param[out] out_items      Parent-scope CMake list of raw linker flags
+##            selected for the current host (empty if omitted or nothing applies).
+## @note Items are **external to BuildMaster**. They are forwarded verbatim
+##       onto the component INTERFACE via `target_link_options(<id> INTERFACE …)`
+##       and therefore propagate along the CMake link chain to the final
+##       artefact (`.dll` / `.so` / executable) that consumes that id.
+##       They do not rewrite the nested third-party build and they do not
+##       fix a link line that never goes through the BM INTERFACE.
+## @note Items are raw linker flags (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`),
+##       not component ids, not metas, not CMake targets, and not library
+##       specs. Use `LINK=` for system library names and `component_link()`
+##       for BM graph nodes.
+## @note Forms:
+##       - `LINKFLAGS=-Wl,-Bsymbolic` — one flag, every platform.
+##       - `LINKFLAGS={-pthread;-Wl,-Bsymbolic}` — flags, every platform.
+##       - `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE};LINUX={-Wl,-Bsymbolic};MAC={};UNIX={-pthread}}`
+##         Platform groups. Known keys: `WINDOWS`, `LINUX`, `MAC`, `UNIX`.
+##         `UNIX` = Linux and macOS (not Windows). Matching groups are
+##         concatenated. A group whose platform does not apply is dropped
+##         at INFO. Empty group (`MAC={}`) adds nothing.
+##       - Tokens inside `{…}` that are not `KEY={…}` are all-platform flags.
+## @note Bare `LINKFLAGS` / `LINKFLAGS=` is FATAL. Several unbraced items
+##       (`LINKFLAGS=a;b`) is FATAL. Unknown platform key `FOO={…}` is FATAL.
+##       Empty tokens are dropped. This function does not interpret sibling keys.
+function(buildmaster_parse_component_linkflags options_string out_items)
+	buildmaster_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_linkflags")
+	set(_items "")
+
+	if(NOT "${options_string}" STREQUAL "")
+		buildmaster_split_option_pairs("${options_string}" _pairs)
+		foreach(_pair IN LISTS _pairs)
+			if(_pair STREQUAL "")
+				continue()
+			endif()
+			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			if(NOT _ok OR NOT _key STREQUAL "LINKFLAGS")
+				continue()
+			endif()
+			if(_val STREQUAL "")
+				buildmaster_message(COMPONENT FATAL
+					"LINKFLAGS requires LINKFLAGS=<flag> or LINKFLAGS={…} (bare LINKFLAGS is invalid)")
+			endif()
+			buildmaster_unwrap_brace_group("${_val}" _inner _brace)
+			if(_brace)
+				if(NOT _inner STREQUAL "")
+					buildmaster_parse_component_linkflags_group("${_inner}" _grp)
+					list(APPEND _items ${_grp})
+				endif()
+			else()
+				if(_val MATCHES ";")
+					buildmaster_message(COMPONENT FATAL
+						"LINKFLAGS with several items must be LINKFLAGS={a;b} (got '${_val}')")
+				endif()
+				list(APPEND _items "${_val}")
+			endif()
+		endforeach()
+	endif()
+
+	if(_items)
+		buildmaster_message(COMPONENT DEBUG "LINKFLAGS items: ${_items}")
+	endif()
+	set(${out_items} "${_items}" PARENT_SCOPE)
+	buildmaster_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_linkflags")
+endfunction()
+
 ## @brief Parse the optional `KEY=VALUE;…` options string used by create_*_component.
 ## @param[out] out_indent     Indent level (integer, default 0).
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
@@ -351,18 +514,20 @@ endfunction()
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
-##            `PC={…}` and `LINK={…}` groups are allowed; `;` inside braces is
-##            not a pair break. A trailing orphan `;` is allowed (dropped).
+##            `PC={…}`, `LINK={…}` and `LINKFLAGS={…}` groups are allowed; `;`
+##            inside braces is not a pair break. A trailing orphan `;` is allowed
+##            (dropped).
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
-##       `LINK=` / `LINK={…}` for raw system linker names and `component_link()`
-##       for BM graph nodes. Values may contain `=` and spaces but not `;`
-##       outside `{…}`. Extra positional arguments are not handled here.
-## @note `PC` and `LINK` are recognized so they are not “unknown keys”.
-##       Generation details: `buildmaster_parse_component_pc()`,
-##       `buildmaster_parse_component_link()`. Meta + PC is FATAL in
-##       create_meta_*. Meta + LINK is accepted and applied INTERFACE
-##       on the meta at materialize.
+##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
+##       `LINKFLAGS={…}` for raw linker flags, and `component_link()` for BM
+##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
+## @note `PC`, `LINK` and `LINKFLAGS` are recognized so they are not
+##       “unknown keys”. Details: `buildmaster_parse_component_pc()`,
+##       `buildmaster_parse_component_link()`,
+##       `buildmaster_parse_component_linkflags()`. Meta + PC is FATAL in
+##       create_meta_*. Meta + LINK / LINKFLAGS is accepted and applied
+##       INTERFACE on the meta at materialize.
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -398,9 +563,11 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 				set(_toolchain "${_val}")
 			elseif(_key STREQUAL "LINK")
 				# parsed by buildmaster_parse_component_link()
+			elseif(_key STREQUAL "LINKFLAGS")
+				# parsed by buildmaster_parse_component_linkflags()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				buildmaster_message(COMPONENT WARNING
-					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, component_link() for BM nodes (ignored)")
+					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, component_link() for BM nodes (ignored)")
 			elseif(_key STREQUAL "RENAME")
 				buildmaster_option_flag_enabled("${_val}" _rename)
 			elseif(_key STREQUAL "BUILDONLY")
@@ -497,8 +664,6 @@ macro(buildmaster_append_library_spec library_mode spec base_libdir
 			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 		if(MSVC)
-			# GNUInstallDirs: RUNTIME (DLL) → BINDIR, ARCHIVE (import .lib) → LIBDIR.
-			# BUILDONLY keeps both artifacts under the component BUILDDIR.
 			if("${base_libdir}" STREQUAL "${BUILDMASTER_INSTALL_LIBDIR}")
 				set(_bm_as_dll_dir "${BUILDMASTER_INSTALL_BINDIR}")
 			else()

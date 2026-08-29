@@ -12,6 +12,10 @@ payload-lib_configure -> payload_unpack
 link-b -> link-b_install
 link-b_configure -> link-a_install
 
+# linkflags
+lf-os-meta_install -> lf-os_install
+lf-unix-meta_install -> lf-unix_install
+
 # meta
 meta-inner_install -> leaf-a_install
 meta-inner_install -> leaf-b_install

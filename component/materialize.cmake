@@ -145,15 +145,19 @@ endfunction()
 ## @brief configure_file + include the shared component fragment template.
 ## @param[in] _component Registered component id.
 ## @param[in] _deferred  TRUE → dependant template (configure at build time).
-## @note Collects outputs, WHOLE, LINK (raw linker names) and recorded
-##       dependencies, then generates `component_<id>.cmake` under
-##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it.
+## @note Collects outputs, WHOLE, LINK (raw linker names), LINKFLAGS (raw
+##       linker flags) and recorded dependencies, then generates
+##       `component_<id>.cmake` under `BUILDMASTER_SCRIPTS_COMPONENTDIR`
+##       and `include()`s it.
 ##       `<id>` is already an INTERFACE from create_*; the fragment only
-##       attaches includes, IMPORTED archives, WHOLE and LINK.
+##       attaches includes, IMPORTED archives, WHOLE, LINK and LINKFLAGS.
 ## @note `_BM_LINK_ITEMS` is the CMake list stored on
 ##       `BUILDMASTER_COMPONENT_<id>_LINK` (empty string if unset). The
 ##       template applies it INTERFACE on `<id>` so consumers propagate
 ##       those raw names to the final artefact.
+## @note `_BM_LINKFLAGS_ITEMS` is the CMake list stored on
+##       `BUILDMASTER_COMPONENT_<id>_LINKFLAGS` (empty string if unset).
+##       The template applies it INTERFACE via `target_link_options`.
 ## @note Library-spec `component_link` dests are folded into FILES by
 ##       `collect_outputs`. Stage `OUTPUT` is frozen at create_* (declared
 ##       produced specs only). After `include()`, each extra file that is
@@ -226,6 +230,15 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	if(_BM_LINK_ITEMS)
 		buildmaster_message(COMPONENT DEBUG
 			"${_component}: LINK (raw) → ${_BM_LINK_ITEMS}")
+	endif()
+
+	get_property(_BM_LINKFLAGS_ITEMS GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINKFLAGS)
+	if(NOT _BM_LINKFLAGS_ITEMS)
+		set(_BM_LINKFLAGS_ITEMS "")
+	endif()
+	if(_BM_LINKFLAGS_ITEMS)
+		buildmaster_message(COMPONENT DEBUG
+			"${_component}: LINKFLAGS (raw) → ${_BM_LINKFLAGS_ITEMS}")
 	endif()
 
 	if(_deferred)

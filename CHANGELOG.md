@@ -9,10 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **`LINK=` / `LINK={…}`:** raw system linker names (`shlwapi`, `ws2_32`) on the component or meta INTERFACE. They propagate to whoever links that id, including the final `.dll` / `.so`. Not BM nodes and not a fix for a third-party link done outside this INTERFACE. Revives the 1.x `LINK_EXTRA` idea under a shorter name; `component_link` stays the graph (unknown dest is now fatal instead of inventing a prefix spec).
+- **`LINKFLAGS=` / `LINKFLAGS={…}`:** raw linker flags (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`) on the component or meta INTERFACE via `target_link_options`. They propagate to whoever links that id, including the final `.dll` / `.so`. Not library names (`LINK=`), not BM nodes, and not a rewrite of the nested third-party link line. Optional platform groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux and macOS). A group that does not apply on this host is skipped at INFO. Unknown platform key is FATAL. Headers mode: WARNING, ignored.
 - Logging: `WARNING` is no longer filtered. Default `BUILDMASTER_LOGLEVEL=STATUS`
   shows STATUS, WARNING and FATAL. Policy ignores (STRIPRES/WHOLE/LINK on a
   mode that cannot use them, ignored keys on a meta) are INFO; unknown options,
-  `LINK_EXTRA`, and orphan components stay WARNING.
+  `LINK_EXTRA`, orphan components, and `LINKFLAGS` on headers stay WARNING.
 - Silent env runner replays nested BuildMaster lines live. The full child
   log is still kept and dumped on failure. Matching uses both header
   shapes (`[BuildMaster/…]` and `[LEVEL][BuildMaster/…]`); WARNING/FATAL

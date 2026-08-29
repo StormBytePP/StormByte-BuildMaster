@@ -42,19 +42,27 @@ endfunction()
 ##            MSVC/clang-cl archives after RENAME),
 ##            LINK=<name> / LINK={name;name2} (raw linker names on the
 ##            component INTERFACE; see below),
+##            LINKFLAGS=<flag> / LINKFLAGS={…} (raw linker flags on the
+##            component INTERFACE via target_link_options; platform groups
+##            WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
 ## @note The INTERFACE exists as soon as this function returns, so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see `<id>`.
 ##       Deferred finalize only emits stages and the fragment: includes,
-##       IMPORTED archives, WHOLE and LINK. A second create_* for the same
-##       id is FATAL in the registry.
+##       IMPORTED archives, WHOLE, LINK and LINKFLAGS. A second create_*
+##       for the same id is FATAL in the registry.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
 ##       They are applied `INTERFACE` on `<id>` and propagate through CMake
 ##       `target_link_libraries` to the final artefact that consumes that id.
 ##       They do not repair a third-party archive that was linked without
 ##       going through this INTERFACE. Not a substitute for `component_link()`.
-## @note Headers mode: `LINK` is INFO and ignored (no link line).
+## @note `LINKFLAGS` items are external raw linker flags
+##       (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`). Applied `INTERFACE` on `<id>`
+##       via `target_link_options` and propagate to the final artefact.
+##       They do not rewrite the nested third-party link line.
+## @note Headers mode: `LINK` is INFO and ignored. `LINKFLAGS` is WARNING
+##       and ignored (no link line).
 ## @note `STRIPRES` default is ON. INFO only when the user wrote the key and
 ##       mode is not static (shared/headers have nothing to strip).
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
@@ -110,6 +118,7 @@ function(create_component _component _component_title _srcdir _builddir
 		"${_options_string}"
 		_pc_present _pc_enabled _pc_name _pc_version _pc_description)
 	buildmaster_parse_component_link("${_options_string}" _reg_link)
+	buildmaster_parse_component_linkflags("${_options_string}" _reg_linkflags)
 
 	string(TOLOWER "${_library_mode}" _library_mode)
 	string(TOLOWER "${_build_system}" _build_system)
@@ -150,6 +159,11 @@ function(create_component _component _component_title _srcdir _builddir
 		buildmaster_message(COMPONENT INFO
 			"create_component('${_component}'): LINK ignored (headers mode has no link line)")
 		set(_reg_link "")
+	endif()
+	if(_library_mode STREQUAL "headers" AND _reg_linkflags)
+		buildmaster_message(COMPONENT WARNING
+			"create_component('${_component}'): LINKFLAGS ignored (headers mode has no link line)")
+		set(_reg_linkflags "")
 	endif()
 
 	if(_pc_enabled AND _reg_buildonly)
@@ -194,6 +208,8 @@ function(create_component _component _component_title _srcdir _builddir
 		"${_options_string}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINK
 		"${_reg_link}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINKFLAGS
+		"${_reg_linkflags}")
 	if(_reg_buildonly)
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
 	else()

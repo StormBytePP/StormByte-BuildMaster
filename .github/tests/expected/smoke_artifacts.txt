@@ -14,11 +14,15 @@
 <lib>/blinklib.lib|windows
 <lib>/deplib.lib|windows
 <lib>/firstlib.lib|windows
+<lib>/lfos.lib|windows
+<lib>/lfunix.lib|windows
 <lib>/libalinklib.a|unix
 <lib>/libbaselib.a|unix
 <lib>/libblinklib.a|unix
 <lib>/libdeplib.a|unix
 <lib>/libfirstlib.a|unix
+<lib>/liblfos.a|unix
+<lib>/liblfunix.a|unix
 <lib>/libloaderlib.a|unix
 <lib>/libmergedlib.a|unix
 <lib>/libmetaleafa.a|unix
@@ -56,6 +60,8 @@
 <include>/first.h|all
 <include>/leaf_a.h|all
 <include>/leaf_b.h|all
+<include>/lfos.h|all
+<include>/lfunix.h|all
 <include>/loader.h|all
 <include>/metaout.h|all
 <include>/outlib.h|all

@@ -41,6 +41,7 @@ BuildMaster is that layer, written once:
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** collection |
 | `LNK2005` / duplicate `.res` after `/WHOLEARCHIVE` | `STRIPRES` on static MSVC/clang-cl archives (default on) |
 | `shlwapi` on every consumer because a static `.lib` does not record it | Optional `LINK={…}` on the producer (or the meta) |
+| `/FORCE:MULTIPLE` / `-Bsymbolic` on the parent because the WHOLE pack needs it | Optional `LINKFLAGS={WINDOWS={…};LINUX={…}}` on the producer |
 | Hand-written `.pc` so the next Meson node finds this prefix | Optional helper `PC={…}` on the component |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
@@ -59,6 +60,7 @@ a product, not a build blog.
 - [How a component works](#how-a-component-works)
 - [Dependencies and links](#dependencies-and-links)
 - [Raw system libraries (`LINK`)](#raw-system-libraries-link)
+- [Raw linker flags (`LINKFLAGS`)](#raw-linker-flags-linkflags)
 - [Meta components](#meta-components)
 - [Orphan warnings](#orphan-warnings)
 - [Prerequisites](#prerequisites)
@@ -144,6 +146,7 @@ larger library links as one `WHOLE` node.
 | Whole-archive static link on INTERFACE | Manual | Manual | **Optional (`WHOLE`)** |
 | Strip `.res` from static MSVC archives | Manual `/REMOVE` | Manual | **Default on static (`STRIPRES`)** |
 | Raw system libs on the INTERFACE | Manual on every consumer | Manual | **Optional (`LINK={…}`)** |
+| Raw linker flags on the INTERFACE | Manual on every consumer | Manual | **Optional (`LINKFLAGS={…}`)** |
 | Helper `.pc` for the shared prefix | Manual | Manual | **Optional (`PC={…}`)** |
 | Build-only + static repack | No | Manual | **Yes** |
 | Unified log API (`buildmaster_message`) | No | No | **Yes** |
@@ -350,13 +353,90 @@ confusion. Using the old key is a **WARNING**.
 
 ---
 
+## Raw linker flags (`LINKFLAGS`)
+
+`LINK` is a *library name*. `/FORCE:MULTIPLE` and `-Wl,-Bsymbolic` are
+not. Putting them in `LINK={…}` would hand CMake a library token. The
+parent would keep a hidden `target_link_options` “because BM cannot say
+this”, and that is the kind of sentence this DSL exists to retire.
+
+`LINKFLAGS` is the declaration on the **producer** (or on a meta):
+whoever links this `INTERFACE` also gets these flags, via
+`target_link_options`.
+
+```cmake
+create_meson_component(
+    ffmpeg
+    "FFmpeg"
+    ${FFMPEG_SRC_DIR}
+    ${FFMPEG_BUILD_DIR}
+    "${FFMPEG_MESON_OPTIONS}"
+    static
+    "avutil;avcodec;avformat;swscale;swresample;avfilter"
+    "WHOLE;LINKFLAGS={WINDOWS={/FORCE:MULTIPLE}}"
+)
+```
+
+Read that twice before you copy `-Bsymbolic` onto every codec.
+
+The BM node is an `INTERFACE` library. CMake has no useful `PRIVATE` on
+that kind of target: if the flags are not `INTERFACE`, the consumer never
+sees them. So `LINKFLAGS` is always stored `INTERFACE` on `<id>`.
+
+That is **one hop**, not a virus:
+
+| Who links whom | What happens |
+|----------------|--------------|
+| `target_link_libraries(Multimedia PRIVATE ffmpeg)` | Flags are used **while linking Multimedia**. They do **not** become `INTERFACE` of Multimedia. |
+| `target_link_libraries(Multimedia PUBLIC ffmpeg)` | Flags are used while linking Multimedia **and** re-exported to whoever links Multimedia. |
+| Someone links `avcodec.a` by hand, skipping the BM id | `LINKFLAGS` does not exist. Same contract as `LINK`. |
+
+So: if Multimedia must **not** be born with `-Wl,-Bsymbolic`, do not put
+that flag on `ffmpeg`. FFmpeg’s own Meson may still pass `-Bsymbolic`
+when *it* builds `libavcodec.so`. That link already happened inside the
+nested project. `LINKFLAGS` is only the **next** link — your artefact
+swallowing the static pack.
+
+Typical split for a static FFmpeg WHOLE pack:
+
+- Windows: `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE}}` — the WHOLE pull
+  often needs it, and it belongs on *this* link.
+- Linux / macOS: omit `LINUX` / `UNIX` / `MAC` unless you have measured
+  that *your* `.so` needs `-Bsymbolic`. Copying FFmpeg’s private DSO
+  flag onto Multimedia is how you invent a new bug.
+
+| Form | Meaning |
+|------|---------|
+| omitted | nothing extra |
+| `LINKFLAGS=-Wl,-Bsymbolic` | one flag, every platform |
+| `LINKFLAGS={-pthread;-Wl,-Bsymbolic}` | several flags, every platform |
+| `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE};LINUX={-Wl,-Bsymbolic};MAC={};UNIX={-pthread}}` | platform groups |
+| `LINKFLAGS=` / bare `LINKFLAGS` | **FATAL** |
+| several items without braces | **FATAL** |
+| unknown group name (`WIN32={…}`, `APPLE={…}`) | **FATAL** |
+
+`WINDOWS` applies on Win32 (MSVC and clang-cl). `LINUX` applies when
+`CMAKE_SYSTEM_NAME` is `Linux`. `MAC` applies on Apple. `UNIX` applies
+on Linux **and** macOS, not Windows. Matching groups are concatenated,
+in declaration order. A known group that does not apply on this host is
+dropped at **INFO**. An empty group (`MAC={}`) adds nothing.
+
+Items are **external to BuildMaster**. They go to the linker as written.
+They do not rewrite the nested third-party link line.
+
+Headers mode has no link line: `LINKFLAGS` is **WARNING**, ignored.
+A meta **accepts** `LINKFLAGS` and puts the flags on the collection
+`INTERFACE`.
+
+---
+
 ## Meta components
 
 A **meta** is an `INTERFACE` plus a graph anchor. No sources, no compile,
 no artifacts of its own. It collects members (components, other metas,
 static or shared) and forwards wait + link. It may set `WHOLE` on the
-collection even if members did not. It may set `LINK` on the collection
-even if members did not.
+collection even if members did not. It may set `LINK` and `LINKFLAGS` on
+the collection even if members did not.
 
 `TOOLCHAIN` on a meta does **not** compile the meta. At materialize time
 that profile is copied onto members (and onto `component_dependency` /
@@ -434,13 +514,13 @@ Every `create_*_component` accepts **at most one** optional trailing
 argument:
 
 ```text
-KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};PC={VERSION=1.0.0;NAME=foo}
+KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};LINKFLAGS={WINDOWS={/FORCE:MULTIPLE}};PC={VERSION=1.0.0;NAME=foo}
 ```
 
 | Rule | Detail |
 |------|--------|
 | Pair separator | `;` outside `{…}` |
-| Brace group | `PC={…}` and `LINK={…}` — `;` inside the braces is part of the group |
+| Brace group | `PC={…}`, `LINK={…}` and `LINKFLAGS={…}` — `;` inside the braces is part of the group |
 | Key / value | Only the **first** `=` in a pair |
 | Keys | Case-insensitive, stored **UPPERCASE** |
 | Values | May contain spaces and extra `=` (`test==value` is fine) |
@@ -448,6 +528,7 @@ KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};PC={VERSION=1.0.0;NAME=fo
 | Bare flag | `RENAME` / `WHOLE` / `BUILDONLY` / `STRIPRES` / `PC` ≡ `KEY=ON` |
 | Bare `PC` / `PC=ON` without `{…}` | **FATAL** — use `PC={VERSION=…}` or `PC={ENABLED=FALSE}` |
 | Bare `LINK` / `LINK=` | **FATAL** — use `LINK=name` or `LINK={a;b}` |
+| Bare `LINKFLAGS` / `LINKFLAGS=` | **FATAL** — use `LINKFLAGS=flag` or `LINKFLAGS={a;b}` |
 | Unknown key | **WARNING**, ignored |
 | Extra positional arguments | **FATAL_ERROR** |
 
@@ -460,6 +541,7 @@ KEY=value;KEY2=value with spaces;LINK={shlwapi;ws2_32};PC={VERSION=1.0.0;NAME=fo
 | `BUILDONLY` | Do not install into the shared prefix |
 | `STRIPRES` | After `RENAME`, strip `.res` members from **static** MSVC / clang-cl archives (default **ON**) |
 | `LINK=` / `LINK={…}` | Raw system linker names on the component or meta `INTERFACE` |
+| `LINKFLAGS=` / `LINKFLAGS={…}` | Raw linker flags on the component or meta `INTERFACE` (`target_link_options`) |
 | `PC={…}` | After install, write a **helper** `.pc` under the shared prefix (see below) |
 
 `LINK_EXTRA` is not a key. It **WARNING**s and is ignored.
@@ -657,7 +739,7 @@ declared on `create_*`; extra spec-link files get a Ninja wait-rule on
 `create_cmake_headers_component` / `create_meson_headers_component` still
 run configure / build / install for the include tree. There is no produced
 archive and no link line. `LINK` on a headers component is **INFO**,
-ignored.
+ignored. `LINKFLAGS` is **WARNING**, ignored.
 
 ---
 
@@ -750,8 +832,8 @@ Higher number = quieter filter threshold for the *optional* levels.
 |-------|------|
 | `LOWLEVEL` | Function enter/exit and path plumbing |
 | `DEBUG` | Useful when debugging BuildMaster or a consumer graph |
-| `INFO` | Policy that was ignored because it cannot apply (STRIPRES/WHOLE/LINK on the wrong mode, ignored keys on a meta, rename already done) |
-| `WARNING` | Something you should fix: unknown option, `LINK_EXTRA`, orphan component. **Always printed.** |
+| `INFO` | Policy that was ignored because it cannot apply (STRIPRES/WHOLE/LINK on the wrong mode, ignored keys on a meta, skipped `LINKFLAGS` platform group, rename already done) |
+| `WARNING` | Something you should fix: unknown option, `LINK_EXTRA`, `LINKFLAGS` on headers, orphan component. **Always printed.** |
 | `STATUS` | Default narrative. Stage titles (`Configuring` / `Compiling` / `Installing`) |
 | `FATAL` | Always printed. Stops configure/script. Never filtered |
 

@@ -31,6 +31,11 @@ mtc-pinned_install
 link_component_test
 order_independent_link_test
 
+# LINKFLAGS
+lf-os_install
+lf-unix_install
+linkflags_os_test_run
+
 # Pkg-config helper
 pc-dep_install
 pc-lib_install

@@ -38,6 +38,7 @@ _buildmaster_finalize_components()
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_api.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_propagation.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -66,6 +67,11 @@ add_custom_target(run_buildmaster_consumer
 # Smoke
 # ---------------------------------------------------------------------------
 
+set(_BM_SMOKE_UNIX "")
+if(NOT WIN32)
+	set(_BM_SMOKE_UNIX linkflags_unix_test_run)
+endif()
+
 add_custom_target(run_buildmaster_smoke
 	COMMAND ${CMAKE_COMMAND}
 		-DBUILDMASTER_INSTALL_DIR=${BUILDMASTER_INSTALL_DIR}
@@ -89,6 +95,10 @@ add_custom_target(run_buildmaster_smoke
 		mtc-inherit_install mtc-pinned_install
 		# Order / link tests
 		link_component_test order_independent_link_test
+		# LINKFLAGS
+		lf-os_install lf-unix_install
+		linkflags_os_test_run
+		${_BM_SMOKE_UNIX}
 		# Pkg-config helper
 		pc-dep_install pc-lib_install pc_check_run
 		# Recursive

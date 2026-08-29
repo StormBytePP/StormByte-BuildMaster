@@ -2,10 +2,10 @@
 # One subdirectory per feature. recursive/ stays as cmake|meson.
 
 if(NOT BM_TEST_REPO_ROOT)
-    get_filename_component(BM_TEST_REPO_ROOT
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
-        ABSOLUTE
-    )
+	get_filename_component(BM_TEST_REPO_ROOT
+		"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+		ABSOLUTE
+	)
 endif()
 
 # ---------------------------------------------------------------------------
@@ -44,6 +44,11 @@ add_subdirectory(meta-toolchain)
 add_subdirectory(link-component)
 add_subdirectory(order-independent)
 add_subdirectory(prerequisite)
+
+# ---------------------------------------------------------------------------
+# LINKFLAGS platform groups
+# ---------------------------------------------------------------------------
+add_subdirectory(linkflags)
 
 # ---------------------------------------------------------------------------
 # Pkg-config helper
