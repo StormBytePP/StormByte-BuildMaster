@@ -69,9 +69,13 @@ fragment to `include()`, no public dependant factories. A 1.x
 - **Silent env runner** replays nested `[BuildMaster/…]` lines live;
   the full child log is dumped on failure. `BUILDMASTER_VERBOSE` still
   uses the unfiltered runner.
-- **`create_*_component` 2.1-style arity:** omit the build directory.
-  BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. No WARNING
-  on this form.
+- **`create_*_component` optional build directory.**
+  Library: `id title srcdir options mode produced [optstr]`.
+  Headers: `id title srcdir options [optstr]`.
+  BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`.
+  The path form is still accepted and still uses the caller directory.
+  `create_component` creates whichever path it receives
+  (`file(MAKE_DIRECTORY)`, idempotent).
 - **Hooks.** `buildmaster_on_component_materialize(id fn alias
   [CAPTURE …])` / `buildmaster_on_graph_finalized(fn alias [CAPTURE …])`.
   `fn` must exist at registration. Alias is the only order key (ASCII
@@ -88,6 +92,7 @@ fragment to `include()`, no public dependant factories. A 1.x
   consumer `include()` of a generated fragment. Signature:
   `create_cmake_component(<id> <title> <srcdir> <builddir> <options>
   <mode> <produced> [options_string])` (Meson / headers analogues).
+  The builddir slot may be omitted; see Added.
 - **Breaking — dependant factories are gone.**
   `create_*_dependant_component` / `create_*_headers_dependant_component`
   are not public. Use `create_*` + `component_dependency` (or
@@ -102,11 +107,8 @@ fragment to `include()`, no public dependant factories. A 1.x
   `PC={…}`, `LINK=`, `LINKFLAGS=`). `;` inside `{…}` is not a pair
   break. Unknown keys warn; extra positionals are fatal.
 - `create_*_stages` are internal.
-- **`ensure_build_dir` deprecated (removed in 2.1.x).** Still fills the
-  output variable; it no longer creates the directory. There is no
-  public getter for the assigned builddir yet.
-- **Explicit `builddir` on `create_*` deprecated (removed in 2.1.x).**
-  Legacy arity still works and still uses the caller path (WARNING).
+- `ensure_build_dir` still fills the output variable and no longer
+  creates the directory. `create_component` owns `MAKE_DIRECTORY`.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
   use `[BuildMaster/Ninja]`.
 - Root `CMakeLists.txt` includes helpers before `init_vars`, so

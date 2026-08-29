@@ -6,17 +6,16 @@
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Deprecated in 2.0.x. Omit for 2.1-style:
+## @param[in] _builddir Optional. Omit for 2.1-style:
 ##            `id title srcdir options mode produced [optstr]`.
-##            Legacy: `id title srcdir builddir options mode produced [optstr]`.
+##            With path: `id title srcdir builddir options mode produced [optstr]`.
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
-## @note Same arity rules and deprecation as create_cmake_component.
-##       2.1.x drops the explicit builddir. No public getter yet.
+## @note Same arity rules as create_cmake_component.
 function(create_meson_component _component _component_title _srcdir)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_component")
 
@@ -60,10 +59,7 @@ function(create_meson_component _component _component_title _srcdir)
 		endif()
 	endif()
 
-	if(_legacy)
-		buildmaster_message(COMPONENT WARNING
-			"create_meson_component('${_component}'): explicit build directory is deprecated and will be removed in BuildMaster 2.1.x (BuildMaster will assign the directory). There is no public getter for that path yet.")
-	else()
+	if(NOT _legacy)
 		_buildmaster_component_builddir(_builddir "${_component}")
 	endif()
 
@@ -79,9 +75,9 @@ endfunction()
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Deprecated in 2.0.x. Same 4–6 arity as
+## @param[in] _builddir Optional. Same 4–6 arity as
 ##            create_cmake_headers_component.
-## @note 5 arguments are always the legacy form. No public builddir getter yet.
+## @note 5 arguments are always the path form.
 function(create_meson_headers_component _component _component_title _srcdir)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_headers_component")
 
@@ -108,10 +104,7 @@ function(create_meson_headers_component _component _component_title _srcdir)
 		set(_options "${ARGV4}")
 	endif()
 
-	if(_legacy)
-		buildmaster_message(COMPONENT WARNING
-			"create_meson_headers_component('${_component}'): explicit build directory is deprecated and will be removed in BuildMaster 2.1.x (BuildMaster will assign the directory). There is no public getter for that path yet.")
-	else()
+	if(NOT _legacy)
 		_buildmaster_component_builddir(_builddir "${_component}")
 	endif()
 

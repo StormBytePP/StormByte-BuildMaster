@@ -18,9 +18,9 @@ endfunction()
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Deprecated in 2.0.x. Omit for 2.1-style:
+## @param[in] _builddir Optional. Omit for 2.1-style:
 ##            `id title srcdir options mode produced [optstr]`.
-##            Legacy: `id title srcdir builddir options mode produced [optstr]`.
+##            With path: `id title srcdir builddir options mode produced [optstr]`.
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
@@ -28,13 +28,10 @@ endfunction()
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
 ## @note Mode token (`static`/`shared`/`headers`) selects the arity:
-##       6/7 without a path in the builddir slot = 2.1 (BuildMaster path,
-##       no WARNING). 7/8 with a path before options = 2.0 (WARNING;
-##       removed in 2.1.x). Ambiguous 7-arg where both slots look like
-##       mode is treated as 2.0.
-## @note 2.1.x drops the explicit builddir. There is no public getter for
-##       the assigned directory yet; that is why 2.0.x still accepts the
-##       legacy slot.
+##       6/7 without a path in the builddir slot uses
+##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. 7/8 with a path before
+##       options uses that path. Ambiguous 7-arg where both slots look
+##       like mode is treated as the path form.
 ## @note Delegates to create_component. Stages and the fragment run at
 ##       deferred finalize. No fragment path. No include() is required.
 function(create_cmake_component _component _component_title _srcdir)
@@ -80,10 +77,7 @@ function(create_cmake_component _component _component_title _srcdir)
 		endif()
 	endif()
 
-	if(_legacy)
-		buildmaster_message(COMPONENT WARNING
-			"create_cmake_component('${_component}'): explicit build directory is deprecated and will be removed in BuildMaster 2.1.x (BuildMaster will assign the directory). There is no public getter for that path yet.")
-	else()
+	if(NOT _legacy)
 		_buildmaster_component_builddir(_builddir "${_component}")
 	endif()
 
@@ -99,13 +93,10 @@ endfunction()
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Deprecated in 2.0.x. 2.1-style: `id title srcdir
-##            options [optstr]` (4 or 5 args). Legacy: `id title srcdir
-##            builddir options [optstr]` (5 or 6 args).
-## @note 5 arguments are always the legacy form (existing callers). 2.1
-##       plus optstr is 4 args without optstr, or wait for 2.1.x.
-## @note Same deprecation as create_cmake_component: no public builddir
-##       getter yet.
+## @param[in] _builddir Optional. 2.1-style: `id title srcdir options [optstr]`
+##            (4 or 5 args). With path: `id title srcdir builddir options [optstr]`
+##            (5 or 6 args).
+## @note 5 arguments are always the path form (existing callers).
 function(create_cmake_headers_component _component _component_title _srcdir)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_cmake_headers_component")
 
@@ -132,10 +123,7 @@ function(create_cmake_headers_component _component _component_title _srcdir)
 		set(_options "${ARGV4}")
 	endif()
 
-	if(_legacy)
-		buildmaster_message(COMPONENT WARNING
-			"create_cmake_headers_component('${_component}'): explicit build directory is deprecated and will be removed in BuildMaster 2.1.x (BuildMaster will assign the directory). There is no public getter for that path yet.")
-	else()
+	if(NOT _legacy)
 		_buildmaster_component_builddir(_builddir "${_component}")
 	endif()
 

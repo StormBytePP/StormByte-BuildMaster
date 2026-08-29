@@ -91,25 +91,20 @@ function(_buildmaster_component_builddir _out _component)
 	buildmaster_message(CORE LOWLEVEL "Exiting _buildmaster_component_builddir")
 endfunction()
 
-## @brief Deprecated. Build directories will not be caller-owned in 2.1.x.
-## @param[out] _out Name of the variable to set in the parent scope with
-##            the directory path (same layout as before this deprecation).
-## @param[in] _component Optional component name; when provided the
-##            path is `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`.
-##            When omitted the path is `${CMAKE_CURRENT_BINARY_DIR}/build`.
-## @note No longer creates the directory. Emits WARNING; removal planned
-##       for BuildMaster 2.1.x because `create_*_component` will stop
-##       taking an explicit builddir (BuildMaster assigns it). There is
-##       no public getter for that path yet — that is why this helper is
-##       deprecated rather than removed in 2.0.x.
+## @brief Fill a caller variable with a conventional build path.
+## @param[out] _out Parent-scope variable name.
+## @param[in] _component Optional id. With it:
+##            `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`.
+##            Without it: `${CMAKE_CURRENT_BINARY_DIR}/build`.
+## @note Does not create the directory. `create_component` does
+##       `file(MAKE_DIRECTORY)` on the path it actually uses.
+##       Callers that omit the builddir slot get
+##       `_buildmaster_component_builddir` instead (`…/bm/<id>`).
 function(ensure_build_dir _out)
 	buildmaster_message(CORE LOWLEVEL "Entering ensure_build_dir")
 	if(ARGC LESS 1)
 		buildmaster_message(CORE FATAL "ensure_build_dir requires an output variable name and optional component name")
 	endif()
-
-	buildmaster_message(CORE WARNING
-		"ensure_build_dir() is deprecated and will be removed in BuildMaster 2.1.x: create_*_component will no longer take an explicit build directory (BuildMaster assigns it). There is no public getter for that path yet.")
 
 	set(_out_var "${_out}")
 
@@ -130,4 +125,3 @@ function(ensure_build_dir _out)
 	set(${_out_var} "${_builddir}" PARENT_SCOPE)
 	buildmaster_message(CORE LOWLEVEL "Exiting ensure_build_dir")
 endfunction()
-
