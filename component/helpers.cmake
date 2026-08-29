@@ -12,6 +12,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/options.cmake")
 # Registry, create_component, component_dependency / link / prerequisite.
 include("${CMAKE_CURRENT_LIST_DIR}/graph.cmake")
 
+# Inspectable hooks (on_component_materialize / on_graph_finalized).
+include("${CMAKE_CURRENT_LIST_DIR}/hooks.cmake")
+
 # Meta components (no sources; membership + INTERFACE).
 include("${CMAKE_CURRENT_LIST_DIR}/meta.cmake")
 

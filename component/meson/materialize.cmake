@@ -13,6 +13,7 @@
 ##       `Setting up <title> for build-time configure` here so parent
 ##       configure is not silent about them; the real Meson setup
 ##       still runs under `<id>_configure` at build time.
+## @note Per-id hooks run after the fragment include (alias order).
 function(_buildmaster_materialize_meson _component)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_meson")
 	get_property(_component_title GLOBAL PROPERTY
@@ -58,6 +59,7 @@ function(_buildmaster_materialize_meson _component)
 	)
 
 	_buildmaster_component_write_fragment("${_component}" "${_deferred}")
+	_buildmaster_run_component_materialize_hooks("${_component}")
 	buildmaster_message(COMPONENT DEBUG "Materialized meson component ${_component} deferred=${_deferred}")
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_meson")
 endfunction()

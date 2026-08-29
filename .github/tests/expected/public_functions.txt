@@ -1,6 +1,8 @@
 # One public command per line (sections and names alphabetical)
 
 # Component API
+buildmaster_on_component_materialize
+buildmaster_on_graph_finalized
 component_dependency
 component_link
 component_prerequisite

@@ -27,6 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selects the slot. BuildMaster assigns
   `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and `create_component` creates
   it (`file(MAKE_DIRECTORY)`, idempotent). No WARNING on this form.
+- **`buildmaster_on_component_materialize(id fn alias [CAPTURE …])` /
+  `buildmaster_on_graph_finalized(fn alias [CAPTURE …])`:** inspectable
+  hooks. `fn` must exist at registration (friendly FATAL). Alias is the
+  only order key (ASCII ascending, per id or among graph hooks). Scripts
+  land in `BUILDMASTER_SCRIPTS_HOOK_DIR` as
+  `<alias>__component_<id>.cmake` / `<alias>__graph.cmake`. Optional
+  `CAPTURE` snapshots variables by copy into the script (`set(NAME [=[…]=])`).
+  Per-id hooks run after that component’s fragment; graph hooks run after
+  links and orphan warn. No other order contract. An id that never
+  materializes is FATAL.
 
 ### Changed
 - **`ensure_build_dir` deprecated (removed in 2.1.x).** It still fills the

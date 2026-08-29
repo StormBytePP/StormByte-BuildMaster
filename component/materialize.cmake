@@ -424,19 +424,19 @@ function(_buildmaster_apply_links)
 endfunction()
 
 ## @brief Deferred materialize: metas, toolchain inherit, components, repacks,
-##        links, orphan warn.
+##        links, orphan warn, hooks.
 ## @note Idempotent. Scheduled by `_buildmaster_component_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
 ## @note Concrete and create_meta INTERFACE stubs already exist. This pass
 ##       emits stages, fragments, repack targets, meta stage anchors, member
 ##       wiring and recorded `component_link` edges.
-## @note Order: flush queued git reset/patch → materialize metas (lazy
-##       INTERFACE + anchors + meta LINK) → propagate meta TOOLCHAIN onto
-##       members → per-id cmake/meson materialize → repacks → meta wire →
-##       apply links → orphan warning.
-## @note Git flush is first so eager nested configure sees patched sources
-##       (`create_git_patch_file` is not allowed to lose the race to this
-##       function).
+## @note Order: flush queued git reset/patch → materialize metas →
+##       propagate meta TOOLCHAIN → per-id cmake/meson materialize
+##       (each id’s hooks after its fragment) → repacks → meta wire →
+##       apply links → orphan warning → fail if a per-id hook was
+##       registered for an id that never materialized → graph hooks
+##       (alias order).
+## @note Git flush is first so eager nested configure sees patched sources.
 function(_buildmaster_finalize_components)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -472,7 +472,22 @@ function(_buildmaster_finalize_components)
 	_buildmaster_meta_wire()
 	_buildmaster_apply_links()
 	_buildmaster_warn_orphans()
+
+	get_property(_hook_ids GLOBAL PROPERTY BUILDMASTER_ON_MATERIALIZE_IDS)
+	if(_hook_ids)
+		list(REMOVE_DUPLICATES _hook_ids)
+		foreach(_hid IN LISTS _hook_ids)
+			get_property(_hook_done GLOBAL PROPERTY
+				BUILDMASTER_ON_MATERIALIZE_${_hid}_DONE)
+			if(NOT _hook_done)
+				buildmaster_message(COMPONENT FATAL
+					"buildmaster_on_component_materialize('${_hid}'): component was never materialized")
+			endif()
+		endforeach()
+	endif()
+
+	_buildmaster_hook_run_sorted("BUILDMASTER_ON_GRAPH_FINALIZED")
+
 	buildmaster_message(COMPONENT DEBUG "Component graph finalized")
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
 endfunction()
-
