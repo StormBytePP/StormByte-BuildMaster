@@ -43,3 +43,21 @@ sdkloader_configure -> sdk-headers_install
 # slow-configure
 slow-configure -> slow-configure_install
 slow-configure_configure -> base_install
+
+# late-link (link before dest create)
+late-src -> late-src_install
+late-src_configure -> late-dst_install
+
+# dup-link
+dup-a -> dup-a_install
+dup-a_configure -> dup-b_install
+
+# hooks
+hook-a -> hook-a_install
+hook-b -> hook-b_install
+
+# omit-builddir
+omit-lib -> omit-lib_install
+
+# link-raw
+raw-lib -> raw-lib_install

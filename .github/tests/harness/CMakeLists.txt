@@ -39,6 +39,8 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_api.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_propagation.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_hooks.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -116,5 +118,26 @@ add_custom_target(run_buildmaster_smoke
 		# WHOLE
 		out-lib_install plain-lib_install whole-lib_install
 		whole_link_test_nowhole_run whole_link_test_run
+		# harness-expand
+		hook-a_install hook-b_install
+		late-dst_install late-src_install
+		omit-lib_install
+		dup-a_install dup-b_install
+		raw-lib_install
 	VERBATIM
 )
+
+# ---------------------------------------------------------------------------
+# harness-expand: configure-time FATAL cases
+# ---------------------------------------------------------------------------
+add_custom_target(run_buildmaster_negative
+	COMMAND ${CMAKE_COMMAND}
+		-DBM_TEST_REPO_ROOT=${BM_TEST_REPO_ROOT}
+		-DBM_TEST_NEGATIVE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../negative
+		-DCMAKE_GENERATOR=${CMAKE_GENERATOR}
+		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/run_negative.cmake
+	COMMENT "[BuildMaster/Core     ]: negative configure contracts"
+	VERBATIM
+)
+add_dependencies(run_buildmaster_smoke run_buildmaster_negative)
