@@ -39,7 +39,7 @@ fragment to `include()`, no public dependant factories, no public
   Same arity as the old `create_*` wrappers. Neutral `options` list:
   `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
   `DEFINITIONS` — private to the nested compile, appended to the parent
-  job / toolchain. Other keys FATAL. optstr (`LINK=`, `PC=`, …)
+  job / toolchain. Other keys FATAL. optstr (`LINK=`, `PC=`, `GIT=`, …)
   unchanged.
 - **Optional build directory slot.** BuildMaster assigns
   `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` when omitted.
@@ -52,6 +52,12 @@ fragment to `include()`, no public dependant factories, no public
   `target_link_options` on the same INTERFACE. Groups: `WINDOWS`,
   `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux + macOS). A group that does
   not apply is skipped at INFO. Unknown platform key is FATAL.
+- **`GIT={FETCH;SWITCH=<branch>;RESET;PATCH=<file>;TITLE=…}`.** Srcdir
+  git work on `buildmaster_component`. Flush order is fixed: FETCH →
+  SWITCH → RESET → PATCH (PATCH order is declaration order). Relative
+  `PATCH=` is from `CMAKE_CURRENT_SOURCE_DIR`. Empty `GIT` / `GIT={}`
+  is WARNING. Meta + any git op is FATAL. `FETCH` / `RESET` are inner
+  flags. Post-install reset runs only when a PATCH was queued.
 - **`RENAME` (flag, default ON).** Post-install normalize of variant
   basenames. Headers mode ignores it.
 - **`WHOLE`.** Whole-archive link of produced static archives.
@@ -79,11 +85,12 @@ fragment to `include()`, no public dependant factories, no public
   tree.
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
   meta-toolchain, LINKFLAGS, hooks, late link, raw `LINK=`, duplicate
-  edges, reset-then-patch, PC clobber (install FATAL).
+  edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install
+  FATAL).
 
 ### Changed
 
-- **Breaking — public API is `buildmaster_*` only.** Eighteen commands
+- **Breaking — public API is `buildmaster_*` only.** Fourteen commands
   (see `public_functions.txt`). Internals are `_bm_<craft>_*` and are
   not a supported API. In particular:
   - `create_cmake_component` / `create_meson_component` /
@@ -95,7 +102,7 @@ fragment to `include()`, no public dependant factories, no public
   - `component_repack` → `buildmaster_repack`.
   - `create_meta_component` → `buildmaster_meta`.
   - `meta_component_add` → `buildmaster_meta_add`.
-  - `create_git_*` → `buildmaster_git_{fetch,switch,reset,patch}`.
+  - `create_git_*` / `buildmaster_git_*` → `GIT={…}` on the component.
   - `file_download` / `file_download_cached` / `file_decompress` →
     `buildmaster_download{,_cached}` / `buildmaster_decompress`.
   - `buildmaster_on_component_materialize` →
@@ -116,22 +123,23 @@ fragment to `include()`, no public dependant factories, no public
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
-  `PC={…}`, `LINK=`, `LINKFLAGS=`). `;` inside `{…}` is not a pair
-  break. Unknown keys warn; extra positionals are fatal.
+  `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`). `;` inside `{…}` is not a
+  pair break. Unknown keys warn; extra positionals are fatal.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
   use `[BuildMaster/Ninja]`.
 - Root `CMakeLists.txt` includes helpers before `init_vars`, so
   `add_subdirectory(buildmaster)` alone bootstraps a consumer.
 - Root configure includes `GNUInstallDirs`.
+- Post-install git reset + clean runs only after a PATCH.
 
 ### Fixed
 
 - Git patch lost the race with eager configure: flush runs at
   registration and again *before* materialize (reset then patch once
   per root).
-- `buildmaster_git_patch` then `buildmaster_git_reset` used to apply
-  and immediately `reset --hard`. Ops flush as reset + clean, then
-  apply.
+- `GIT={PATCH=…;RESET}` (or the old `buildmaster_git_patch` then
+  `reset`) used to apply and immediately `reset --hard`. Ops flush as
+  reset + clean, then apply.
 - Cached download under `cmake -P` did not see the log helper; templates
   now include log + checksum.
 - Dead second `function(component_dependency)` (now

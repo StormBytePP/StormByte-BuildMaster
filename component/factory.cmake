@@ -200,7 +200,8 @@ endfunction()
 ## @note Both marker files or neither: FATAL. Then use create_cmake_* or
 ##       create_meson_*.
 ## @note `mode` is still the caller’s (`static` / `shared` / `headers`).
-## @note optstr (`LINK=`, `PC=`, `WHOLE`, …) is unchanged and last.
+## @note optstr (`LINK=`, `PC=`, `WHOLE`, `GIT={…}`, …) is last. GIT is
+##       applied inside `_bm_comp_create` after the INTERFACE exists.
 ## @note INTERFACE `<id>` exists on return (delegates to create_*).
 function(buildmaster_component _component _component_title _srcdir)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")

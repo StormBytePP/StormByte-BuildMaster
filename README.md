@@ -17,7 +17,7 @@ toolchain and environment that actually reach nested Meson.
 This is not a wrapper around `ExternalProject_Add`. It is not FetchContent
 with extra macros. It is a small language for **graphs of third-party builds**.
 
-The public surface is eighteen `buildmaster_*` commands. Everything else
+The public surface is fourteen `buildmaster_*` commands. Everything else
 is `_bm_<craft>_*` and is not a supported API. Coming from 1.0.x?
 [`MIGRATE.md`](MIGRATE.md).
 
@@ -52,6 +52,7 @@ BuildMaster is that layer, written once:
 | `cmake_language(DEFER)` so a summary line appears *after* the graph | Optional **hooks** |
 | “Did anyone actually link this plugin?” | Orphan warnings at configure |
 | Waiting on a slow tarball every `rm -rf build` | Point `BUILDMASTER_DOWNLOADSDIR` at a folder you keep |
+| Four public git commands plus “call reset before the factory” | Optional `GIT={…}` on the component |
 
 The cost is a short public API. The payoff is a parent tree that looks like
 a product, not a build blog.
@@ -104,7 +105,7 @@ While the parent is still configuring, you **declare**:
 - edges (`buildmaster_depend`, `buildmaster_link`)
 - hooks (`buildmaster_hook_component`, `buildmaster_hook_graph`)
 - optional work that must finish first (`buildmaster_prerequisite`,
-  file and git helpers)
+  file helpers, `GIT={…}` on the component)
 
 You do **not** `include()` generated fragments. You do **not** call a
 public finalize. Materialization runs once via an internal
@@ -135,7 +136,7 @@ larger library links as one `WHOLE` node.
 
 | Capability | FetchContent | ExternalProject_Add | BuildMaster |
 |------------|:------------:|:-------------------:|:-----------:|
-| Fetch / manage sources | Yes | Yes | Yes (Git helpers) |
+| Fetch / manage sources | Yes | Yes | Yes (`GIT={…}`) |
 | Cacheable downloads | Partial | Manual | **Built-in** (`BUILDMASTER_DOWNLOADSDIR`) |
 | Hash-verified downloads | Yes | Manual | **Yes**, plus reuse across builds |
 | Download / unpack during parent configure | Manual | No | **Yes** (`buildmaster_download*`) |
@@ -164,7 +165,7 @@ larger library links as one `WHOLE` node.
 | INTERFACE depends on `_install` | No | Manual | **Yes** |
 | Orphan component / meta warning | No | No | **Yes** |
 | Inspectable post-graph hooks | Manual `DEFER` | Manual | **Yes** |
-| Per-repo post-install git reset | No | Manual | **Yes** |
+| Per-repo post-install git reset | No | Manual | **Yes** (PATCH only) |
 
 ---
 
@@ -208,7 +209,7 @@ buildmaster_component(
 	"${_opts}"
 	static
 	"mylib"
-	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib}"
+	"INDENT=2;TOOLCHAIN=clang-cl;RENAME;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib};GIT={RESET;PATCH=${CMAKE_CURRENT_SOURCE_DIR}/0001-fix.patch}"
 )
 ```
 
@@ -236,7 +237,8 @@ Factory `options` may also be a CMake list of neutral keys
 4. **Optional:** hooks, `buildmaster_prerequisite`,
    `buildmaster_download*` / `buildmaster_decompress` (these run
    during the call, so sources exist before the factory), or
-   configure-time `buildmaster_git_*`.
+   `GIT={…}` on the component (applied when the component is
+   registered).
 5. End of `CMAKE_SOURCE_DIR`: BuildMaster materializes. Unused ids
    produce one **WARNING**. Hooks run after that pass.
 
@@ -418,7 +420,8 @@ buildmaster_link(engine plugins)
 No sources, no install of its own. `<id>_install` waits on members.
 `TOOLCHAIN` on the meta copies onto members (and onto empty dests)
 that do not already have one. Two metas fighting over the same empty
-dest is **FATAL**. `PC={…}` on a meta is **FATAL**.
+dest is **FATAL**. `PC={…}` on a meta is **FATAL**. `GIT={…}` with
+FETCH / SWITCH / RESET / PATCH on a meta is **FATAL** (no srcdir).
 
 `buildmaster_meta_add` may run before `buildmaster_meta`.
 
@@ -498,6 +501,7 @@ One optional trailing `KEY=value;…` on `buildmaster_component` /
 | `PC={…}` | off | Helper `.pc` for **this** prefix |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker flags, optional platform groups |
+| `GIT={…}` | off | Srcdir git work. Empty group is WARNING. Meta + ops is FATAL |
 
 Unknown keys: **WARNING**, ignored. Extra positionals: **FATAL**.
 `;` inside `{…}` is not a pair break.
@@ -668,14 +672,14 @@ will explode (`CORE` is not a log level).
 |-------|------|
 | `LOWLEVEL` | Function enter/exit and path plumbing |
 | `DEBUG` | Useful when debugging BuildMaster or a consumer graph |
-| `INFO` | Policy that was ignored because it cannot apply |
-| `WARNING` | Something you should fix. **Always printed.** |
-| `STATUS` | Default narrative |
-| `FATAL` | Always printed. Stops configure/script |
+| `INFO` | Extra context that is not a warning |
+| `STATUS` | Normal progress |
+| `WARNING` | Always shown |
+| `FATAL` | Always shown, stops configure |
 
-Default `BUILDMASTER_LOGLEVEL` is `STATUS`. `WARNING` and `FATAL`
-ignore the filter. Without `BUILDMASTER_VERBOSE`, a WARNING is one
-yellow `message(NOTICE)` line (no `CMake Warning at …` banner).
+`WARNING` and `FATAL` are never filtered. With
+`BUILDMASTER_VERBOSE` off, a warning is a full-line coloured
+`message(NOTICE)` (no `CMake Warning at …` banner).
 With verbose, `message(WARNING)`.
 
 `BUILDMASTER_DEBUG` is ignored.
@@ -732,18 +736,23 @@ compilers.
 
 ## Git helpers
 
-Bound to a **component id**. Configure-time ops run when you call
-them; a post-install reset can restore the tree after patching.
+Git work is an optstr on the **component**, not four public commands.
+The srcdir is the work tree. Flush order is fixed: FETCH → SWITCH →
+RESET → PATCH. PATCH files keep declaration order. Relative `PATCH=`
+is from `CMAKE_CURRENT_SOURCE_DIR`.
 
 ```cmake
-buildmaster_git_reset(mylib "MyLib reset" ${MYLIB_SRC_DIR})
-buildmaster_git_patch(mylib "MyLib patch" ${MYLIB_SRC_DIR} ${PATCH_FILE})
-buildmaster_git_switch(mylib "MyLib branch" ${MYLIB_SRC_DIR} my-topic)
-buildmaster_git_fetch(mylib "MyLib fetch" ${MYLIB_SRC_DIR})
+buildmaster_component(
+	mylib "My library" "${MYLIB_SRC}"
+	"" static "mylib"
+	"GIT={FETCH;SWITCH=my-topic;RESET;PATCH=${CMAKE_CURRENT_SOURCE_DIR}/0001-fix.patch;TITLE=mylib git}")
 ```
 
-Call these **before** `buildmaster_component` for that id. Patch is
-queued; flush is reset-then-apply once per root.
+Empty `GIT` / `GIT={}` is WARNING. A meta cannot run git (no srcdir).
+`FETCH` and `RESET` are flags (`RESET` ≡ `RESET=ON`). Recommend
+`RESET` on reconfigure so a leftover apply does not fail the next
+patch. A post-install `reset --hard` + `clean -fd` runs **only** when
+a PATCH was queued.
 
 ---
 
@@ -782,10 +791,10 @@ file target must precede configure.
 | Meta | `buildmaster_meta`, `buildmaster_meta_add` |
 | Repack | `buildmaster_repack` |
 | Files | `buildmaster_download`, `buildmaster_download_cached`, `buildmaster_decompress` |
-| Git | `buildmaster_git_fetch`, `buildmaster_git_switch`, `buildmaster_git_reset`, `buildmaster_git_patch` |
+| Git | `GIT={…}` on `buildmaster_component` |
 | Log | `buildmaster_message` |
 
-Eighteen commands. `_bm_*` is internal. Stage generators, parse
+Fourteen commands. `_bm_*` is internal. Stage generators, parse
 helpers, import hints, `ensure_build_dir`, checksum and git marker
 are not part of the supported surface.
 

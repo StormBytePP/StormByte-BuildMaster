@@ -31,13 +31,13 @@ index 1111111..2222222 100644
 ")
 
 # Patch first in source order; flush must still reset then apply.
-buildmaster_git_patch(
+_bm_tools_git_patch(
     grp
     "harness reset-patch apply"
     "${_GRP}"
     "${CMAKE_CURRENT_BINARY_DIR}/add_marker.patch"
 )
-buildmaster_git_reset(
+_bm_tools_git_reset(
     grp
     "harness reset-patch reset"
     "${_GRP}"

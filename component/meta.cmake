@@ -97,6 +97,8 @@ endfunction()
 ##       and options). A second buildmaster_meta() for the same id is FATAL.
 ## @note If never called, lazy ids from buildmaster_meta_add() still materialize
 ##       with title = id, WHOLE off, TOOLCHAIN empty, LINK empty, LINKFLAGS empty.
+## @note `GIT={…}` with FETCH / SWITCH / RESET / PATCH is FATAL on a meta
+##       (no srcdir). Empty `GIT` / `GIT={}` is the parser WARNING only.
 function(buildmaster_meta _id _title)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta")
 	if(ARGC GREATER 3)
@@ -140,9 +142,16 @@ function(buildmaster_meta _id _title)
 		"${_optstr}" _pc_present _pc_enabled _pc_name _pc_ver _pc_desc)
 	_bm_opt_parse_link("${_optstr}" _meta_link)
 	_bm_opt_parse_linkflags("${_optstr}" _meta_linkflags)
+	_bm_opt_parse_git(
+		"${_optstr}" _git_present _git_fetch _git_switch _git_reset
+		_git_patches _git_title)
 	if(_pc_present)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
+	endif()
+	if(_git_present AND (_git_fetch OR NOT "${_git_switch}" STREQUAL "" OR _git_reset OR _git_patches))
+		_bm_log_message(COMPONENT FATAL
+			"buildmaster_meta('${_id}'): cannot run git commands on a sourceless meta component")
 	endif()
 	if(_buildonly)
 		_bm_log_message(COMPONENT INFO

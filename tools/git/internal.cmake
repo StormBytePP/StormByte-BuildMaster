@@ -55,10 +55,10 @@ endfunction()
 
 ## @brief Write the post-install reset -P script for one git root.
 ## @param[in] _git_root Absolute git toplevel.
+## @note Only written when a PATCH was queued. FETCH / SWITCH / RESET-only
+##       leave the tree clean after configure; install must not reset again.
 ## @note The generated script runs `git reset --hard` then `git clean -fd`
-##       via ENV_GIT_SILENT_COMMAND. Stdout/stderr are captured so raw git
-##       lines (`HEAD is now at …`) go through `_bm_log_message(GIT …)`
-##       instead of leaking unprefixed. Failures are WARNING (install already
+##       via ENV_GIT_SILENT_COMMAND. Failures are WARNING (install already
 ##       succeeded). Invoked from install_exec after the component install.
 function(_bm_git_register_post_install_reset _git_root)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_register_post_install_reset")
@@ -98,20 +98,22 @@ if(NOT _rc EQUAL 0)
 	_bm_log_message(GIT WARNING \"git clean -fd failed in ${_git_root} (exit \${_rc})\")
 endif()
 ")
+	_bm_log_message(GIT DEBUG "post-install reset script ${_marker}")
 	_bm_log_message(GIT LOWLEVEL "Exiting _bm_git_register_post_install_reset")
 endfunction()
 
-## @brief Register a component id with a git root for clean / post-install.
+## @brief Register a component id with a git root for clean targets.
 ## @param[in] _component_id  Component id (sanitized for target names).
 ## @param[in] _git_repo_dir  Path inside the work tree (srcdir).
-## @note Stores BUILDMASTER_GIT_ROOT_<id>. When BUILDMASTER_CLEAN_RESET_REPOS
-##       is true, adds `buildmaster_clean_git_<id>` under `buildmaster_clean`
-##       (reset + clean + delete BUILDMASTER_GIT_CONFIGURE_STAMP).
+## @note Stores BUILDMASTER_GIT_ROOT_<id>. Does **not** write the
+##       post-install reset marker — that is PATCH-only
+##       (`_bm_tools_git_patch` → `_bm_git_register_post_install_reset`).
+## @note When BUILDMASTER_CLEAN_RESET_REPOS is true, adds
+##       `buildmaster_clean_git_<id>` under `buildmaster_clean`.
 function(_bm_git_register_op _component_id _git_repo_dir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_register_op")
 	_bm_path_sanitize(_cid "${_component_id}")
 	_bm_git_toplevel(_git_root "${_git_repo_dir}")
-	_bm_git_register_post_install_reset("${_git_root}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_ROOT_${_cid} "${_git_root}")
 
 	if(BUILDMASTER_CLEAN_RESET_REPOS)
@@ -142,7 +144,8 @@ endfunction()
 ## @brief Resolve post-install reset script path for a source directory.
 ## @param[out] _out     Parent-scope path, or empty if no marker was written.
 ## @param[in]  _srcdir  Component source directory.
-## @note Used by create_*_stages so install_exec can reset the tree after install.
+## @note Marker exists only when a PATCH was registered for that git root.
+##       Used by create_*_stages so install_exec can reset after install.
 function(_bm_tools_git_marker _out _srcdir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_marker")
 	_bm_git_toplevel(_git_root "${_srcdir}")

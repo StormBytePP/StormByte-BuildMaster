@@ -16,11 +16,5 @@ buildmaster_decompress
 buildmaster_download
 buildmaster_download_cached
 
-# Git helpers
-buildmaster_git_fetch
-buildmaster_git_patch
-buildmaster_git_reset
-buildmaster_git_switch
-
 # Logging
 buildmaster_message

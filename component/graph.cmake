@@ -249,6 +249,9 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 
 	add_library("${_component}" INTERFACE)
 
+	_bm_comp_apply_git(
+		"${_component}" "${_component_title}" "${_srcdir}" "${_options_string}")
+
 	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_create")

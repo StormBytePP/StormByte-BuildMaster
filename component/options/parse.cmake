@@ -19,20 +19,21 @@
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
-##            `PC={…}`, `LINK={…}` and `LINKFLAGS={…}` groups are allowed; `;`
-##            inside braces is not a pair break. A trailing orphan `;` is allowed
-##            (dropped).
+##            `PC={…}`, `LINK={…}`, `LINKFLAGS={…}` and `GIT={…}` groups are
+##            allowed; `;` inside braces is not a pair break. A trailing
+##            orphan `;` is allowed (dropped).
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
-## @note `PC`, `LINK` and `LINKFLAGS` are recognized so they are not
+## @note `PC`, `LINK`, `LINKFLAGS` and `GIT` are recognized so they are not
 ##       “unknown keys”. Details: `_bm_opt_parse_pc()`,
-##       `_bm_opt_parse_link()`,
-##       `_bm_opt_parse_linkflags()`. Meta + PC is FATAL in
-##       create_meta_*. Meta + LINK / LINKFLAGS is accepted and applied
-##       INTERFACE on the meta at materialize.
+##       `_bm_opt_parse_link()`, `_bm_opt_parse_linkflags()`,
+##       `_bm_opt_parse_git()`. Meta + PC is FATAL in create_meta_*.
+##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
+##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
+##       meta at materialize.
 function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -70,6 +71,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_link()
 			elseif(_key STREQUAL "LINKFLAGS")
 				# parsed by _bm_opt_parse_linkflags()
+			elseif(_key STREQUAL "GIT")
+				# parsed by _bm_opt_parse_git()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
 					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")

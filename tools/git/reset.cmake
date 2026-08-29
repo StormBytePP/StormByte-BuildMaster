@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/git/reset.cmake — buildmaster_git_reset
+# tools/git/reset.cmake — _bm_tools_git_reset
 # =============================================================================
 
 ## @brief Run queued reset scripts then queued patch scripts for one git root.
@@ -48,9 +48,9 @@ endfunction()
 ## @param[in] _git_repo_dir Repository working tree.
 ## @note Generates the script and queues it. Flush runs every reset for the
 ##       repo, then every patch. Call order of create_git_* does not matter.
-##       Call as: `buildmaster_git_reset(<id> <title> <repo>)`.
-function(buildmaster_git_reset _component_id _title _git_repo_dir)
-	_bm_log_message(GIT LOWLEVEL "Entering buildmaster_git_reset")
+##       Call as: `_bm_tools_git_reset(<id> <title> <repo>)`.
+function(_bm_tools_git_reset _component_id _title _git_repo_dir)
+	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_reset")
 	set(GIT_REPO "${_git_repo_dir}")
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_RESET_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_reset_${_safe}.cmake")
@@ -69,5 +69,5 @@ function(buildmaster_git_reset _component_id _title _git_repo_dir)
 	_bm_git_register_op("${_component_id}" "${_git_repo_dir}")
 	_bm_git_flush_repo("${_git_repo_dir}")
 	_bm_log_message(GIT DEBUG "Reset git repo for ${_component_id}")
-	_bm_log_message(GIT LOWLEVEL "Exiting buildmaster_git_reset")
+	_bm_log_message(GIT LOWLEVEL "Exiting _bm_tools_git_reset")
 endfunction()

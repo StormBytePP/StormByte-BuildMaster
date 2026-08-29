@@ -91,7 +91,7 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 | `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
 | `buildmaster_message(level text [, indent])` | Only supported log API. Module is always `USER` |
 | `buildmaster_download` / `buildmaster_download_cached` / `buildmaster_decompress` | File helpers (no out-var) |
-| `buildmaster_git_fetch` / `buildmaster_git_switch` / `buildmaster_git_reset` / `buildmaster_git_patch` | Git helpers (no out-var) |
+| `_bm_tools_git_fetch` / `_bm_tools_git_switch` / `_bm_tools_git_reset` / `_bm_tools_git_patch` | Git helpers (no out-var) |
 
 `buildmaster_link` always records `buildmaster_depend` when `dest` is a
 graph node. A spec or on-disk archive is link-only. Duplicate
@@ -223,9 +223,9 @@ later pass to `buildmaster_prerequisite`.
 |-------|--------|
 | `file_download_cached(OUT url …)` + `include(${OUT})` | `buildmaster_download_cached(<name> <url> [EXPECTED_HASH …] [TITLE …])` then `buildmaster_prerequisite(<id> <name>)` |
 | `file_decompress(OUT archive dest …)` + `include` | `buildmaster_decompress(<name> <archive> <dest> [TITLE …])` |
-| `create_git_reset_file(OUT id title repo)` + `include` | `buildmaster_git_reset(<id> <title> <repo>)` |
-| `create_git_patch_file(OUT id title repo patches)` + `include` | `buildmaster_git_patch(<id> <title> <repo> <patch>)` |
-| `create_git_fetch` / `create_git_switch_branch` | `buildmaster_git_fetch` / `buildmaster_git_switch` |
+| `create_git_reset_file(OUT id title repo)` + `include` | `_bm_tools_git_reset(<id> <title> <repo>)` |
+| `create_git_patch_file(OUT id title repo patches)` + `include` | `_bm_tools_git_patch(<id> <title> <repo> <patch>)` |
+| `create_git_fetch` / `create_git_switch_branch` | `_bm_tools_git_fetch` / `_bm_tools_git_switch` |
 
 Call `buildmaster_git_*` **before** `buildmaster_component` for that
 id. Post-install reset of registered roots is still automatic.

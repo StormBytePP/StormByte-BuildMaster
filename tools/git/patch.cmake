@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/git/patch.cmake — buildmaster_git_patch
+# tools/git/patch.cmake — _bm_tools_git_patch
 # =============================================================================
 
 ## @brief Queue git patches for configure-time apply; register post-install reset.
@@ -7,16 +7,14 @@
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @param[in] _git_patches  List of patch files (joined with spaces for apply).
-## @note Does not apply inside this function's first lines; it queues the
-##       script and flushes the repo immediately so the working tree is
-##       patched before any later nested cmake/meson (eager finalize).
-##       If a reset is also queued for this root, flush runs reset then
-##       patch once. A SOURCE_DIR DEFER remains as a fallback when no
-##       component finalize runs. Paths are written without extra quote
-##       wrapping (`_bm_list_join` would nest quotes inside the STATUS string
-##       and break CMake parse).
-function(buildmaster_git_patch _component_id _title _git_repo_dir _git_patches)
-	_bm_log_message(GIT LOWLEVEL "Entering buildmaster_git_patch")
+## @note Queues the script and flushes immediately so the tree is patched
+##       before a later nested cmake/meson. If a reset is also queued for
+##       this root, flush runs reset then patch once.
+## @note Post-install reset is registered **here only**. A PATCH dirties
+##       the srcdir for the compile; install must restore it. FETCH /
+##       SWITCH / RESET-only do not write that marker.
+function(_bm_tools_git_patch _component_id _title _git_repo_dir _git_patches)
+	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_patch")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(_patches "${_git_patches}")
 	string(REPLACE ";" " " GIT_PATCHES "${_patches}")
@@ -36,9 +34,10 @@ function(buildmaster_git_patch _component_id _title _git_repo_dir _git_patches)
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS "${_root}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
 	_bm_git_register_op("${_component_id}" "${_git_repo_dir}")
+	_bm_git_register_post_install_reset("${_root}")
 	_bm_git_flush_repo("${_git_repo_dir}")
 	cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
 		CALL _bm_git_flush_repo "${_git_repo_dir}")
 	_bm_log_message(GIT DEBUG "Queued git patch for ${_component_id}")
-	_bm_log_message(GIT LOWLEVEL "Exiting buildmaster_git_patch")
+	_bm_log_message(GIT LOWLEVEL "Exiting _bm_tools_git_patch")
 endfunction()

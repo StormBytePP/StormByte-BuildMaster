@@ -31,13 +31,13 @@ endif()
 
 # --- reset ---
 file(WRITE "${_sandbox}/.bm_harness_dirty" "dirty\n")
-buildmaster_git_reset(
+_bm_tools_git_reset(
 	git-sandbox
 	"Harness git reset"
 	"${_sandbox}"
 )
 if(EXISTS "${_sandbox}/.bm_harness_dirty")
-	message(FATAL_ERROR "git-sandbox: buildmaster_git_reset did not clean dirty file")
+	message(FATAL_ERROR "git-sandbox: _bm_tools_git_reset did not clean dirty file")
 endif()
 
 # --- patch (generate a valid unified diff with git, then re-apply via BM) ---
@@ -78,10 +78,10 @@ if(NOT _rh_err STREQUAL "")
 	_bm_log_message(GIT DEBUG "${_rh_err}")
 endif()
 if(EXISTS "${_sandbox}/.bm_harness_patched")
-	message(FATAL_ERROR "git-sandbox: expected clean tree before buildmaster_git_patch")
+	message(FATAL_ERROR "git-sandbox: expected clean tree before _bm_tools_git_patch")
 endif()
 
-buildmaster_git_patch(
+_bm_tools_git_patch(
 	git-sandbox
 	"Harness patch"
 	"${_sandbox}"
@@ -100,7 +100,7 @@ if(_marker STREQUAL "" OR NOT EXISTS "${_marker}")
 endif()
 
 # --- fetch (local origin from clone) ---
-buildmaster_git_fetch(
+_bm_tools_git_fetch(
 	git-sandbox
 	"Harness fetch"
 	"${_sandbox}"

@@ -30,18 +30,6 @@ if(NOT EXISTS "${CONSUMERDEP_SRCDIR}/.git")
 	endif()
 endif()
 
-buildmaster_git_patch(
-	consumer-dep
-	"fix typo"
-	"${CONSUMERDEP_SRCDIR}"
-	"${CONSUMERDEP_PATCH}"
-)
-buildmaster_git_reset(
-	consumer-dep
-	"dep reset"
-	"${CONSUMERDEP_SRCDIR}"
-)
-
 _bm_backend_cmake_create(
 	consumer-dep
 	"Consumer-style dependant library"
@@ -50,5 +38,5 @@ _bm_backend_cmake_create(
 	""
 	"static"
 	"consumerdep"
-	"INDENT=1"
+	"INDENT=1;GIT={RESET;PATCH=${CONSUMERDEP_PATCH};TITLE=fix typo}"
 )
