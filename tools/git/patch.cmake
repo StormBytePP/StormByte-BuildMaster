@@ -7,12 +7,14 @@
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @param[in] _git_patches  List of patch files (joined with spaces for apply).
-## @note Does not apply immediately. If a reset is registered for this root,
-##       flush (from create_git_reset_file) runs reset then patch once. If no
-##       reset is registered, a DEFER flush at the end of CMAKE_SOURCE_DIR
-##       applies the patch. Paths are written without extra quote wrapping
-##       (`list_join` would nest quotes inside the STATUS string and break
-##       CMake parse).
+## @note Does not apply inside this function's first lines; it queues the
+##       script and flushes the repo immediately so the working tree is
+##       patched before any later nested cmake/meson (eager finalize).
+##       If a reset is also queued for this root, flush runs reset then
+##       patch once. A SOURCE_DIR DEFER remains as a fallback when no
+##       component finalize runs. Paths are written without extra quote
+##       wrapping (`list_join` would nest quotes inside the STATUS string
+##       and break CMake parse).
 function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
 	buildmaster_message(GIT LOWLEVEL "Entering create_git_patch_file")
 	set(GIT_REPO "${_git_repo_dir}")
@@ -31,8 +33,10 @@ function(create_git_patch_file _component_id _title _git_repo_dir _git_patches)
 	list(APPEND _plist "${_GIT_PATCH_FILE}")
 	list(REMOVE_DUPLICATES _plist)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_SCRIPTS_${_root} "${_plist}")
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS "${_root}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
+	_buildmaster_git_flush_repo("${_git_repo_dir}")
 	cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
 		CALL _buildmaster_git_flush_repo "${_git_repo_dir}")
 	buildmaster_message(GIT DEBUG "Queued git patch for ${_component_id}")

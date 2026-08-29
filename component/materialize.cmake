@@ -430,9 +430,13 @@ endfunction()
 ## @note Concrete and create_meta INTERFACE stubs already exist. This pass
 ##       emits stages, fragments, repack targets, meta stage anchors, member
 ##       wiring and recorded `component_link` edges.
-## @note Order: materialize metas (lazy INTERFACE + anchors + meta LINK) →
-##       propagate meta TOOLCHAIN onto members → per-id cmake/meson
-##       materialize → repacks → meta wire → apply links → orphan warning.
+## @note Order: flush queued git reset/patch → materialize metas (lazy
+##       INTERFACE + anchors + meta LINK) → propagate meta TOOLCHAIN onto
+##       members → per-id cmake/meson materialize → repacks → meta wire →
+##       apply links → orphan warning.
+## @note Git flush is first so eager nested configure sees patched sources
+##       (`create_git_patch_file` is not allowed to lose the race to this
+##       function).
 function(_buildmaster_finalize_components)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -441,6 +445,10 @@ function(_buildmaster_finalize_components)
 		return()
 	endif()
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
+
+	if(COMMAND _buildmaster_git_flush_all)
+		_buildmaster_git_flush_all()
+	endif()
 
 	_buildmaster_materialize_metas()
 	_buildmaster_propagate_meta_toolchains()
@@ -467,3 +475,4 @@ function(_buildmaster_finalize_components)
 	buildmaster_message(COMPONENT DEBUG "Component graph finalized")
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
 endfunction()
+

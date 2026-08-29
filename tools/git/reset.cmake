@@ -27,6 +27,21 @@ function(_buildmaster_git_flush_repo _git_repo_dir)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} TRUE)
 endfunction()
 
+## @brief Flush every git root that queued a reset or patch.
+## @note Called from `_buildmaster_finalize_components` *before* nested
+##       cmake/meson so eager configure sees the patched tree.
+function(_buildmaster_git_flush_all)
+	buildmaster_message(GIT LOWLEVEL "Entering _buildmaster_git_flush_all")
+	get_property(_roots GLOBAL PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS)
+	if(_roots)
+		list(REMOVE_DUPLICATES _roots)
+		foreach(_root IN LISTS _roots)
+			_buildmaster_git_flush_repo("${_root}")
+		endforeach()
+	endif()
+	buildmaster_message(GIT LOWLEVEL "Exiting _buildmaster_git_flush_all")
+endfunction()
+
 ## @brief git reset --hard + clean -fd at parent configure; register post-install.
 ## @param[in] _component_id Component identifier.
 ## @param[in] _title        Human-readable title (script filename).
@@ -49,6 +64,7 @@ function(create_git_reset_file _component_id _title _git_repo_dir)
 	list(APPEND _resets "${_GIT_RESET_FILE}")
 	list(REMOVE_DUPLICATES _resets)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_RESET_SCRIPTS_${_root} "${_resets}")
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS "${_root}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
 	_buildmaster_git_register_op("${_component_id}" "${_git_repo_dir}")
 	_buildmaster_git_flush_repo("${_git_repo_dir}")
