@@ -55,7 +55,7 @@ function(buildmaster_git_reset _component_id _title _git_repo_dir)
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_RESET_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_reset_${_safe}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/reset.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/templates/reset.cmake.in"
 		"${_GIT_RESET_FILE}"
 		@ONLY
 	)

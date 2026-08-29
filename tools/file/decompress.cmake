@@ -63,7 +63,7 @@ function(buildmaster_decompress name archive out_dir)
 	set(_FILE_INDENT  "${_FILE_INDENT}")
 
 	configure_file(
-		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_decompress.cmake.in"
+		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/templates/file_decompress.cmake.in"
 		"${_script}"
 		@ONLY
 	)

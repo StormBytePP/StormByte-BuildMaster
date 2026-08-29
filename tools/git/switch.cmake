@@ -15,7 +15,7 @@ function(buildmaster_git_switch _component_id _title _git_repo_dir _git_branch)
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_SWITCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_switch_${_safe}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/switch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/templates/switch.cmake.in"
 		"${_GIT_SWITCH_FILE}"
 		@ONLY
 	)

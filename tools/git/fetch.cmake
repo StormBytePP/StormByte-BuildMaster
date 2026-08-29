@@ -13,7 +13,7 @@ function(buildmaster_git_fetch _component_id _title _git_repo_dir)
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_FETCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_fetch_${_safe}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/fetch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/templates/fetch.cmake.in"
 		"${_GIT_FETCH_FILE}"
 		@ONLY
 	)

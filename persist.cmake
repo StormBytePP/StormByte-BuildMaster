@@ -3,7 +3,7 @@
 ##       host root. `add_subdirectory(thirdparty/buildmaster)` only PARENT_SCOPE
 ##       one level (thirdparty), so template roots such as
 ##       BUILDMASTER_TOOLS_CMAKE_SRCDIR would be empty at DEFER
-##       (`File /configure.cmake.in does not exist`). Cache INTERNAL is visible
+##       (`File /templates/configure.cmake.in does not exist`). Cache INTERNAL is visible
 ##       in every directory. Idempotent. Does not persist CMAKE_* flags.
 ## @note `NPROC` is not a BUILDMASTER_* / ENV_* name but Meson/CMake stage
 ##       templates substitute `@NPROC@` (`--jobs` / `--parallel`) at DEFER.

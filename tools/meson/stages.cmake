@@ -455,27 +455,27 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	)
 
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/setup.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/setup.cmake.in"
 		"${_MESON_SETUP_FILE}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/compile_exec.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/compile_exec.cmake.in"
 		"${_MESON_COMPILE_EXEC_SCRIPT}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/install_exec.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/install_exec.cmake.in"
 		"${_MESON_INSTALL_EXEC_SCRIPT}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/compile.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/compile.cmake.in"
 		"${_MESON_COMPILE_FILE}"
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/install.cmake.in"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/install.cmake.in"
 		"${_MESON_INSTALL_FILE}"
 		@ONLY
 	)

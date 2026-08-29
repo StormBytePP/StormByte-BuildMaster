@@ -50,7 +50,7 @@ function(_bm_file_generate_download_script out_script url title expected_hash
 	set(_FILE_INDENT        "${_FILE_INDENT}")
 
 	configure_file(
-		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_download.cmake.in"
+		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/templates/file_download.cmake.in"
 		"${_script}"
 		@ONLY
 	)
@@ -222,7 +222,7 @@ function(buildmaster_download_cached name url)
 	set(_FILE_INDENT        "${_FILE_INDENT}")
 
 	configure_file(
-		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/file_download_cached.cmake.in"
+		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/templates/file_download_cached.cmake.in"
 		"${_script}"
 		@ONLY
 	)

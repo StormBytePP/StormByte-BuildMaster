@@ -30,7 +30,7 @@ include(init_vars.cmake)
 #   - _bm_tc_write() overwrite the parent toolchain.cmake with an
 #     incomplete file (missing TOOLS_CMAKE_SRCDIR, COMPONENT_SRCDIR, ENV_*, …)
 # That incomplete file is what later causes:
-#   File /configure.cmake.in does not exist
+#   File /templates/configure.cmake.in does not exist
 #   File /component_shared.cmake.in does not exist
 #
 # Order matters: this check runs after init_vars (so CONFIGURED from the

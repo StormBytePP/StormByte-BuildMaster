@@ -24,7 +24,7 @@ function(buildmaster_git_patch _component_id _title _git_repo_dir _git_patches)
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_safe}.cmake")
 	configure_file(
-		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/patch.cmake.in"
+		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/templates/patch.cmake.in"
 		"${_GIT_PATCH_FILE}"
 		@ONLY
 	)
