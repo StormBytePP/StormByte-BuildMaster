@@ -111,8 +111,9 @@ endfunction()
 ## @param[in] _deferred  TRUE → dependant template (configure at build time).
 ## @note Collects outputs, WHOLE link items, LINK (raw linker names) and
 ##       recorded dependencies, then generates `component_<id>.cmake` under
-##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it so IMPORTED /
-##       INTERFACE targets exist immediately.
+##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it.
+##       `<id>` is already an INTERFACE from create_*; the fragment only
+##       attaches includes, IMPORTED archives, WHOLE and LINK.
 ## @note `_BM_LINK_ITEMS` is the CMake list stored on
 ##       `BUILDMASTER_COMPONENT_<id>_LINK` (empty string if unset). The
 ##       template applies it INTERFACE on `<id>` so consumers of that id
@@ -297,11 +298,12 @@ endfunction()
 ##        links, orphan warn.
 ## @note Idempotent. Scheduled by `_buildmaster_component_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
-##       Metas are created first so component_link/dependency can resolve them;
-##       their INTERFACE is wired after real components exist.
-## @note Order: materialize metas → propagate meta TOOLCHAIN onto members →
-##       per-id cmake/meson materialize → repacks → meta wire → apply links →
-##       orphan warning.
+## @note Concrete and create_meta INTERFACE stubs already exist. This pass
+##       emits stages, fragments, repack targets, meta stage anchors, member
+##       wiring and recorded `component_link` edges.
+## @note Order: materialize metas (lazy INTERFACE + anchors + meta LINK) →
+##       propagate meta TOOLCHAIN onto members → per-id cmake/meson
+##       materialize → repacks → meta wire → apply links → orphan warning.
 function(_buildmaster_finalize_components)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)

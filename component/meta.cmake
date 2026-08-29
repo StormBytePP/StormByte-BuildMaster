@@ -298,12 +298,15 @@ function(_buildmaster_meta_collect_leaves id stack out_var)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_meta_collect_leaves")
 endfunction()
 
-## @brief Create meta INTERFACE + stage anchors and record expanded leaves.
+## @brief Materialize meta stage anchors; create INTERFACE only if missing.
 ## @note Runs at the start of finalize, before `create_*` materialize, so
 ##       `component_link` / `component_dependency` can resolve meta ids.
 ## @note DFS via `_buildmaster_meta_collect_leaves` (cycles FATAL). Each leaf
-##       must be a registered non-BUILDONLY component. Creates `<id>`
-##       INTERFACE plus empty `<id>_install` / `_build` / `_configure`.
+##       must be a registered non-BUILDONLY component.
+## @note `create_meta_component` already created `<id>` INTERFACE. This
+##       function does `add_library(INTERFACE)` only for lazy metas
+##       (`meta_component_add` without `create_meta_component`). Always
+##       creates empty `<id>_install` / `_build` / `_configure` if missing.
 ## @note `BUILDMASTER_META_<id>_LINK` (raw linker names) is applied INTERFACE
 ##       on `<id>` here so consumers of the meta propagate those names to the
 ##       final artefact. Empty or unset LINK is a no-op.

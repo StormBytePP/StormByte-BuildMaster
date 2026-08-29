@@ -25,7 +25,7 @@ function(_buildmaster_component_defer_arm)
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_defer_arm")
 endfunction()
 
-## @brief Register a component. Targets are created at deferred finalize.
+## @brief Register a component. Creates an empty INTERFACE `<id>` before return.
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -44,10 +44,11 @@ endfunction()
 ##            component INTERFACE; see below),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
-## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
-##       target_* in the same CMakeLists (before DEFER) see the target.
-##       Fragments only attach includes, IMPORTED archives, WHOLE and LINK.
-##       A second create_* for the same id is FATAL in the registry.
+## @note The INTERFACE exists as soon as this function returns, so ALIAS /
+##       target_* in the same CMakeLists (before DEFER) see `<id>`.
+##       Deferred finalize only emits stages and the fragment: includes,
+##       IMPORTED archives, WHOLE and LINK. A second create_* for the same
+##       id is FATAL in the registry.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
 ##       They are applied `INTERFACE` on `<id>` and propagate through CMake
 ##       `target_link_libraries` to the final artefact that consumes that id.
@@ -258,7 +259,7 @@ function(component_dependency source dest)
 endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
-## @param[in] source Registered component id (INTERFACE after finalize).
+## @param[in] source Registered component id (INTERFACE from create_*).
 ## @param[in] dest   Registered component or meta, existing CMake target,
 ##            or an on-disk archive path.
 ## @note Dest that is none of the above is FATAL at materialize. Raw system

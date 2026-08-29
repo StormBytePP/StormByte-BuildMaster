@@ -352,7 +352,7 @@ endfunction()
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
 ##            `PC={…}` and `LINK={…}` groups are allowed; `;` inside braces is
-##            not a pair break.
+##            not a pair break. A trailing orphan `;` is allowed (dropped).
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names and `component_link()`
@@ -361,7 +361,8 @@ endfunction()
 ## @note `PC` and `LINK` are recognized so they are not “unknown keys”.
 ##       Generation details: `buildmaster_parse_component_pc()`,
 ##       `buildmaster_parse_component_link()`. Meta + PC is FATAL in
-##       create_meta_*. Meta + LINK is WARNING ignored there.
+##       create_meta_*. Meta + LINK is accepted and applied INTERFACE
+##       on the meta at materialize.
 function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)

@@ -2,7 +2,7 @@
 # component/meson/wrappers.cmake — public Meson component factories
 # =============================================================================
 
-## @brief Register a Meson-backed component (materialized at deferred finalize).
+## @brief Register a Meson-backed component (INTERFACE `<id>` exists on return).
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -13,7 +13,8 @@
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
-## @note Does not return a fragment path. No include() is required.
+## @note Delegates to create_component. Stages and the fragment run at
+##       deferred finalize. No fragment path. No include() is required.
 function(create_meson_component _component _component_title
 								_srcdir _builddir _options _library_mode _produced)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_component")
@@ -33,7 +34,7 @@ function(create_meson_component _component _component_title
 	buildmaster_message(COMPONENT LOWLEVEL "Exiting create_meson_component")
 endfunction()
 
-## @brief Register a header-only Meson component.
+## @brief Register a header-only Meson component (INTERFACE `<id>` on return).
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -41,7 +42,8 @@ endfunction()
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See create_component for supported keys.
-## @note Does not return a fragment path. No include() is required.
+## @note Delegates to create_component in headers mode. Stages run at
+##       deferred finalize. No fragment path. No include() is required.
 function(create_meson_headers_component _component _component_title
 										_srcdir _builddir _options)
 	buildmaster_message(COMPONENT LOWLEVEL "Entering create_meson_headers_component")
