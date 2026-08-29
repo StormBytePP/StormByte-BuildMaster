@@ -70,20 +70,46 @@ function(sanitize_for_filename _out _input)
 	buildmaster_message(CORE LOWLEVEL "Exiting sanitize_for_filename")
 endfunction()
 
-## @brief Ensure a per-component build directory exists and return its path.
+## @brief Canonical per-component build directory (2.1.x layout).
+## @param[out] _out Parent-scope path:
+##            `${CMAKE_CURRENT_BINARY_DIR}/bm/<sanitized-id>`.
+## @param[in]  _component Component id.
+## @note Does not create the directory. `create_component` runs
+##       `file(MAKE_DIRECTORY)` on the path it receives.
+function(_buildmaster_component_builddir _out _component)
+	buildmaster_message(CORE LOWLEVEL "Entering _buildmaster_component_builddir")
+	if(NOT ARGC EQUAL 2)
+		buildmaster_message(CORE FATAL
+			"_buildmaster_component_builddir requires output variable and component id")
+	endif()
+	if("${_component}" STREQUAL "")
+		buildmaster_message(CORE FATAL
+			"_buildmaster_component_builddir: empty component id")
+	endif()
+	sanitize_for_filename(_safe "${_component}")
+	set(${_out} "${CMAKE_CURRENT_BINARY_DIR}/bm/${_safe}" PARENT_SCOPE)
+	buildmaster_message(CORE LOWLEVEL "Exiting _buildmaster_component_builddir")
+endfunction()
+
+## @brief Deprecated. Build directories will not be caller-owned in 2.1.x.
 ## @param[out] _out Name of the variable to set in the parent scope with
-##            the created directory path.
+##            the directory path (same layout as before this deprecation).
 ## @param[in] _component Optional component name; when provided the
-##            directory will be `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`
-##            where `<sanitized>` is produced by `sanitize_for_filename`.
-##            When omitted the directory is `${CMAKE_CURRENT_BINARY_DIR}/build`.
-## @note Creates the directory with `file(MAKE_DIRECTORY ...)` if it
-##       does not already exist.
+##            path is `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`.
+##            When omitted the path is `${CMAKE_CURRENT_BINARY_DIR}/build`.
+## @note No longer creates the directory. Emits WARNING; removal planned
+##       for BuildMaster 2.1.x because `create_*_component` will stop
+##       taking an explicit builddir (BuildMaster assigns it). There is
+##       no public getter for that path yet — that is why this helper is
+##       deprecated rather than removed in 2.0.x.
 function(ensure_build_dir _out)
 	buildmaster_message(CORE LOWLEVEL "Entering ensure_build_dir")
 	if(ARGC LESS 1)
 		buildmaster_message(CORE FATAL "ensure_build_dir requires an output variable name and optional component name")
 	endif()
+
+	buildmaster_message(CORE WARNING
+		"ensure_build_dir() is deprecated and will be removed in BuildMaster 2.1.x: create_*_component will no longer take an explicit build directory (BuildMaster assigns it). There is no public getter for that path yet.")
 
 	set(_out_var "${_out}")
 
@@ -101,7 +127,7 @@ function(ensure_build_dir _out)
 	endif()
 
 	set(_builddir "${CMAKE_CURRENT_BINARY_DIR}/${_sanitized}")
-	file(MAKE_DIRECTORY "${_builddir}")
 	set(${_out_var} "${_builddir}" PARENT_SCOPE)
 	buildmaster_message(CORE LOWLEVEL "Exiting ensure_build_dir")
 endfunction()
+

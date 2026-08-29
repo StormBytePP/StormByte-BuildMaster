@@ -29,7 +29,7 @@ endfunction()
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory.
+## @param[in] _builddir Component build directory (created here if missing).
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake` or `meson`.
@@ -52,6 +52,11 @@ endfunction()
 ##       Deferred finalize only emits stages and the fragment: includes,
 ##       IMPORTED archives, WHOLE, LINK and LINKFLAGS. A second create_*
 ##       for the same id is FATAL in the registry.
+## @note `_builddir` is created with `file(MAKE_DIRECTORY)` (mkdir -p).
+##       If the directory already exists that is fine. If it already has
+##       contents, the caller owns mixed trees and the odd failures that
+##       follow. Public `create_*` wrappers may pass a legacy caller path
+##       or the canonical `_buildmaster_component_builddir` path.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
 ##       They are applied `INTERFACE` on `<id>` and propagate through CMake
 ##       `target_link_libraries` to the final artefact that consumes that id.
@@ -90,6 +95,11 @@ function(create_component _component _component_title _srcdir _builddir
 	if("${_component}" STREQUAL "")
 		buildmaster_message(COMPONENT FATAL "create_component: empty component id")
 	endif()
+	if("${_builddir}" STREQUAL "")
+		buildmaster_message(COMPONENT FATAL
+			"create_component('${_component}'): empty build directory")
+	endif()
+	file(MAKE_DIRECTORY "${_builddir}")
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)

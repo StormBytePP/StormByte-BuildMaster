@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Stage `-P` configure no longer captures child streams, so the replay
   reaches the TTY as it happens. `BUILDMASTER_VERBOSE` still uses the
   normal runner (entire child output, unfiltered).
+- **`create_*_component` 2.1-style arity:** omit the build directory.
+  Library: `id title srcdir options mode produced [optstr]`. Headers:
+  `id title srcdir options`. Mode (`static` / `shared` / `headers`)
+  selects the slot. BuildMaster assigns
+  `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and `create_component` creates
+  it (`file(MAKE_DIRECTORY)`, idempotent). No WARNING on this form.
+
+### Changed
+- **`ensure_build_dir` deprecated (removed in 2.1.x).** It still fills the
+  output variable so existing CMakeLists keep a path; it no longer
+  creates the directory. WARNING explains why it stays in 2.0.x: there
+  is no public getter for the assigned builddir yet.
+- **Explicit `builddir` on `create_*_component` deprecated (removed in
+  2.1.x).** Legacy 7/8-arg (library) and 5/6-arg (headers) still work
+  and still use the caller path. WARNING on that slot. `create_component`
+  always `MAKE_DIRECTORY`s the path it receives; an already-populated
+  directory is the caller’s problem.
 
 ### Fixed
 - **Git patch lost the race with eager configure:** `create_git_patch_file` only queued a `DEFER` on `CMAKE_SOURCE_DIR`, and component finalize was already armed first, so nested cmake/meson ran on the virgin tree (`cmake_minimum_required` too old, unknown Meson options). Flush now runs when the patch is registered, and `_buildmaster_finalize_components` flushes every queued git root *before* materialize. A second flush for the same root is still a no-op (reset then patch once).
