@@ -7,7 +7,7 @@
 ## @param[in] token Token to append (`-I…`, `-L…`, `/I…`, `/LIBPATH:…`).
 ## @note Empty @p token is a no-op. Writes the updated string to PARENT_SCOPE
 ##       under the same name.
-function(_buildmaster_prefix_append_flag io_flags token)
+function(_bm_env_prefix_append_flag io_flags token)
 	if("${token}" STREQUAL "")
 		return()
 	endif()
@@ -29,7 +29,7 @@ endfunction()
 ## @note `file(TO_NATIVE_PATH)` so `cl.exe` / `link.exe` accept the entry.
 ##       If the CMake variable is empty, seeds from `$ENV{INCLUDE}` / `$ENV{LIB}`
 ##       (vcvars) so the SDK paths are not wiped. Idempotent.
-function(_buildmaster_prefix_prepend_win_env io_list dir)
+function(_bm_env_prefix_prepend_win io_list dir)
 	if("${dir}" STREQUAL "")
 		return()
 	endif()
@@ -68,20 +68,20 @@ endfunction()
 ## @note Writes `CMAKE_C_FLAGS`, `CMAKE_CXX_FLAGS`, `CMAKE_EXE_LINKER_FLAGS`,
 ##       `CMAKE_SHARED_LINKER_FLAGS`, `CMAKE_MODULE_LINKER_FLAGS`, `CFLAGS`,
 ##       `CXXFLAGS`, `LDFLAGS`, `INCLUDE`, `LIB` to the parent scope.
-function(buildmaster_apply_install_search_paths)
-	_bm_log_message(ENV LOWLEVEL "Entering buildmaster_apply_install_search_paths")
+function(_bm_env_apply_install_search_paths)
+	_bm_log_message(ENV LOWLEVEL "Entering _bm_env_apply_install_search_paths")
 
 	if(NOT DEFINED BUILDMASTER_INSTALL_INCLUDEDIR OR BUILDMASTER_INSTALL_INCLUDEDIR STREQUAL "")
-		_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no INCLUDEDIR)")
+		_bm_log_message(ENV LOWLEVEL "Exiting _bm_env_apply_install_search_paths (no INCLUDEDIR)")
 		return()
 	endif()
 	if(NOT DEFINED BUILDMASTER_INSTALL_LIBDIR OR BUILDMASTER_INSTALL_LIBDIR STREQUAL "")
-		_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths (no LIBDIR)")
+		_bm_log_message(ENV LOWLEVEL "Exiting _bm_env_apply_install_search_paths (no LIBDIR)")
 		return()
 	endif()
 
-	normalize_cmake_path(_inc "${BUILDMASTER_INSTALL_INCLUDEDIR}")
-	normalize_cmake_path(_lib "${BUILDMASTER_INSTALL_LIBDIR}")
+	_bm_path_normalize(_inc "${BUILDMASTER_INSTALL_INCLUDEDIR}")
+	_bm_path_normalize(_lib "${BUILDMASTER_INSTALL_LIBDIR}")
 
 	if(NOT DEFINED CMAKE_C_FLAGS)
 		set(CMAKE_C_FLAGS "")
@@ -129,18 +129,18 @@ function(buildmaster_apply_install_search_paths)
 		set(_lflag "-L${_lib}")
 	endif()
 
-	_buildmaster_prefix_append_flag(CMAKE_C_FLAGS "${_iflag}")
-	_buildmaster_prefix_append_flag(CMAKE_CXX_FLAGS "${_iflag}")
-	_buildmaster_prefix_append_flag(CFLAGS "${_iflag}")
-	_buildmaster_prefix_append_flag(CXXFLAGS "${_iflag}")
-	_buildmaster_prefix_append_flag(CMAKE_EXE_LINKER_FLAGS "${_lflag}")
-	_buildmaster_prefix_append_flag(CMAKE_SHARED_LINKER_FLAGS "${_lflag}")
-	_buildmaster_prefix_append_flag(CMAKE_MODULE_LINKER_FLAGS "${_lflag}")
-	_buildmaster_prefix_append_flag(LDFLAGS "${_lflag}")
+	_bm_env_prefix_append_flag(CMAKE_C_FLAGS "${_iflag}")
+	_bm_env_prefix_append_flag(CMAKE_CXX_FLAGS "${_iflag}")
+	_bm_env_prefix_append_flag(CFLAGS "${_iflag}")
+	_bm_env_prefix_append_flag(CXXFLAGS "${_iflag}")
+	_bm_env_prefix_append_flag(CMAKE_EXE_LINKER_FLAGS "${_lflag}")
+	_bm_env_prefix_append_flag(CMAKE_SHARED_LINKER_FLAGS "${_lflag}")
+	_bm_env_prefix_append_flag(CMAKE_MODULE_LINKER_FLAGS "${_lflag}")
+	_bm_env_prefix_append_flag(LDFLAGS "${_lflag}")
 
 	if(WIN32)
-		_buildmaster_prefix_prepend_win_env(INCLUDE "${_inc}")
-		_buildmaster_prefix_prepend_win_env(LIB "${_lib}")
+		_bm_env_prefix_prepend_win(INCLUDE "${_inc}")
+		_bm_env_prefix_prepend_win(LIB "${_lib}")
 	endif()
 
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
@@ -156,5 +156,5 @@ function(buildmaster_apply_install_search_paths)
 
 	_bm_log_message(ENV DEBUG
 		"prefix search: inc=${_inc} lib=${_lib} msvc_like=${_msvc_like}")
-	_bm_log_message(ENV LOWLEVEL "Exiting buildmaster_apply_install_search_paths")
+	_bm_log_message(ENV LOWLEVEL "Exiting _bm_env_apply_install_search_paths")
 endfunction()

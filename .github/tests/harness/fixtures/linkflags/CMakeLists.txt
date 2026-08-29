@@ -11,7 +11,7 @@ set(_unix_src "${CMAKE_CURRENT_SOURCE_DIR}/unix")
 set(_unix_build "${CMAKE_CURRENT_BINARY_DIR}/unix_build")
 file(MAKE_DIRECTORY "${_os_build}" "${_unix_build}")
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	lf-os
 	"Harness LINKFLAGS OS library"
 	"${_os_src}"
@@ -22,7 +22,7 @@ create_cmake_component(
 	"LINKFLAGS={WINDOWS={/ALTERNATENAME:bm_lf_ok=__ImageBase};LINUX={-Wl,--defsym,bm_lf_ok=1};MAC={-Wl,-alias,__mh_execute_header,_bm_lf_ok}}"
 )
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	lf-unix
 	"Harness LINKFLAGS UNIX library"
 	"${_unix_src}"
@@ -33,18 +33,18 @@ create_cmake_component(
 	"LINKFLAGS={UNIX={-Wl,-rpath,/bm-harness-unix}}"
 )
 
-create_meta_component(
+buildmaster_meta(
 	lf-os-meta
 	"Harness LINKFLAGS OS meta"
 	"LINKFLAGS={WINDOWS={/ALTERNATENAME:bm_lf_ok=__ImageBase};LINUX={-Wl,--defsym,bm_lf_ok=1};MAC={-Wl,-alias,__mh_execute_header,_bm_lf_ok}}"
 )
-create_meta_component(
+buildmaster_meta(
 	lf-unix-meta
 	"Harness LINKFLAGS UNIX meta"
 	"LINKFLAGS={UNIX={-Wl,-rpath,/bm-harness-unix}}"
 )
-meta_component_add(lf-os-meta lf-os)
-meta_component_add(lf-unix-meta lf-unix)
+buildmaster_meta_add(lf-os-meta lf-os)
+buildmaster_meta_add(lf-unix-meta lf-unix)
 
 add_executable(linkflags_os_test linkflags_os_test.c)
 target_link_libraries(linkflags_os_test PRIVATE lf-os)

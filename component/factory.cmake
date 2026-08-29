@@ -7,15 +7,15 @@
 ## @param[out] out_var Parent-scope `cmake` or `meson`.
 ## @note Exactly one of `CMakeLists.txt` / `meson.build`. Both or neither
 ##       is FATAL. No recursion into subdirectories.
-function(_bm_detect_build_system srcdir out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_detect_build_system")
+function(_bm_factory_detect srcdir out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_factory_detect")
 	if("${srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"_bm_detect_build_system: empty source directory")
+			"_bm_factory_detect: empty source directory")
 	endif()
 	if(NOT IS_DIRECTORY "${srcdir}")
 		_bm_log_message(COMPONENT FATAL
-			"_bm_detect_build_system: '${srcdir}' is not a directory")
+			"_bm_factory_detect: '${srcdir}' is not a directory")
 	endif()
 
 	set(_cmake FALSE)
@@ -29,16 +29,16 @@ function(_bm_detect_build_system srcdir out_var)
 
 	if(_cmake AND _meson)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use create_cmake_component or create_meson_component")
+			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use _bm_comp_cmake_create or _bm_comp_meson_create")
 	endif()
 	if(_cmake)
 		set(${out_var} "cmake" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_detect")
 		return()
 	endif()
 	if(_meson)
 		set(${out_var} "meson" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_detect_build_system")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_detect")
 		return()
 	endif()
 
@@ -185,8 +185,8 @@ endfunction()
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Source directory. Must contain exactly one of
 ##            `CMakeLists.txt` or `meson.build`.
-## @param[in] … Same remaining arity as `create_cmake_component` /
-##            `create_meson_component`:
+## @param[in] … Same remaining arity as `_bm_comp_cmake_create` /
+##            `_bm_comp_meson_create`:
 ##            2.1: `options mode produced [optstr]`
 ##            with path: `builddir options mode produced [optstr]`.
 ## @param[in] options CMake list of `KEY=value`. Allowed keys (all
@@ -207,7 +207,7 @@ function(buildmaster_component _component _component_title _srcdir)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: expected 6–8 arguments (same arity as create_cmake_component)")
+			"buildmaster_component: expected 6–8 arguments (same arity as _bm_comp_cmake_create)")
 	endif()
 	if("${_srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
@@ -233,8 +233,8 @@ function(buildmaster_component _component _component_title _srcdir)
 		set(_produced "${ARGV6}")
 		set(_options_string "${ARGV7}")
 	else()
-		_buildmaster_is_library_mode("${ARGV4}" _m21)
-		_buildmaster_is_library_mode("${ARGV5}" _m20)
+		_bm_comp_is_library_mode("${ARGV4}" _m21)
+		_bm_comp_is_library_mode("${ARGV5}" _m20)
 		if(_m21 AND NOT _m20)
 			set(_options "${ARGV3}")
 			set(_library_mode "${ARGV4}")
@@ -249,31 +249,31 @@ function(buildmaster_component _component _component_title _srcdir)
 		endif()
 	endif()
 
-	_bm_detect_build_system("${_srcdir}" _sys)
+	_bm_factory_detect("${_srcdir}" _sys)
 	_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
 	_bm_log_message(COMPONENT DEBUG
 		"buildmaster_component('${_component}'): ${_sys}")
 
 	if(_legacy)
 		if(_sys STREQUAL "cmake")
-			create_cmake_component(
+			_bm_comp_cmake_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_builddir}" "${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		else()
-			create_meson_component(
+			_bm_comp_meson_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_builddir}" "${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		endif()
 	else()
 		if(_sys STREQUAL "cmake")
-			create_cmake_component(
+			_bm_comp_cmake_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		else()
-			create_meson_component(
+			_bm_comp_meson_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")

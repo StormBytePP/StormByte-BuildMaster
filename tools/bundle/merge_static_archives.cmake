@@ -7,8 +7,8 @@ if(NOT BUILDMASTER_SRCDIR)
 endif()
 
 include("${BUILDMASTER_SRCDIR}/log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 if(NOT OUTPUT OR NOT INPUTS)
@@ -30,7 +30,7 @@ get_filename_component(_out_dir "${OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${_out_dir}")
 
 include("${BUILDMASTER_SRCDIR}/tools/archive/helpers.cmake")
-buildmaster_find_archiver(_ar _style)
+_bm_tools_archive_find(_ar _style)
 
 # Apple ar has no MRI (-M). Prefer libtool -static.
 if(APPLE)

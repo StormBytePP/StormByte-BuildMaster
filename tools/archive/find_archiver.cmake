@@ -19,8 +19,8 @@
 ## @note Missing archiver is fatal (`_bm_log_message(ARCHIVE FATAL …)`).
 ## @note Safe to include from `cmake -P` scripts after `log.cmake` (the archive
 ##       helpers stub already does that).
-function(buildmaster_find_archiver out_path out_style)
-	_bm_log_message(ARCHIVE LOWLEVEL "Entering buildmaster_find_archiver")
+function(_bm_tools_archive_find out_path out_style)
+	_bm_log_message(ARCHIVE LOWLEVEL "Entering _bm_tools_archive_find")
 	if(ARGC GREATER 2)
 		set(_hint "${ARGV2}")
 	else()
@@ -64,7 +64,7 @@ function(buildmaster_find_archiver out_path out_style)
 
 	if(_found STREQUAL "")
 		_bm_log_message(ARCHIVE FATAL
-			"buildmaster_find_archiver: no archiver found (CMAKE_AR, ENV{AR}, llvm-lib/lib, llvm-ar/gcc-ar/ar)")
+			"_bm_tools_archive_find: no archiver found (CMAKE_AR, ENV{AR}, llvm-lib/lib, llvm-ar/gcc-ar/ar)")
 	endif()
 
 	get_filename_component(_name "${_found}" NAME)
@@ -79,5 +79,5 @@ function(buildmaster_find_archiver out_path out_style)
 	_bm_log_message(ARCHIVE DEBUG "archiver=${_found} style=${_style}")
 	set(${out_path} "${_found}" PARENT_SCOPE)
 	set(${out_style} "${_style}" PARENT_SCOPE)
-	_bm_log_message(ARCHIVE LOWLEVEL "Exiting buildmaster_find_archiver")
+	_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_tools_archive_find")
 endfunction()

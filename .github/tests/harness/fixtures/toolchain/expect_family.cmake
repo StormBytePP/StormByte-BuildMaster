@@ -3,8 +3,8 @@ if(DEFINED BUILDMASTER_ROOT AND EXISTS "${BUILDMASTER_ROOT}/log.cmake")
 elseif(DEFINED BM_TEST_REPO_ROOT AND EXISTS "${BM_TEST_REPO_ROOT}/log.cmake")
 	include("${BM_TEST_REPO_ROOT}/log.cmake")
 endif()
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 ## @brief Apply the expected compiler-family compile definition to a target.

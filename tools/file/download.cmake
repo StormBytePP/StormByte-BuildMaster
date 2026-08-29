@@ -1,10 +1,10 @@
 # =============================================================================
-# tools/file/download.cmake — file_download / file_download_cached
+# tools/file/download.cmake — buildmaster_download / buildmaster_download_cached
 # =============================================================================
 # Public calls create a CMake custom target of the same name (no out-var,
 # no include()). The generated -P script also runs during the caller's
 # configure so artifacts exist before create_*_component. Wire extra graph
-# edges with component_dependency(<component> <file_target>) only when the
+# edges with buildmaster_depend(<component> <file_target>) only when the
 # component must wait on a later rebuild of the file target.
 
 ## @brief Generate the force-download script and return its path (internal).
@@ -15,9 +15,9 @@
 ## @param[in]  max_retries Maximum attempts (default 3).
 ## @param[in]  current_try Internal try counter (default 1).
 ## @param[in]  indent_level Status indentation tabs (default 0).
-function(_file_generate_download_script out_script url title expected_hash
+function(_bm_file_generate_download_script out_script url title expected_hash
 										max_retries current_try indent_level)
-	_bm_log_message(FILE LOWLEVEL "Entering _file_generate_download_script")
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_generate_download_script")
 	if("${title}" STREQUAL "")
 		get_filename_component(title "${url}" NAME)
 	endif()
@@ -34,12 +34,12 @@ function(_file_generate_download_script out_script url title expected_hash
 	string(REPEAT "\t" ${indent_level} _FILE_INDENT)
 
 	get_filename_component(_basename "${url}" NAME)
-	_file_validate_no_traversal("${_basename}")
+	_bm_file_validate_no_traversal("${_basename}")
 	set(_full_output "${BUILDMASTER_DOWNLOADSDIR}/${_basename}")
 	file(MAKE_DIRECTORY "${BUILDMASTER_DOWNLOADSDIR}")
 
-	sanitize_for_filename(_safe "${title}")
-	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_download_${_safe}.cmake")
+	_bm_path_sanitize(_safe "${title}")
+	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/buildmaster_download_${_safe}.cmake")
 
 	set(_FILE_URL           "${url}")
 	set(_FILE_OUTPUT        "${_full_output}")
@@ -57,7 +57,7 @@ function(_file_generate_download_script out_script url title expected_hash
 
 	set(${out_script} "${_script}" PARENT_SCOPE)
 	_bm_log_message(FILE DEBUG "Generated download script ${_script}")
-	_bm_log_message(FILE LOWLEVEL "Exiting _file_generate_download_script")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_generate_download_script")
 endfunction()
 
 ## @brief Create a file prerequisite target and run its -P script now.
@@ -66,11 +66,11 @@ endfunction()
 ## @param[in] comment Progress COMMENT (wrapped with the File log header).
 ## @param[in] depends Optional list of target dependencies (build-graph only).
 ## @note `execute_process(-P script)` runs at configure so callers can
-##       create_component against the artifact in the same directory.
+##       _bm_comp_create against the artifact in the same directory.
 ##       The custom target remains for incremental rebuilds / graph edges.
 ##       The script must be idempotent (cached download, extract-if-missing).
-function(_file_add_prerequisite_target name script comment depends)
-	_bm_log_message(FILE LOWLEVEL "Entering _file_add_prerequisite_target")
+function(_bm_file_add_prerequisite_target name script comment depends)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_add_prerequisite_target")
 	if(TARGET "${name}")
 		_bm_log_message(FILE FATAL
 			"file helper: target '${name}' already exists")
@@ -78,8 +78,8 @@ function(_file_add_prerequisite_target name script comment depends)
 	if("${comment}" STREQUAL "")
 		set(comment "file: ${name}")
 	endif()
-	if(COMMAND buildmaster_log_comment)
-		buildmaster_log_comment(_bm_cmt FILE "${comment}")
+	if(COMMAND _bm_log_comment)
+		_bm_log_comment(_bm_cmt FILE "${comment}")
 	else()
 		set(_bm_cmt "[BuildMaster/File     ]: ${comment}")
 	endif()
@@ -104,11 +104,11 @@ function(_file_add_prerequisite_target name script comment depends)
 			"file helper '${name}' failed at configure (exit ${_file_rc})")
 	endif()
 
-	_bm_log_message(FILE LOWLEVEL "Exiting _file_add_prerequisite_target")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_add_prerequisite_target")
 endfunction()
 
 ## @brief Always download a file (retries + optional hash); creates a target.
-## @param[in] name Target name used with component_dependency / prerequisite.
+## @param[in] name Target name used with buildmaster_depend / prerequisite.
 ## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
 ## @param[in] TITLE         Optional human-readable title (default: URL basename).
 ## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
@@ -118,13 +118,13 @@ endfunction()
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
 ## @note No out-variable and no include(). The -P script runs during this
 ##       call (configure) and again if `name` is built.
-function(file_download name url)
-	_bm_log_message(FILE LOWLEVEL "Entering file_download")
+function(buildmaster_download name url)
+	_bm_log_message(FILE LOWLEVEL "Entering buildmaster_download")
 	if("${name}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_download: empty name")
+		_bm_log_message(FILE FATAL "buildmaster_download: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_download: empty url")
+		_bm_log_message(FILE FATAL "buildmaster_download: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -134,7 +134,7 @@ function(file_download name url)
 		${ARGN}
 	)
 
-	_file_generate_download_script(_script
+	_bm_file_generate_download_script(_script
 		"${url}"
 		"${ARG_TITLE}"
 		"${ARG_EXPECTED_HASH}"
@@ -151,14 +151,14 @@ function(file_download name url)
 		endif()
 	endif()
 
-	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	_bm_log_message(FILE DEBUG "file_download target ${name}")
-	_bm_log_message(FILE LOWLEVEL "Exiting file_download")
+	_bm_log_message(FILE DEBUG "buildmaster_download target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting buildmaster_download")
 endfunction()
 
 ## @brief Cache-aware download; creates a target named `name`.
-## @param[in] name Target name used with component_dependency / prerequisite.
+## @param[in] name Target name used with buildmaster_depend / prerequisite.
 ## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
 ## @param[in] TITLE         Optional human-readable title (default: URL basename).
 ## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
@@ -170,13 +170,13 @@ endfunction()
 ##       wrapper runs during this call (configure) so the file is on disk
 ##       before create_*_component. Building `name` re-runs the same
 ##       idempotent wrapper. No out-variable / include().
-function(file_download_cached name url)
-	_bm_log_message(FILE LOWLEVEL "Entering file_download_cached")
+function(buildmaster_download_cached name url)
+	_bm_log_message(FILE LOWLEVEL "Entering buildmaster_download_cached")
 	if("${name}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_download_cached: empty name")
+		_bm_log_message(FILE FATAL "buildmaster_download_cached: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_download_cached: empty url")
+		_bm_log_message(FILE FATAL "buildmaster_download_cached: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -196,7 +196,7 @@ function(file_download_cached name url)
 		set(ARG_INDENT 0)
 	endif()
 
-	_file_generate_download_script(_force_script
+	_bm_file_generate_download_script(_force_script
 		"${url}"
 		"${ARG_TITLE}"
 		"${ARG_EXPECTED_HASH}"
@@ -206,12 +206,12 @@ function(file_download_cached name url)
 	)
 
 	get_filename_component(_basename "${url}" NAME)
-	_file_validate_no_traversal("${_basename}")
+	_bm_file_validate_no_traversal("${_basename}")
 	set(_full_output "${BUILDMASTER_DOWNLOADSDIR}/${_basename}")
 
 	string(REPEAT "\t" ${ARG_INDENT} _FILE_INDENT)
-	sanitize_for_filename(_safe "${ARG_TITLE}")
-	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_download_cached_${_safe}.cmake")
+	_bm_path_sanitize(_safe "${ARG_TITLE}")
+	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/buildmaster_download_cached_${_safe}.cmake")
 
 	set(_FILE_URL           "${url}")
 	set(_FILE_OUTPUT        "${_full_output}")
@@ -231,8 +231,8 @@ function(file_download_cached name url)
 		set(ARG_COMMENT "Download (cached) ${ARG_TITLE}")
 	endif()
 
-	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	_bm_log_message(FILE DEBUG "file_download_cached target ${name}")
-	_bm_log_message(FILE LOWLEVEL "Exiting file_download_cached")
+	_bm_log_message(FILE DEBUG "buildmaster_download_cached target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting buildmaster_download_cached")
 endfunction()

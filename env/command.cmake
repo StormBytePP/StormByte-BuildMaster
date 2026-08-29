@@ -16,10 +16,10 @@
 ## @note Paths that already contain spaces must **not** be passed through
 ##       this function a second time (use the list as-is).
 ## @note Wrong arity is fatal (`_bm_log_message(CORE FATAL …)`).
-function(prepare_command _out _command_list)
+function(_bm_env_prepare_command _out _command_list)
 	if(NOT ARGC EQUAL 2)
 		_bm_log_message(CORE FATAL
-			"prepare_command requires out variable and command list"
+			"_bm_env_prepare_command requires out variable and command list"
 		)
 	endif()
 
@@ -40,7 +40,7 @@ endfunction()
 ##       script does not hit invalid CMake escapes (`\S`, `\P`, …). Each
 ##       token is double-quoted so `set(x ...)` and `execute_process(COMMAND ...)`
 ##       keep paths with spaces as a single argument.
-function(buildmaster_quote_cmd_list_for_script out_var)
+function(_bm_env_quote_cmd_list out_var)
 	set(_acc "")
 	foreach(_tok IN LISTS ARGN)
 		string(REPLACE "\\" "/" _tok "${_tok}")

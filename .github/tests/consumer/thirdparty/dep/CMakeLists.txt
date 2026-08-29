@@ -1,4 +1,4 @@
-ensure_build_dir(CONSUMERDEP_BUILDDIR)
+_bm_path_builddir(CONSUMERDEP_BUILDDIR)
 
 set(CONSUMERDEP_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 set(CONSUMERDEP_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/0001-fix-typo.patch")
@@ -30,19 +30,19 @@ if(NOT EXISTS "${CONSUMERDEP_SRCDIR}/.git")
 	endif()
 endif()
 
-create_git_patch_file(
+buildmaster_git_patch(
 	consumer-dep
 	"fix typo"
 	"${CONSUMERDEP_SRCDIR}"
 	"${CONSUMERDEP_PATCH}"
 )
-create_git_reset_file(
+buildmaster_git_reset(
 	consumer-dep
 	"dep reset"
 	"${CONSUMERDEP_SRCDIR}"
 )
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	consumer-dep
 	"Consumer-style dependant library"
 	"${CONSUMERDEP_SRCDIR}"

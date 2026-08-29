@@ -1,6 +1,6 @@
 include("@BUILDMASTER_SRCDIR@/log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 execute_process(

@@ -1,9 +1,9 @@
 # =============================================================================
-# tools/file/decompress.cmake — file_decompress
+# tools/file/decompress.cmake — buildmaster_decompress
 # =============================================================================
 
 ## @brief Decompress an archive into a directory; creates a target named `name`.
-## @param[in] name    Target name used with component_dependency / prerequisite.
+## @param[in] name    Target name used with buildmaster_depend / prerequisite.
 ## @param[in] archive Archive path, or basename under BUILDMASTER_DOWNLOADSDIR.
 ## @param[in] out_dir Destination directory (created if missing).
 ## @param[in] TITLE   Optional human-readable title.
@@ -15,18 +15,18 @@
 ## @note Uses file(ARCHIVE_EXTRACT) inside the generated -P script.
 ##       No out-variable / include(). The script runs at configure (so
 ##       amalgamation sources exist before create_*_component) and again
-##       if `name` is built. Call after file_download_cached in the same
+##       if `name` is built. Call after buildmaster_download_cached in the same
 ##       CMakeLists so the archive is already on disk.
-function(file_decompress name archive out_dir)
-	_bm_log_message(FILE LOWLEVEL "Entering file_decompress")
+function(buildmaster_decompress name archive out_dir)
+	_bm_log_message(FILE LOWLEVEL "Entering buildmaster_decompress")
 	if("${name}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_decompress: empty name")
+		_bm_log_message(FILE FATAL "buildmaster_decompress: empty name")
 	endif()
 	if("${archive}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_decompress: empty archive")
+		_bm_log_message(FILE FATAL "buildmaster_decompress: empty archive")
 	endif()
 	if("${out_dir}" STREQUAL "")
-		_bm_log_message(FILE FATAL "file_decompress: empty out_dir")
+		_bm_log_message(FILE FATAL "buildmaster_decompress: empty out_dir")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -45,8 +45,8 @@ function(file_decompress name archive out_dir)
 
 	string(REPEAT "\t" ${ARG_INDENT} _FILE_INDENT)
 
-	_file_validate_no_traversal("${archive}")
-	_file_validate_no_traversal("${out_dir}")
+	_bm_file_validate_no_traversal("${archive}")
+	_bm_file_validate_no_traversal("${out_dir}")
 
 	if(IS_ABSOLUTE "${archive}")
 		set(_archive "${archive}")
@@ -54,8 +54,8 @@ function(file_decompress name archive out_dir)
 		set(_archive "${BUILDMASTER_DOWNLOADSDIR}/${archive}")
 	endif()
 
-	sanitize_for_filename(_safe "${ARG_TITLE}")
-	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/file_decompress_${_safe}.cmake")
+	_bm_path_sanitize(_safe "${ARG_TITLE}")
+	set(_script "${BUILDMASTER_SCRIPTS_FILE_DIR}/buildmaster_decompress_${_safe}.cmake")
 
 	set(_FILE_ARCHIVE "${_archive}")
 	set(_FILE_OUT_DIR "${out_dir}")
@@ -72,8 +72,8 @@ function(file_decompress name archive out_dir)
 		set(ARG_COMMENT "Decompress ${ARG_TITLE}")
 	endif()
 
-	_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	_bm_log_message(FILE DEBUG "file_decompress target ${name}")
-	_bm_log_message(FILE LOWLEVEL "Exiting file_decompress")
+	_bm_log_message(FILE DEBUG "buildmaster_decompress target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting buildmaster_decompress")
 endfunction()

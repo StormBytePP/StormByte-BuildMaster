@@ -1,5 +1,5 @@
-ensure_build_dir(HEADERS_BUILD_DIR "sdk-headers")
-create_cmake_headers_component(
+_bm_path_builddir(HEADERS_BUILD_DIR "sdk-headers")
+_bm_comp_cmake_create_headers(
 	sdk-headers
 	"Harness SDK headers"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"

@@ -12,11 +12,11 @@
 ##       Meson/CMake builds share the same compiler cache as the parent job.
 ## @note Resolves `AR` / `RANLIB` / `NM` from `CMAKE_AR` / `CMAKE_RANLIB` /
 ##       `CMAKE_NM` or `ENV{AR,RANLIB,NM}` when the variables are unset, then
-##       normalizes them with `normalize_cmake_path` so Windows paths are safe
+##       normalizes them with `_bm_path_normalize` so Windows paths are safe
 ##       inside the generated runner and toolchain dump.
 ## @note Does not rewrite per-component runners; those are produced by
-##       `buildmaster_create_component_env_runners` after a profile load.
-function(update_env_runner)
+##       `_bm_env__bm_comp_create_runners` after a profile load.
+function(_bm_env_update_runner)
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
 		set(CMAKE_C_COMPILER_LAUNCHER "")
 	endif()
@@ -62,13 +62,13 @@ function(update_env_runner)
 	endif()
 
 	if(NOT AR STREQUAL "")
-		normalize_cmake_path(AR "${AR}")
+		_bm_path_normalize(AR "${AR}")
 	endif()
 	if(NOT RANLIB STREQUAL "")
-		normalize_cmake_path(RANLIB "${RANLIB}")
+		_bm_path_normalize(RANLIB "${RANLIB}")
 	endif()
 	if(NOT NM STREQUAL "")
-		normalize_cmake_path(NM "${NM}")
+		_bm_path_normalize(NM "${NM}")
 	endif()
 
 	if(WIN32)
@@ -101,7 +101,7 @@ endfunction()
 ## @param[in] component Component id used to name the generated scripts.
 ## @param[in] toolchain_name Normalized toolchain name (e.g. `msvc`, `clang-cl`).
 ## @note Implemented as a **macro** so `BM_TC_*` and `PATH` from the caller
-##       (`create_*_stages` after `buildmaster_load_toolchain_profile`) are
+##       (`create_*_stages` after `_bm_tc_load_profile`) are
 ##       visible without extra PARENT_SCOPE plumbing.
 ## @note Requires `BM_TC_*` already set in the caller. Writes
 ##       `runner_<safe>` and `runner_silent_<safe>` under
@@ -112,14 +112,14 @@ endfunction()
 ##       `powershell -ExecutionPolicy Bypass -File` (process-local).
 ## @note On Unix the silent script is bash (`PIPESTATUS` + live BM replay).
 ## @note Empty `component` or `toolchain_name` is fatal.
-macro(buildmaster_create_component_env_runners out_runner out_runner_silent component toolchain_name)
+macro(_bm_env__bm_comp_create_runners out_runner out_runner_silent component toolchain_name)
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
 		_bm_log_message(TOOLCHAIN FATAL
-			"buildmaster_create_component_env_runners: component and toolchain_name must be non-empty"
+			"_bm_env__bm_comp_create_runners: component and toolchain_name must be non-empty"
 		)
 	endif()
 
-	sanitize_for_filename(_bm_tc_safe "${component}_${toolchain_name}")
+	_bm_path_sanitize(_bm_tc_safe "${component}_${toolchain_name}")
 
 	set(CMAKE_C_COMPILER "${BM_TC_C_COMPILER}")
 	set(CMAKE_CXX_COMPILER "${BM_TC_CXX_COMPILER}")
@@ -128,13 +128,13 @@ macro(buildmaster_create_component_env_runners out_runner out_runner_silent comp
 	set(NM "${BM_TC_NM}")
 
 	if(NOT AR STREQUAL "")
-		normalize_cmake_path(AR "${AR}")
+		_bm_path_normalize(AR "${AR}")
 	endif()
 	if(NOT RANLIB STREQUAL "")
-		normalize_cmake_path(RANLIB "${RANLIB}")
+		_bm_path_normalize(RANLIB "${RANLIB}")
 	endif()
 	if(NOT NM STREQUAL "")
-		normalize_cmake_path(NM "${NM}")
+		_bm_path_normalize(NM "${NM}")
 	endif()
 
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
@@ -183,8 +183,8 @@ macro(buildmaster_create_component_env_runners out_runner out_runner_silent comp
 	if(WIN32)
 		set(_bm_tc_runner_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_${_bm_tc_safe}.ps1")
 		set(_bm_tc_silent_path "${BUILDMASTER_SCRIPTS_ENVDIR}/runner_silent_${_bm_tc_safe}.ps1")
-		normalize_cmake_path(_bm_tc_runner_path_cmake "${_bm_tc_runner_path}")
-		normalize_cmake_path(_bm_tc_silent_path_cmake "${_bm_tc_silent_path}")
+		_bm_path_normalize(_bm_tc_runner_path_cmake "${_bm_tc_runner_path}")
+		_bm_path_normalize(_bm_tc_silent_path_cmake "${_bm_tc_silent_path}")
 
 		configure_file(
 			"${BUILDMASTER_SRCDIR}/env/runner_windows.ps1.in"

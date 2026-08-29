@@ -6,7 +6,7 @@
 ## @brief Keys that may appear without '=' (flag form → enabled).
 ## @note RENAME, BUILDONLY, WHOLE, STRIPRES and PC accept `KEY`, `KEY=` and
 ##       `KEY=ON|OFF`. Other keys require `KEY=value`. Keep this list in
-##       sync with buildmaster_parse_component_options().
+##       sync with _bm_opt_parse().
 ## @note `PC` as a bare flag is accepted by the splitter so it is not treated
 ##       as an unknown token, but a `.pc` is only generated from `PC={…}`.
 ##       A bare `PC` / `PC=ON` without a brace group is FATAL.
@@ -19,7 +19,7 @@ set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC")
 
 # CMake lists use ';' as the element separator. Tokens that contain ';'
 # (PC={VERSION=1;NAME=x}) are stored with this stand-in so foreach(IN LISTS)
-# does not re-split them. buildmaster_option_pair_split restores ';'.
+# does not re-split them. _bm_opt_split_pair restores ';'.
 set(_BM_OPT_SEMI "__BM_SEMI__")
 
 ## @brief Split an options string on `;` that are not inside `{…}`.
@@ -29,8 +29,8 @@ set(_BM_OPT_SEMI "__BM_SEMI__")
 ## @note Brace depth counts nested `{` / `}`. Unbalanced `{` / `}` is FATAL.
 ##       Empty tokens are dropped. Values still must not contain a raw `;`
 ##       outside braces.
-function(buildmaster_split_option_pairs options_string out_pairs)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_split_option_pairs")
+function(_bm_opt_split_pairs options_string out_pairs)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_split_pairs")
 	set(_pairs "")
 	set(_cur "")
 	set(_depth 0)
@@ -71,15 +71,15 @@ function(buildmaster_split_option_pairs options_string out_pairs)
 		list(APPEND _pairs "${_tok}")
 	endif()
 	set(${out_pairs} "${_pairs}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_split_option_pairs")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_split_pairs")
 endfunction()
 
 ## @brief Extract the interior of a `{…}` group.
 ## @param[in]  val        Stripped value that should be `{…}`.
 ## @param[out] out_inner  Text between the outermost braces (parent scope).
 ## @param[out] out_ok     TRUE if `val` is a single brace group.
-function(buildmaster_unwrap_brace_group val out_inner out_ok)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_unwrap_brace_group")
+function(_bm_opt_unwrap_brace val out_inner out_ok)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_unwrap_brace")
 	string(STRIP "${val}" _v)
 	set(_ok FALSE)
 	set(_inner "")
@@ -97,7 +97,7 @@ function(buildmaster_unwrap_brace_group val out_inner out_ok)
 	endif()
 	set(${out_inner} "${_inner}" PARENT_SCOPE)
 	set(${out_ok} "${_ok}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_unwrap_brace_group")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_unwrap_brace")
 endfunction()
 
 ## @brief Split one options token into key and value.
@@ -111,8 +111,8 @@ endfunction()
 ##       BUILDMASTER_COMPONENT_OPTION_FLAGS (e.g. `RENAME` ≡ `RENAME=ON`).
 ##       Other bare tokens emit WARNING and set out_ok FALSE.
 ##       Only the first `=` separates key from value.
-function(buildmaster_option_pair_split pair out_key out_val out_ok)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_option_pair_split")
+function(_bm_opt_split_pair pair out_key out_val out_ok)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_split_pair")
 	set(_ok TRUE)
 	set(_key "")
 	set(_val "")
@@ -153,7 +153,7 @@ function(buildmaster_option_pair_split pair out_key out_val out_ok)
 	set(${out_key} "${_key}" PARENT_SCOPE)
 	set(${out_val} "${_val}" PARENT_SCOPE)
 	set(${out_ok} "${_ok}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_option_pair_split")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_split_pair")
 endfunction()
 
 ## @brief Interpret a flag option value as a CMake boolean.
@@ -163,11 +163,11 @@ endfunction()
 ##       Accepted truthy: `1`, `ON`, `TRUE`, `YES` (case-insensitive).
 ##       Accepted falsy: `0`, `OFF`, `FALSE`, `NO`.
 ##       Any other non-empty value → WARNING and FALSE.
-function(buildmaster_option_flag_enabled val out_bool)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_option_flag_enabled")
+function(_bm_opt_flag val out_bool)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_flag")
 	if("${val}" STREQUAL "")
 		set(${out_bool} TRUE PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_option_flag_enabled")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_flag")
 		return()
 	endif()
 	string(TOUPPER "${val}" _v)
@@ -180,7 +180,7 @@ function(buildmaster_option_flag_enabled val out_bool)
 			"Unrecognized flag value '${val}' (treated as OFF)")
 		set(${out_bool} FALSE PARENT_SCOPE)
 	endif()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_option_flag_enabled")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_flag")
 endfunction()
 
 ## @brief Parse `PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…}` from an options string.
@@ -200,9 +200,9 @@ endfunction()
 ##       one is FATAL (do not clobber an upstream file). That check lives in
 ##       install_exec, not here.
 ## @note Unknown inner keys → WARNING and ignored.
-function(buildmaster_parse_component_pc options_string out_present out_enabled
+function(_bm_opt_parse_pc options_string out_present out_enabled
 										out_name out_version out_description)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_pc")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_pc")
 	set(_present FALSE)
 	set(_enabled FALSE)
 	set(_name "")
@@ -210,12 +210,12 @@ function(buildmaster_parse_component_pc options_string out_present out_enabled
 	set(_description "")
 
 	if(NOT "${options_string}" STREQUAL "")
-		buildmaster_split_option_pairs("${options_string}" _pairs)
+		_bm_opt_split_pairs("${options_string}" _pairs)
 		foreach(_pair IN LISTS _pairs)
 			if(_pair STREQUAL "")
 				continue()
 			endif()
-			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
 			if(NOT _ok)
 				continue()
 			endif()
@@ -223,18 +223,18 @@ function(buildmaster_parse_component_pc options_string out_present out_enabled
 				continue()
 			endif()
 			set(_present TRUE)
-			buildmaster_unwrap_brace_group("${_val}" _inner _brace_ok)
+			_bm_opt_unwrap_brace("${_val}" _inner _brace_ok)
 			if(NOT _brace_ok)
 				_bm_log_message(COMPONENT FATAL
 					"PC must be PC={VERSION=…;NAME=…;ENABLED=…} (got '${_val}')")
 			endif()
 			set(_enabled TRUE)
-			buildmaster_split_option_pairs("${_inner}" _inner_pairs)
+			_bm_opt_split_pairs("${_inner}" _inner_pairs)
 			foreach(_ip IN LISTS _inner_pairs)
 				if(_ip STREQUAL "")
 					continue()
 				endif()
-				buildmaster_option_pair_split("${_ip}" _ik _iv _iok)
+				_bm_opt_split_pair("${_ip}" _ik _iv _iok)
 				if(NOT _iok)
 					continue()
 				endif()
@@ -245,7 +245,7 @@ function(buildmaster_parse_component_pc options_string out_present out_enabled
 				elseif(_ik STREQUAL "DESCRIPTION")
 					set(_description "${_iv}")
 				elseif(_ik STREQUAL "ENABLED")
-					buildmaster_option_flag_enabled("${_iv}" _enabled)
+					_bm_opt_flag("${_iv}" _enabled)
 				else()
 					_bm_log_message(COMPONENT WARNING
 						"Unknown PC sub-option '${_ik}' (ignored)")
@@ -264,7 +264,7 @@ function(buildmaster_parse_component_pc options_string out_present out_enabled
 	set(${out_name} "${_name}" PARENT_SCOPE)
 	set(${out_version} "${_version}" PARENT_SCOPE)
 	set(${out_description} "${_description}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_pc")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_pc")
 endfunction()
 
 ## @brief Parse `LINK=<name>` / `LINK={name;name2}` from a component options string.
@@ -280,24 +280,24 @@ endfunction()
 ##       through the BM INTERFACE.
 ## @note Items are raw linker names (`shlwapi`, `ws2_32`), not component ids,
 ##       not metas, not CMake targets, and not library specs under the install
-##       prefix. Use `component_link()` for BM graph nodes. A name that
+##       prefix. Use `buildmaster_link()` for BM graph nodes. A name that
 ##       collides with an existing TARGET may be resolved by CMake as that
 ##       target — do not use colliding names.
 ## @note One item: `LINK=shlwapi`. Several: `LINK={shlwapi;ws2_32}` — `;`
 ##       inside `{…}` is not a pair break. Bare `LINK` / `LINK=` is FATAL.
 ##       Several items without braces is FATAL. Empty tokens inside `{…}`
 ##       are dropped. This function does not interpret sibling keys.
-function(buildmaster_parse_component_link options_string out_items)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_link")
+function(_bm_opt_parse_link options_string out_items)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_link")
 	set(_items "")
 
 	if(NOT "${options_string}" STREQUAL "")
-		buildmaster_split_option_pairs("${options_string}" _pairs)
+		_bm_opt_split_pairs("${options_string}" _pairs)
 		foreach(_pair IN LISTS _pairs)
 			if(_pair STREQUAL "")
 				continue()
 			endif()
-			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
 			if(NOT _ok OR NOT _key STREQUAL "LINK")
 				continue()
 			endif()
@@ -305,10 +305,10 @@ function(buildmaster_parse_component_link options_string out_items)
 				_bm_log_message(COMPONENT FATAL
 					"LINK requires LINK=<name> or LINK={name;name2} (bare LINK is invalid)")
 			endif()
-			buildmaster_unwrap_brace_group("${_val}" _inner _brace)
+			_bm_opt_unwrap_brace("${_val}" _inner _brace)
 			if(_brace)
 				if(NOT _inner STREQUAL "")
-					buildmaster_split_option_pairs("${_inner}" _inner_pairs)
+					_bm_opt_split_pairs("${_inner}" _inner_pairs)
 					foreach(_it IN LISTS _inner_pairs)
 						string(STRIP "${_it}" _it)
 						if(_it STREQUAL "")
@@ -331,7 +331,7 @@ function(buildmaster_parse_component_link options_string out_items)
 		_bm_log_message(COMPONENT DEBUG "LINK items: ${_items}")
 	endif()
 	set(${out_items} "${_items}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_link")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_link")
 endfunction()
 
 ## @brief Classify one LINKFLAGS `{…}` body into flags for this host.
@@ -342,11 +342,11 @@ endfunction()
 ##       Matching groups are concatenated. A known group that does not apply
 ##       is skipped at INFO. `FOO={…}` with an unknown key is FATAL.
 ##       Tokens that are not `KEY={…}` are all-platform flags.
-function(buildmaster_parse_component_linkflags_group inner out_items)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_linkflags_group")
+function(_bm_opt_parse_linkflags_group inner out_items)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_linkflags_group")
 	set(_items "")
 
-	buildmaster_split_option_pairs("${inner}" _toks)
+	_bm_opt_split_pairs("${inner}" _toks)
 	foreach(_tok IN LISTS _toks)
 		string(REPLACE "${_BM_OPT_SEMI}" ";" _tok "${_tok}")
 		string(STRIP "${_tok}" _tok)
@@ -354,7 +354,7 @@ function(buildmaster_parse_component_linkflags_group inner out_items)
 			continue()
 		endif()
 
-		buildmaster_unwrap_brace_group("${_tok}" _discard _is_bare_group)
+		_bm_opt_unwrap_brace("${_tok}" _discard _is_bare_group)
 		if(_is_bare_group)
 			_bm_log_message(COMPONENT FATAL
 				"LINKFLAGS group token '{…}' without a platform key (got '${_tok}')")
@@ -371,7 +371,7 @@ function(buildmaster_parse_component_linkflags_group inner out_items)
 			string(STRIP "${_pkey}" _pkey)
 			string(TOUPPER "${_pkey}" _pkey)
 			string(STRIP "${_pval}" _pval)
-			buildmaster_unwrap_brace_group("${_pval}" _pinner _pbrace)
+			_bm_opt_unwrap_brace("${_pval}" _pinner _pbrace)
 			if(_pbrace)
 				set(_is_platform TRUE)
 			endif()
@@ -413,7 +413,7 @@ function(buildmaster_parse_component_linkflags_group inner out_items)
 			if(_pinner STREQUAL "")
 				continue()
 			endif()
-			buildmaster_split_option_pairs("${_pinner}" _flags)
+			_bm_opt_split_pairs("${_pinner}" _flags)
 			foreach(_f IN LISTS _flags)
 				string(REPLACE "${_BM_OPT_SEMI}" ";" _f "${_f}")
 				string(STRIP "${_f}" _f)
@@ -427,7 +427,7 @@ function(buildmaster_parse_component_linkflags_group inner out_items)
 	endforeach()
 
 	set(${out_items} "${_items}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_linkflags_group")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_linkflags_group")
 endfunction()
 
 ## @brief Parse `LINKFLAGS=` / `LINKFLAGS={…}` from a component options string.
@@ -442,7 +442,7 @@ endfunction()
 ##       fix a link line that never goes through the BM INTERFACE.
 ## @note Items are raw linker flags (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`),
 ##       not component ids, not metas, not CMake targets, and not library
-##       specs. Use `LINK=` for system library names and `component_link()`
+##       specs. Use `LINK=` for system library names and `buildmaster_link()`
 ##       for BM graph nodes.
 ## @note Forms:
 ##       - `LINKFLAGS=-Wl,-Bsymbolic` — one flag, every platform.
@@ -456,17 +456,17 @@ endfunction()
 ## @note Bare `LINKFLAGS` / `LINKFLAGS=` is FATAL. Several unbraced items
 ##       (`LINKFLAGS=a;b`) is FATAL. Unknown platform key `FOO={…}` is FATAL.
 ##       Empty tokens are dropped. This function does not interpret sibling keys.
-function(buildmaster_parse_component_linkflags options_string out_items)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_linkflags")
+function(_bm_opt_parse_linkflags options_string out_items)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_linkflags")
 	set(_items "")
 
 	if(NOT "${options_string}" STREQUAL "")
-		buildmaster_split_option_pairs("${options_string}" _pairs)
+		_bm_opt_split_pairs("${options_string}" _pairs)
 		foreach(_pair IN LISTS _pairs)
 			if(_pair STREQUAL "")
 				continue()
 			endif()
-			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
 			if(NOT _ok OR NOT _key STREQUAL "LINKFLAGS")
 				continue()
 			endif()
@@ -474,10 +474,10 @@ function(buildmaster_parse_component_linkflags options_string out_items)
 				_bm_log_message(COMPONENT FATAL
 					"LINKFLAGS requires LINKFLAGS=<flag> or LINKFLAGS={…} (bare LINKFLAGS is invalid)")
 			endif()
-			buildmaster_unwrap_brace_group("${_val}" _inner _brace)
+			_bm_opt_unwrap_brace("${_val}" _inner _brace)
 			if(_brace)
 				if(NOT _inner STREQUAL "")
-					buildmaster_parse_component_linkflags_group("${_inner}" _grp)
+					_bm_opt_parse_linkflags_group("${_inner}" _grp)
 					list(APPEND _items ${_grp})
 				endif()
 			else()
@@ -494,7 +494,7 @@ function(buildmaster_parse_component_linkflags options_string out_items)
 		_bm_log_message(COMPONENT DEBUG "LINKFLAGS items: ${_items}")
 	endif()
 	set(${out_items} "${_items}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_linkflags")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_linkflags")
 endfunction()
 
 ## @brief Parse the optional `KEY=VALUE;…` options string used by create_*_component.
@@ -520,18 +520,18 @@ endfunction()
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
-##       `LINKFLAGS={…}` for raw linker flags, and `component_link()` for BM
+##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
 ## @note `PC`, `LINK` and `LINKFLAGS` are recognized so they are not
-##       “unknown keys”. Details: `buildmaster_parse_component_pc()`,
-##       `buildmaster_parse_component_link()`,
-##       `buildmaster_parse_component_linkflags()`. Meta + PC is FATAL in
+##       “unknown keys”. Details: `_bm_opt_parse_pc()`,
+##       `_bm_opt_parse_link()`,
+##       `_bm_opt_parse_linkflags()`. Meta + PC is FATAL in
 ##       create_meta_*. Meta + LINK / LINKFLAGS is accepted and applied
 ##       INTERFACE on the meta at materialize.
-function(buildmaster_parse_component_options out_indent out_toolchain out_rename
+function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_component_options")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse")
 	set(_indent 0)
 	set(_toolchain "")
 	set(_rename TRUE)
@@ -540,14 +540,14 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(_stripres TRUE)
 
 	if(NOT "${options_string}" STREQUAL "")
-		buildmaster_split_option_pairs("${options_string}" _pairs)
+		_bm_opt_split_pairs("${options_string}" _pairs)
 
 		foreach(_pair IN LISTS _pairs)
 			if(_pair STREQUAL "")
 				continue()
 			endif()
 
-			buildmaster_option_pair_split("${_pair}" _key _val _ok)
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
 			if(NOT _ok)
 				continue()
 			endif()
@@ -562,22 +562,22 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 			elseif(_key STREQUAL "TOOLCHAIN")
 				set(_toolchain "${_val}")
 			elseif(_key STREQUAL "LINK")
-				# parsed by buildmaster_parse_component_link()
+				# parsed by _bm_opt_parse_link()
 			elseif(_key STREQUAL "LINKFLAGS")
-				# parsed by buildmaster_parse_component_linkflags()
+				# parsed by _bm_opt_parse_linkflags()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
-					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, component_link() for BM nodes (ignored)")
+					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")
 			elseif(_key STREQUAL "RENAME")
-				buildmaster_option_flag_enabled("${_val}" _rename)
+				_bm_opt_flag("${_val}" _rename)
 			elseif(_key STREQUAL "BUILDONLY")
-				buildmaster_option_flag_enabled("${_val}" _buildonly)
+				_bm_opt_flag("${_val}" _buildonly)
 			elseif(_key STREQUAL "WHOLE")
-				buildmaster_option_flag_enabled("${_val}" _whole)
+				_bm_opt_flag("${_val}" _whole)
 			elseif(_key STREQUAL "STRIPRES")
-				buildmaster_option_flag_enabled("${_val}" _stripres)
+				_bm_opt_flag("${_val}" _stripres)
 			elseif(_key STREQUAL "PC")
-				buildmaster_unwrap_brace_group("${_val}" _pc_inner _pc_ok)
+				_bm_opt_unwrap_brace("${_val}" _pc_inner _pc_ok)
 				if(NOT _pc_ok)
 					_bm_log_message(COMPONENT FATAL
 						"PC must be PC={VERSION=…;NAME=…;ENABLED=…} (got '${_val}')")
@@ -595,7 +595,7 @@ function(buildmaster_parse_component_options out_indent out_toolchain out_rename
 	set(${out_buildonly} "${_buildonly}" PARENT_SCOPE)
 	set(${out_whole} "${_whole}" PARENT_SCOPE)
 	set(${out_stripres} "${_stripres}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_component_options")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse")
 endfunction()
 
 ## @brief Split a library spec into CMake target, library basename and libdir subdir.
@@ -604,11 +604,11 @@ endfunction()
 ## @param[out] out_libname Library basename without prefix/suffix.
 ## @param[out] out_subdir  Directory relative to the library base dir, or empty.
 ## @note Empty spec or a trailing slash with no name is FATAL.
-function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_parse_subcomponent")
+function(_bm_opt_parse_spec spec out_target out_libname out_subdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_spec")
 	if("${spec}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_parse_subcomponent: empty library spec")
+			"_bm_opt_parse_spec: empty library spec")
 	endif()
 
 	string(FIND "${spec}" "/" _slash)
@@ -624,13 +624,13 @@ function(buildmaster_parse_subcomponent spec out_target out_libname out_subdir)
 
 	if("${_name}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_parse_subcomponent: missing library name in '${spec}'")
+			"_bm_opt_parse_spec: missing library name in '${spec}'")
 	endif()
 
 	set(${out_target} "${_tgt}" PARENT_SCOPE)
 	set(${out_libname} "${_name}" PARENT_SCOPE)
 	set(${out_subdir} "${_dir}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_parse_subcomponent")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_spec")
 endfunction()
 
 ## @brief Resolve one library spec into IMPORTED name + file path (+ MSVC DLL).
@@ -650,17 +650,17 @@ endfunction()
 ## @note BUILDONLY must pass the component's own BUILDDIR — never the parent
 ##       install prefix or another component's build tree.
 ##       This is a macro so the caller's list variables are appended in place.
-macro(buildmaster_append_library_spec library_mode spec base_libdir
+macro(_bm_opt_append_spec library_mode spec base_libdir
 									names_var files_var dlls_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_append_library_spec")
-	buildmaster_parse_subcomponent("${spec}" _bm_as_tgt _bm_as_name _bm_as_subdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_append_spec")
+	_bm_opt_parse_spec("${spec}" _bm_as_tgt _bm_as_name _bm_as_subdir)
 	list(APPEND ${names_var} "${_bm_as_tgt}")
 	if("${library_mode}" STREQUAL "static")
-		library_import_static_hint(_bm_as_path "${_bm_as_name}"
+		_bm_lib_import_static_hint(_bm_as_path "${_bm_as_name}"
 			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 	else()
-		library_import_hint(_bm_as_path "${_bm_as_name}"
+		_bm_lib_import_hint(_bm_as_path "${_bm_as_name}"
 			"${base_libdir}" "${_bm_as_subdir}")
 		list(APPEND ${files_var} "${_bm_as_path}")
 		if(MSVC)
@@ -676,7 +676,7 @@ macro(buildmaster_append_library_spec library_mode spec base_libdir
 				"${_bm_as_dll_dir}/${_bm_as_name}${CMAKE_SHARED_LIBRARY_SUFFIX}")
 		endif()
 	endif()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_append_library_spec")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_append_spec")
 endmacro()
 
 ## @brief Build whole-archive linker items for a list of static archive paths.
@@ -686,13 +686,13 @@ endmacro()
 ##       per-archive `-Wl,-force_load,` on Apple; `-WHOLEARCHIVE:` on MSVC.
 ##       MSVC uses the `-WHOLEARCHIVE:` spelling so Ninja does not treat a leading
 ##       `/WHOLEARCHIVE:` token as a filesystem path.
-function(_buildmaster_whole_archive_link_items _out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_whole_archive_link_items")
+function(_bm_opt_whole_items _out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_whole_items")
 	set(_paths ${ARGN})
 	set(_items "")
 	if(NOT _paths)
 		set(${_out_var} "" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_whole_archive_link_items")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_whole_items")
 		return()
 	endif()
 	if(MSVC)
@@ -711,5 +711,5 @@ function(_buildmaster_whole_archive_link_items _out_var)
 		list(APPEND _items "-Wl,--no-whole-archive")
 	endif()
 	set(${_out_var} "${_items}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_whole_archive_link_items")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_whole_items")
 endfunction()

@@ -1,7 +1,7 @@
-# component_link to another component (not a library-spec path).
+# buildmaster_link to another component (not a library-spec path).
 
-ensure_build_dir(LINK_A_BUILD "link-a")
-create_cmake_component(
+_bm_path_builddir(LINK_A_BUILD "link-a")
+_bm_comp_cmake_create(
 	link-a
 	"Harness link-a"
 	"${CMAKE_CURRENT_SOURCE_DIR}/a"
@@ -11,8 +11,8 @@ create_cmake_component(
 	"alinklib"
 )
 
-ensure_build_dir(LINK_B_BUILD "link-b")
-create_cmake_component(
+_bm_path_builddir(LINK_B_BUILD "link-b")
+_bm_comp_cmake_create(
 	link-b
 	"Harness link-b"
 	"${CMAKE_CURRENT_SOURCE_DIR}/b"
@@ -22,8 +22,8 @@ create_cmake_component(
 	"blinklib"
 )
 
-component_dependency(link-b link-a)
-component_link(link-b link-a)
+buildmaster_depend(link-b link-a)
+buildmaster_link(link-b link-a)
 
 add_executable(link_component_test
 	"${CMAKE_CURRENT_SOURCE_DIR}/link_component_test.c"

@@ -38,11 +38,11 @@ else()
 endif()
 
 if(NOT _bm_tc_other)
-	buildmaster_message(CORE FATAL
+	_bm_log_message(CORE FATAL
 		"Harness meta-toolchain: unsupported compiler '${CMAKE_C_COMPILER_ID}' (${CMAKE_C_COMPILER})")
 endif()
 
-buildmaster_message(CORE STATUS
+_bm_log_message(CORE STATUS
 	"Harness meta TOOLCHAIN inherit: host=${_bm_tc_host} meta=${_bm_tc_other}")
 
 set(_inh_src "${CMAKE_CURRENT_SOURCE_DIR}/inherit")
@@ -51,10 +51,10 @@ set(_inh_build "${CMAKE_CURRENT_BINARY_DIR}/inherit_build")
 set(_pin_build "${CMAKE_CURRENT_BINARY_DIR}/pinned_build")
 file(MAKE_DIRECTORY "${_inh_build}" "${_pin_build}")
 
-meta_component_add(meta-tc mtc-inherit)
-meta_component_add(meta-tc mtc-pinned)
+buildmaster_meta_add(meta-tc mtc-inherit)
+buildmaster_meta_add(meta-tc mtc-pinned)
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	mtc-inherit
 	"Harness meta-toolchain inherit leaf"
 	"${_inh_src}"
@@ -64,7 +64,7 @@ create_cmake_component(
 	"meta-toolchain/mtcinherit"
 )
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	mtc-pinned
 	"Harness meta-toolchain pinned leaf"
 	"${_pin_src}"
@@ -75,7 +75,7 @@ create_cmake_component(
 	"TOOLCHAIN=${_bm_tc_host}"
 )
 
-create_meta_component(
+buildmaster_meta(
 	meta-tc
 	"Harness meta with TOOLCHAIN"
 	"TOOLCHAIN=${_bm_tc_other}"

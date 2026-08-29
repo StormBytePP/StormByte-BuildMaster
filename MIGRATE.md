@@ -11,8 +11,7 @@ This file is **not** a changelog.
 | [`README.md`](README.md) | Current contract (always `master`) |
 | **This file** | How to rewrite caller CMake when a tagged release breaks the public API |
 
-There is one consumer today (StormByte-Multimedia). The same steps apply
-to any later tree.
+The same steps apply to every tree that `add_subdirectory()`s BuildMaster.
 
 ## How to maintain this file
 
@@ -24,14 +23,17 @@ to any later tree.
 3. On release `X.Y.Z`, rename `## Unreleased` to
    `## <previous tag> → X.Y.Z` and start a fresh `## Unreleased`.
 4. Keep examples generic (`foo`, `bar`). Do not copy product recipes
-   (codec names, license gates) from a consumer.
-5. If a helper is removed (`create_bundle_static_libraries`,
-   `rename_msvc_lib.cmake` in the consumer, …), say what replaces it
-   even when the replacement is an option flag rather than a function.
+   from a consumer.
+5. If a helper is removed, say what replaces it even when the
+   replacement is an option flag rather than a function.
 
-Baseline for the current text: last published tag
+Baseline: last published tag
 [`1.0.1`](https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/1.0.1)
 (`b630c1b`). Target: `master` (forthcoming **2.0.0**).
+
+Public surface on `master` is eighteen `buildmaster_*` commands
+(see `.github/tests/expected/public_functions.txt`). Everything else
+is `_bm_<craft>_*` and is **not** a supported API.
 
 ---
 
@@ -45,38 +47,58 @@ Nothing yet. After 2.0.0 ships, new breaking notes go here.
 
 Fully declarative graph. Declaration order no longer matters.
 Generated fragments are no longer part of the public API.
+The caller does **not** choose CMake vs Meson:
+`buildmaster_component` infers the backend from `srcdir`
+(`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
+
+A 1.x `CMakeLists.txt` will not configure. That is the point.
 
 ### Removed public commands
 
-| 1.0.1 | 2.0 |
-|-------|-----|
-| `create_cmake_dependant_component` | `create_cmake_component` + `component_dependency` |
-| `create_meson_dependant_component` | `create_meson_component` + `component_dependency` |
-| `create_cmake_headers_dependant_component` | `create_cmake_headers_component` + `component_dependency` |
-| `create_meson_headers_dependant_component` | `create_meson_headers_component` + `component_dependency` |
-| `create_bundle_static_libraries` | `component_repack` |
+| 1.0.1 | master |
+|-------|--------|
+| `create_cmake_component` | `buildmaster_component` |
+| `create_meson_component` | `buildmaster_component` |
+| `create_cmake_headers_component` | `buildmaster_component` + mode `headers` |
+| `create_meson_headers_component` | `buildmaster_component` + mode `headers` |
+| `create_cmake_dependant_component` | `buildmaster_component` + `buildmaster_depend` |
+| `create_meson_dependant_component` | `buildmaster_component` + `buildmaster_depend` |
+| `create_*_headers_dependant_component` | `buildmaster_component` + `headers` + `buildmaster_depend` |
+| `create_bundle_static_libraries` | `buildmaster_repack` |
+| `create_cmake_stages` / `create_meson_stages` | Internal (`_bm_tools_*_stages`) |
 | First-argument **out-file** on `create_*` / `file_*` / `create_git_*` | Gone. Do **not** `include()` a generated fragment |
 | Positional `[indent_level] [toolchain]` | Trailing options string `INDENT=…;TOOLCHAIN=…` |
-| Options key `LINK_EXTRA` | `component_link` |
+| Options key `LINK_EXTRA` | `buildmaster_link` (graph node) or `LINK=` (raw system lib) |
 | Cache/env `BUILDMASTER_DEBUG` | Ignored. Use `BUILDMASTER_LOGLEVEL` |
-| Public use of `create_*_stages` | Internal only |
+| `ensure_build_dir` | Internal. Omit the builddir slot |
+| `library_import_hint` / `library_import_static_hint` | Internal |
+| `file_checksum_correct` | Internal |
+| `file_download` / `file_download_cached` / `file_decompress` | `buildmaster_download{,_cached}` / `buildmaster_decompress` |
+| `create_git_reset_file` / `create_git_patch_file` / `create_git_fetch` / `create_git_switch_branch` | `buildmaster_git_{reset,patch,fetch,switch}` |
 
-`create_cmake_component`, `create_meson_component`, and the headers
-variants remain. Their **signature** changed.
-
-### New public commands
+### Public commands on master
 
 | Command | Role |
 |---------|------|
-| `component_dependency(source, dest)` | Order-only edge |
-| `component_link(source, dest)` | Link on the component `INTERFACE` + wait if `dest` is a graph node |
-| `component_prerequisite(id, target)` | Wait on a host / `file_*` / custom target before `<id>_configure` |
-| `create_meta_component(id, title [, options])` | `INTERFACE` collection (no sources, no install) |
-| `meta_component_add(meta, member…)` | Membership (allowed before `create_meta_component`) |
-| `component_repack(id, title, output, input…)` | Merge static archives (including `BUILDONLY` inputs) |
-| `buildmaster_message(module, level, text [, indent])` | Only supported log API |
+| `buildmaster_component(id title srcdir …)` | Factory. Backend from `srcdir` |
+| `buildmaster_depend(source dest)` | Order-only edge |
+| `buildmaster_link(source dest)` | Link on the component `INTERFACE` + wait if `dest` is a graph node |
+| `buildmaster_prerequisite(id target)` | Wait on a host / download / custom target before `<id>_configure` |
+| `buildmaster_meta(id title [, options])` | `INTERFACE` collection (no sources, no install) |
+| `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
+| `buildmaster_repack(id title output input…)` | Merge static archives (including `BUILDONLY` inputs) |
+| `buildmaster_hook_component(id fn alias [CAPTURE …])` | Run `fn` after that id materializes |
+| `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
+| `buildmaster_message(level text [, indent])` | Only supported log API. Module is always `USER` |
+| `buildmaster_download` / `buildmaster_download_cached` / `buildmaster_decompress` | File helpers (no out-var) |
+| `buildmaster_git_fetch` / `buildmaster_git_switch` / `buildmaster_git_reset` / `buildmaster_git_patch` | Git helpers (no out-var) |
 
-### `create_*` signature
+`buildmaster_link` always records `buildmaster_depend` when `dest` is a
+graph node. A spec or on-disk archive is link-only. Duplicate
+*explicit* edges are WARNING + no-op. Unresolvable dest at finalize
+is FATAL.
+
+### Component signature
 
 **1.0.1**
 
@@ -97,29 +119,43 @@ create_cmake_component(
 include("${FOO_CREATE_FILE}")
 ```
 
-**2.0**
+**master**
 
 ```cmake
-create_cmake_component(
+buildmaster_component(
 	foo
 	"Foo library"
 	"${FOO_SRC}"
-	"${FOO_BUILD}"
 	"${FOO_OPTIONS}"
 	static
 	foo
 	"INDENT=${PLUGIN_LEVEL};RENAME;STRIPRES"
 )
-component_dependency(foo bar)   # bar may be declared later
-component_link(foo bar)         # if foo must actually link bar
+buildmaster_depend(foo bar)   # bar may be declared later
+buildmaster_link(foo bar)     # if foo must actually link bar
 ```
 
-Same shape for `create_meson_component`.
-Headers variants drop `<build_dir>`, `<mode>`, and `<produced>`.
+Build directory is optional. If omitted, BuildMaster assigns
+`${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it
+(`file(MAKE_DIRECTORY)`, idempotent). Passing an explicit path is
+still accepted; leftover files in that directory are the caller's
+problem.
+
+Headers: same factory, mode `headers`. Drop `<produced>` the same way
+the old headers wrappers did.
 
 Do **not** capture an out-variable. Do **not** `include()` anything
 BuildMaster generated. Materialize runs at the end of
-`CMAKE_SOURCE_DIR` via `cmake_language(DEFER)`.
+`CMAKE_SOURCE_DIR` via `cmake_language(DEFER)`. An `INTERFACE` stub
+named `<id>` exists at registration, so a sibling `ALIAS` /
+`target_link_libraries` before DEFER is valid.
+
+Neutral `options` entries the factory understands
+(`CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
+`DEFINITIONS`) are **private** to the nested compile and **append**
+to the parent job / toolchain. They are not `ENV{CFLAGS}`.
+Everything else in that list is FATAL. The trailing optstr is
+unchanged (`LINK=`, `PC=`, …).
 
 ### Options string
 
@@ -130,7 +166,7 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 ```
 
 - First `=` in each pair splits key from value.
-- `;` inside `PC={…}` is **not** a pair break.
+- `;` inside `{…}` is **not** a pair break.
 - Keys are case-insensitive, stored uppercase.
 - Bare flag (`RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`) means `KEY=ON`.
 - Unknown keys: **WARNING**, ignored.
@@ -144,174 +180,107 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | `WHOLE` | OFF | Whole-archive link of **static** produced archives |
 | `BUILDONLY` | OFF | Do not publish into the shared prefix |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives after `RENAME` |
-| `PC={…}` | off unless the group is present | Helper `.pc` for **this** prefix. See README. Bare `PC` / `PC=ON` is **FATAL**. |
+| `PC={…}` | off unless the group is present | Helper `.pc` for **this** prefix. Bare `PC` / `PC=ON` is **FATAL** |
+| `LINK=` / `LINK={…}` | empty | Raw system linker names (`shlwapi`, `ws2_32`) on the id `INTERFACE` |
+| `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker flags. Groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux + macOS). Unknown platform key is **FATAL**. A group that does not apply is skipped at INFO |
 
 `PC` on a **meta** is **FATAL**. `BUILDONLY` + enabled `PC` is **FATAL**.
 If the library already installs a `.pc` at the canonical path, do not
 set `PC={…}` (collision is **FATAL**).
 
+`LINK=` is **not** a graph node. `buildmaster_link` is.
+`LINKFLAGS` ride the same `INTERFACE` as `LINK=` (they propagate to
+whoever links that id, including the final `.dll` / `.so`). Put
+flags that must **not** leak to the application on a leaf you never
+link from the app, or keep them off BuildMaster.
+
 ### Graph instead of “dependant” + `POST_BUILD`
 
-| 1.0.1 habit | 2.0 |
-|-------------|-----|
-| 9th argument `"bar_install"` | `component_dependency(foo bar)` |
-| `add_dependencies(foo_configure bar_install)` | Same, or `component_prerequisite` for non-component targets |
-| `target_link_libraries(foo_component INTERFACE bar)` by hand | `component_link(foo bar)` |
-| `add_library(plugins INTERFACE)` + `target_link_libraries(plugins INTERFACE foo)` | `create_meta_component(plugins "…")` + `meta_component_add(plugins foo)` |
+| 1.0.1 habit | master |
+|-------------|--------|
+| 9th argument `"bar_install"` | `buildmaster_depend(foo bar)` |
+| `add_dependencies(foo_configure bar_install)` | Same, or `buildmaster_prerequisite` for non-component targets |
+| `target_link_libraries(foo INTERFACE bar)` by hand | `buildmaster_link(foo bar)` |
+| `add_library(plugins INTERFACE)` + `target_link_libraries(plugins INTERFACE foo)` | `buildmaster_meta(plugins "…")` + `buildmaster_meta_add(plugins foo)` |
 | `POST_BUILD` rename / copy `zsd.lib` → `z.lib` | `RENAME` (usually leave default ON) |
 | `POST_BUILD` `lib /REMOVE:….res` | `STRIPRES` (default ON; silent on non-MSVC) |
 | Parent `/WHOLEARCHIVE:` / `-force_load` / `--whole-archive` loop | `WHOLE` on the component or on the meta you link |
-| `create_bundle_static_libraries` + `POST_BUILD` merge | `BUILDONLY` phases + `component_repack` |
+| `create_bundle_static_libraries` + `POST_BUILD` merge | `BUILDONLY` phases + `buildmaster_repack` |
 | `file(WRITE) …pc` + copy into `libdir/pkgconfig` | `PC={VERSION=…;NAME=…}` on the **leaf** that owns the archive |
+| `LINK_EXTRA=shlwapi` | `LINK=shlwapi` or `LINK={shlwapi;ws2_32}` |
+| Hand-written `target_link_options` for `/FORCE:MULTIPLE` | `LINKFLAGS=/FORCE:MULTIPLE` or `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE};UNIX={-Wl,-Bsymbolic}}` |
 
-Host-only libraries (`ws2_32`, Apple frameworks) are **not** graph
-nodes. Keep them on the final `target_link_libraries` of the
-application.
+Host-only libraries (`ws2_32`, Apple frameworks) can live in `LINK=`
+when every consumer of that id needs them. Otherwise keep them on the
+final `target_link_libraries` of the application.
 
 ### File / git helpers
 
-Out-file + `include()` is gone. Bind the operation to a **component
-id** (or a name you later pass to `component_prerequisite`).
+Out-file + `include()` is gone. Bind the operation to a **name** you
+later pass to `buildmaster_prerequisite`.
 
-| 1.0.1 | 2.0 |
-|-------|-----|
-| `file_download_cached(OUT url …)` + `include(${OUT})` | `file_download_cached(<name> <url> [EXPECTED_HASH …] [TITLE …])` then `component_prerequisite(<id> <name>)` |
-| `file_decompress(OUT archive dest …)` + `include` | `file_decompress(<name> <archive> <dest> [TITLE …])` |
-| `create_git_reset_file(OUT id title repo)` + `include` | `create_git_reset_file(<id> <title> <repo>)` |
-| `create_git_patch_file(OUT id title repo patches)` + `include` | `create_git_patch_file(<id> <title> <repo> <patch>)` |
-| `create_git_fetch` / `create_git_switch_branch` | Same drop of `OUT` + `include` |
+| 1.0.1 | master |
+|-------|--------|
+| `file_download_cached(OUT url …)` + `include(${OUT})` | `buildmaster_download_cached(<name> <url> [EXPECTED_HASH …] [TITLE …])` then `buildmaster_prerequisite(<id> <name>)` |
+| `file_decompress(OUT archive dest …)` + `include` | `buildmaster_decompress(<name> <archive> <dest> [TITLE …])` |
+| `create_git_reset_file(OUT id title repo)` + `include` | `buildmaster_git_reset(<id> <title> <repo>)` |
+| `create_git_patch_file(OUT id title repo patches)` + `include` | `buildmaster_git_patch(<id> <title> <repo> <patch>)` |
+| `create_git_fetch` / `create_git_switch_branch` | `buildmaster_git_fetch` / `buildmaster_git_switch` |
 
-Call `create_git_*` **before** `create_*_component` for that id.
-Post-install reset of registered roots is still automatic.
+Call `buildmaster_git_*` **before** `buildmaster_component` for that
+id. Post-install reset of registered roots is still automatic.
+Patch is queued; flush is reset-then-apply once per root.
 
 ### Logging
 
-| 1.0.1 | 2.0 |
-|-------|-----|
+| 1.0.1 | master |
+|-------|--------|
 | `-DBUILDMASTER_DEBUG=1` or `ENV{BUILDMASTER_DEBUG}` | Ignored |
-| `message(STATUS "Setting up Foo")` | `buildmaster_message(USER STATUS "Setting up Foo" ${PLUGIN_LEVEL})` |
+| `message(STATUS "Setting up Foo")` | `buildmaster_message(STATUS "Setting up Foo" ${PLUGIN_LEVEL})` |
+| `buildmaster_message(USER STATUS "…")` | Drop `USER`. Module is always `USER` |
 | — | `-DBUILDMASTER_LOGLEVEL=DEBUG` (or `INFO` / `STATUS` / …) |
 
-`BUILDMASTER_VERBOSE` is unchanged (Ninja / compiler command lines).
-It is independent of `BUILDMASTER_LOGLEVEL`.
+`BUILDMASTER_VERBOSE` is unchanged (live compiler / linker output).
+`WARNING` and `FATAL` are never filtered. CMake `message()` is
+forbidden inside BuildMaster except `log.cmake`.
 
-`USER` is the module name reserved for the consumer so headers line
-up with BuildMaster’s own output.
+### Layout
 
-### Minimal rewrite (leaf + dependency)
+BuildMaster and every DSL-driven dependency must be **sibling
+directories** under the same parent. The registration `CMakeLists.txt`
+is not the nested `srcdir`.
 
-```cmake
-# 1.0.1
-create_cmake_dependant_component(
-	PNG_CREATE
-	png "libpng" "${PNG_SRC}" "${PNG_BUILD}"
-	"${PNG_OPTIONS}" "${TYPE}" png
-	"zlib_install"
-	${PLUGIN_LEVEL}
-)
-include("${PNG_CREATE}")
-
-# 2.0
-create_cmake_component(
-	png "libpng" "${PNG_SRC}" "${PNG_BUILD}"
-	"${PNG_OPTIONS}" ${TYPE} png
-	"INDENT=${PLUGIN_LEVEL}"
-)
-component_dependency(png zlib)
-component_link(png zlib)
+```
+thirdparty/
+	buildmaster/
+	foo/          # registration CMakeLists.txt lives here
+		src/      # CMakeLists.txt or meson.build lives here
 ```
 
-### Collection that the parent whole-archives
-
-```cmake
-# 1.0.1
-add_library(ffmpeg-plugins INTERFACE)
-add_dependencies(ffmpeg-plugins png_install opus_install)
-target_link_libraries(ffmpeg-plugins INTERFACE png opus)
-# parent then walks INTERFACE_LINK_LIBRARIES and emits /WHOLEARCHIVE:
-
-# 2.0
-create_meta_component(ffmpeg-plugins "FFmpeg plugins" "WHOLE")
-meta_component_add(ffmpeg-plugins png opus)
-# parent:
-target_link_libraries(MyApp PRIVATE ffmpeg-plugins)
-```
-
-Membership does not build anything. Something must **consume** the
-meta (`component_link`, `component_dependency`, or host
-`target_link_libraries` / `DEPENDS`). Unused metas warn as orphans.
-
-### Multi-phase static (the x265 shape)
-
-```cmake
-create_cmake_component(foo12 "Foo 12-bit" … static foo12 "BUILDONLY")
-create_cmake_component(foo10 "Foo 10-bit" … static foo10 "BUILDONLY")
-create_cmake_component(foo8  "Foo 8-bit"  … static foo8)
-
-component_dependency(foo8 foo12)
-component_dependency(foo8 foo10)
-
-component_repack(
-	foo-merged "Foo merged"
-	foo
-	foo8 foo10 foo12
-)
-```
-
-Do not `component_link` a normal component to a `BUILDONLY` id
-(**FATAL**). Feed `BUILDONLY` archives only into `component_repack`
-(or another `BUILDONLY`).
+`add_subdirectory(thirdparty/buildmaster)` (or `thirdparty` that
+adds it) is enough. Do not `include(…/helpers.cmake)` after that.
 
 ### Checklist
 
-- [ ] Delete every `include("${…_CREATE_FILE}")` / `include("${…_RESET}")`.
-- [ ] Drop the first out-variable argument on `create_*`, `file_*`, `create_git_*`.
-- [ ] Replace `create_*_dependant_*` with `create_*` + `component_dependency`.
-- [ ] Move indent / toolchain into the trailing options string.
-- [ ] Replace `LINK_EXTRA` and hand-rolled `target_link_libraries` on
-      imported component targets with `component_link`.
-- [ ] Replace consumer `rename_*.cmake` / strip-`.res` scripts with
-      `RENAME` / `STRIPRES` (defaults are already ON).
-- [ ] Replace parent whole-archive loops with `WHOLE` on the meta or leaf.
-- [ ] Replace `create_bundle_static_libraries` with `component_repack`.
-- [ ] Replace hand-written helper `.pc` files with `PC={VERSION=…}`
-      only when the project does **not** already install one.
-- [ ] Replace `INTERFACE` aggregator libraries with
-      `create_meta_component` + `meta_component_add`.
-- [ ] Replace `BUILDMASTER_DEBUG` with `BUILDMASTER_LOGLEVEL`.
-- [ ] Prefer `buildmaster_message(USER …)` over `message()`.
-- [ ] Keep license gates, Meson `-Dlibfoo=enabled`, Apple frameworks,
-      and `ws2_32` in the **consumer**. Those are not BuildMaster.
+- [ ] Delete every `include("${FOO_CREATE_FILE}")` and every out-var
+      argument on `create_*` / `file_*` / `create_git_*`.
+- [ ] Replace `create_cmake_component` / `create_meson_component` /
+      headers wrappers with one `buildmaster_component`.
+- [ ] Replace `create_*_dependant_*` with `buildmaster_depend` or
+      `buildmaster_link`.
+- [ ] Replace `LINK_EXTRA` with `buildmaster_link` or `LINK=`.
+- [ ] Replace `create_bundle_static_libraries` with
+      `BUILDONLY` + `buildmaster_repack`.
+- [ ] Replace `create_git_*` / `file_*` with `buildmaster_git_*` /
+      `buildmaster_download*` / `buildmaster_decompress`.
+- [ ] Drop `ensure_build_dir` unless you still need the path variable
+      for something advanced; the factory creates the directory.
+- [ ] Replace `message(STATUS …)` in the consumer with
+      `buildmaster_message(STATUS …)` (no module argument).
+- [ ] Replace `-DBUILDMASTER_DEBUG=1` with
+      `-DBUILDMASTER_LOGLEVEL=DEBUG`.
+- [ ] Stop calling `_bm_*`, `create_*_stages`, parse helpers, import
+      hints, archiver lookup, checksum, git marker.
+- [ ] Confirm `public_functions.txt` still matches what you call.
 
-### What did not break
-
-- Shared install prefix (`BUILDMASTER_INSTALL_DIR` / `LIBDIR` /
-  `INCLUDEDIR`) and env / pkg-config propagation into nested Meson.
-- Stage target names: `<id>_configure`, `<id>_build`, `<id>_install`.
-- `library_import_hint` / `library_import_static_hint` (optional
-  4th argument `subdir` was added; old 3-arg calls still work).
-- `ensure_build_dir`, path helpers, extra-tool `pkgconf`.
-- `BUILDMASTER_VERBOSE`, `BUILDMASTER_FAIL_FAST`,
-  `BUILDMASTER_CLEAN_RESET_REPOS`, `BUILDMASTER_DOWNLOADSDIR`.
-- Git post-install reset of registered roots.
-- Recursive `BUILDMASTER_CONFIGURED` guard (one prefix per tree).
-
----
-
-## Adding the next breaking wave
-
-Template for a new subsection under `## Unreleased`:
-
-```markdown
-### <one-line title>
-
-| Before (X.Y) | After |
-|--------------|-------|
-| `old_call(...)` | `new_call(...)` |
-
-One paragraph on *why* callers must change. No feature pitch.
-```
-
-If the change is additive (new key with a compatible default, new
-command that nobody is required to call), it does **not** belong
-here. Put it in `CHANGELOG.md` only.
+[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD

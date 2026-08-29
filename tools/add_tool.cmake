@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/add_tool.cmake — add_subdirectory wrapper for tools/
+# tools/_bm_tools_add.cmake — add_subdirectory wrapper for tools/
 # =============================================================================
 
 ## @brief Add and configure a build subdirectory for a third-party tool.
@@ -15,10 +15,10 @@
 ##       does not validate the presence of `CMakeLists.txt` or
 ##       `propagate_vars.cmake` in `srcdir`.
 ## @example
-##   add_tool(myplugin)        # No indentation
-##   add_tool(myplugin 2)      # Prints: "Setting up myplugin" with indent 2
-macro(add_tool srcdir)
-	_bm_log_message(TOOLS LOWLEVEL "Entering add_tool(${srcdir})")
+##   _bm_tools_add(myplugin)        # No indentation
+##   _bm_tools_add(myplugin 2)      # Prints: "Setting up myplugin" with indent 2
+macro(_bm_tools_add srcdir)
+	_bm_log_message(TOOLS LOWLEVEL "Entering _bm_tools_add(${srcdir})")
 	if(${ARGC} GREATER 1)
 		set(_indent_level "${ARGV1}")
 	else()
@@ -28,5 +28,5 @@ macro(add_tool srcdir)
 	_bm_log_message(TOOLS STATUS "Setting up ${srcdir}" ${_indent_level})
 	add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/${srcdir}")
 	include("${CMAKE_CURRENT_LIST_DIR}/${srcdir}/propagate_vars.cmake")
-	_bm_log_message(TOOLS LOWLEVEL "Exiting add_tool(${srcdir})")
+	_bm_log_message(TOOLS LOWLEVEL "Exiting _bm_tools_add(${srcdir})")
 endmacro()

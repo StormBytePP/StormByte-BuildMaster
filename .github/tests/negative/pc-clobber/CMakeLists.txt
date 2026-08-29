@@ -4,7 +4,7 @@ project(neg_pc_clobber LANGUAGES C)
 add_subdirectory("${BM_TEST_REPO_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/bm")
 include("${BM_TEST_REPO_ROOT}/helpers.cmake")
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	pc-clash
 	"Harness PC clobber"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -15,4 +15,4 @@ create_cmake_component(
 	"PC={VERSION=1.0.0;NAME=pcclash}"
 )
 
-_buildmaster_finalize_components()
+_bm_graph_finalize()

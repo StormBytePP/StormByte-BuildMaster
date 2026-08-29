@@ -1,6 +1,6 @@
 include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 set(_bm_api_list "${BM_TEST_EXPECTED_DIR}/public_functions.txt")

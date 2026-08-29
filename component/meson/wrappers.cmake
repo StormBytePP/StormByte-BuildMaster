@@ -14,10 +14,10 @@
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See create_component for supported keys.
-## @note Same arity rules as create_cmake_component.
-function(create_meson_component _component _component_title _srcdir)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering create_meson_component")
+##            See _bm_comp_create for supported keys.
+## @note Same arity rules as _bm_comp_cmake_create.
+function(_bm_comp_meson_create _component _component_title _srcdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_meson_create")
 
 	set(_builddir "")
 	set(_options "")
@@ -28,7 +28,7 @@ function(create_meson_component _component _component_title _srcdir)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
 		_bm_log_message(COMPONENT FATAL
-			"create_meson_component: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
+			"_bm_comp_meson_create: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
 	endif()
 
 	if(ARGC EQUAL 6)
@@ -43,8 +43,8 @@ function(create_meson_component _component _component_title _srcdir)
 		set(_produced "${ARGV6}")
 		set(_options_string "${ARGV7}")
 	else()
-		_buildmaster_is_library_mode("${ARGV4}" _m21)
-		_buildmaster_is_library_mode("${ARGV5}" _m20)
+		_bm_comp_is_library_mode("${ARGV4}" _m21)
+		_bm_comp_is_library_mode("${ARGV5}" _m20)
 		if(_m21 AND NOT _m20)
 			set(_options "${ARGV3}")
 			set(_library_mode "${ARGV4}")
@@ -60,15 +60,15 @@ function(create_meson_component _component _component_title _srcdir)
 	endif()
 
 	if(NOT _legacy)
-		_buildmaster_component_builddir(_builddir "${_component}")
+		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	create_component(
+	_bm_comp_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "${_library_mode}" "meson" "${_produced}"
 		"${_options_string}"
 	)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_meson_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_meson_create")
 endfunction()
 
 ## @brief Register a header-only Meson component (INTERFACE `<id>` on return).
@@ -76,10 +76,10 @@ endfunction()
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
 ## @param[in] _builddir Optional. Same 4–6 arity as
-##            create_cmake_headers_component.
+##            _bm_comp_cmake_create_headers.
 ## @note 5 arguments are always the path form.
-function(create_meson_headers_component _component _component_title _srcdir)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering create_meson_headers_component")
+function(_bm_comp_meson_create_headers _component _component_title _srcdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_meson_create_headers")
 
 	set(_builddir "")
 	set(_options "")
@@ -88,7 +88,7 @@ function(create_meson_headers_component _component _component_title _srcdir)
 
 	if(ARGC LESS 4 OR ARGC GREATER 6)
 		_bm_log_message(COMPONENT FATAL
-			"create_meson_headers_component: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
+			"_bm_comp_meson_create_headers: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
 	endif()
 
 	if(ARGC EQUAL 4)
@@ -105,13 +105,13 @@ function(create_meson_headers_component _component _component_title _srcdir)
 	endif()
 
 	if(NOT _legacy)
-		_buildmaster_component_builddir(_builddir "${_component}")
+		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	create_component(
+	_bm_comp_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "headers" "meson" ""
 		"${_options_string}"
 	)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting create_meson_headers_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_meson_create_headers")
 endfunction()

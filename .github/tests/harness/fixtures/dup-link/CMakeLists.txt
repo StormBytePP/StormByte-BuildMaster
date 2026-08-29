@@ -1,4 +1,4 @@
-create_cmake_component(
+_bm_comp_cmake_create(
     dup-a
     "Harness dup A"
     "${CMAKE_CURRENT_SOURCE_DIR}/a"
@@ -7,7 +7,7 @@ create_cmake_component(
     static
     "dupalib"
 )
-create_cmake_component(
+_bm_comp_cmake_create(
     dup-b
     "Harness dup B"
     "${CMAKE_CURRENT_SOURCE_DIR}/b"
@@ -17,6 +17,6 @@ create_cmake_component(
     "dupblib"
 )
 
-component_link(dup-a dup-b)
-component_link(dup-a dup-b)
-component_dependency(dup-a dup-b)
+buildmaster_link(dup-a dup-b)
+buildmaster_link(dup-a dup-b)
+buildmaster_depend(dup-a dup-b)

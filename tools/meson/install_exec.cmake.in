@@ -6,8 +6,8 @@
 # (upstream already shipped a .pc). BUILDONLY + PC is rejected at create time.
 
 include("@BUILDMASTER_SRCDIR@/log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 if(EXISTS "@BUILDMASTER_FAIL_MARKER@")

@@ -18,10 +18,10 @@
 ##       `prefix_path` is provided it is prepended before the platform
 ##       prefix. `subdir` is inserted between `prefix_path` and the
 ##       filename when non-empty.
-function(library_import_hint _out_var _lib_name _prefix_path)
-	_bm_log_message(CORE LOWLEVEL "Entering library_import_hint")
+function(_bm_lib_import_hint _out_var _lib_name _prefix_path)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_lib_import_hint")
 	if(ARGC LESS 3 OR ARGC GREATER 4)
-		_bm_log_message(CORE FATAL "library_import_hint requires output variable name, library name, prefix and optional subdir.")
+		_bm_log_message(CORE FATAL "_bm_lib_import_hint requires output variable name, library name, prefix and optional subdir.")
 	endif()
 
 	set(_subdir "")
@@ -51,7 +51,7 @@ function(library_import_hint _out_var _lib_name _prefix_path)
 	endif()
 
 	set(${_out_var} "${_pfx}${_lib_name}${_suffix}" PARENT_SCOPE)
-	_bm_log_message(CORE LOWLEVEL "Exiting library_import_hint")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_lib_import_hint")
 endfunction()
 
 ## @brief Construct a static-library filename hint for importing/linking.
@@ -67,10 +67,10 @@ endfunction()
 ##       `CMAKE_STATIC_LIBRARY_SUFFIX`. If `prefix_path` is provided it
 ##       is prepended with a '/' separator. `subdir` is inserted between
 ##       `prefix_path` and the filename when non-empty.
-function(library_import_static_hint _out_var _lib_name _prefix_path)
-	_bm_log_message(CORE LOWLEVEL "Entering library_import_static_hint")
+function(_bm_lib_import_static_hint _out_var _lib_name _prefix_path)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_lib_import_static_hint")
 	if(ARGC LESS 3 OR ARGC GREATER 4)
-		_bm_log_message(CORE FATAL "library_import_static_hint requires output variable name, library name, prefix and optional subdir.")
+		_bm_log_message(CORE FATAL "_bm_lib_import_static_hint requires output variable name, library name, prefix and optional subdir.")
 	endif()
 
 	set(_subdir "")
@@ -96,5 +96,5 @@ function(library_import_static_hint _out_var _lib_name _prefix_path)
 	endif()
 
 	set(${_out_var} "${_prefix}${_lib_name}${CMAKE_STATIC_LIBRARY_SUFFIX}" PARENT_SCOPE)
-	_bm_log_message(CORE LOWLEVEL "Exiting library_import_static_hint")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_lib_import_static_hint")
 endfunction()

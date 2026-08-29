@@ -6,14 +6,14 @@
 ## @param[in] _path Path to validate (URL basename, archive path, or extract dir).
 ## @note FATAL if the path contains ".." anywhere. Used before writing under
 ##       BUILDMASTER_DOWNLOADSDIR or extracting an archive.
-function(_file_validate_no_traversal _path)
-	_bm_log_message(FILE LOWLEVEL "Entering _file_validate_no_traversal")
+function(_bm_file_validate_no_traversal _path)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_validate_no_traversal")
 	if("${_path}" MATCHES "\\.\\.")
 		_bm_log_message(FILE FATAL
 			"Path traversal detected (contains '..'):\n  ${_path}\nRefusing to continue for security reasons."
 		)
 	endif()
-	_bm_log_message(FILE LOWLEVEL "Exiting _file_validate_no_traversal")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_validate_no_traversal")
 endfunction()
 
 ## @brief Check whether a file matches an expected checksum.
@@ -26,17 +26,17 @@ endfunction()
 ## @note Supports any algorithm accepted by file(<ALGO>).
 ##       Algorithm names may contain underscores (SHA3_256, etc.).
 ##       Unknown algorithms → WARNING and FALSE (treated as mismatch).
-function(file_checksum_correct _result _file _hash)
-	_bm_log_message(FILE LOWLEVEL "Entering file_checksum_correct")
+function(_bm_tools_file_checksum _result _file _hash)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_tools_file_checksum")
 	if("${_hash}" STREQUAL "")
 		set(${_result} FALSE PARENT_SCOPE)
-		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting _bm_tools_file_checksum")
 		return()
 	endif()
 
 	if(NOT EXISTS "${_file}")
 		set(${_result} FALSE PARENT_SCOPE)
-		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting _bm_tools_file_checksum")
 		return()
 	endif()
 
@@ -64,7 +64,7 @@ function(file_checksum_correct _result _file _hash)
 			"Unknown hash algorithm '${_algo}' for ${_file}. Known: ${_known_algos}. Treating as mismatch."
 		)
 		set(${_result} FALSE PARENT_SCOPE)
-		_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+		_bm_log_message(FILE LOWLEVEL "Exiting _bm_tools_file_checksum")
 		return()
 	endif()
 
@@ -74,5 +74,5 @@ function(file_checksum_correct _result _file _hash)
 	else()
 		set(${_result} FALSE PARENT_SCOPE)
 	endif()
-	_bm_log_message(FILE LOWLEVEL "Exiting file_checksum_correct")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_tools_file_checksum")
 endfunction()

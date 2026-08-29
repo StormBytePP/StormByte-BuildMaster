@@ -1,7 +1,7 @@
-# Helper .pc for internal BM consumers (Requires follows component_link).
+# Helper .pc for internal BM consumers (Requires follows buildmaster_link).
 
-ensure_build_dir(PC_DEP_BUILD "pc-dep")
-create_cmake_component(
+_bm_path_builddir(PC_DEP_BUILD "pc-dep")
+_bm_comp_cmake_create(
 	pc-dep
 	"Harness PC dependency"
 	"${CMAKE_CURRENT_SOURCE_DIR}/dep"
@@ -12,8 +12,8 @@ create_cmake_component(
 	"PC={VERSION=1.0.0;NAME=pcdep}"
 )
 
-ensure_build_dir(PC_LIB_BUILD "pc-lib")
-create_cmake_component(
+_bm_path_builddir(PC_LIB_BUILD "pc-lib")
+_bm_comp_cmake_create(
 	pc-lib
 	"Harness PC library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -24,7 +24,7 @@ create_cmake_component(
 	"PC={VERSION=2.0.0;NAME=pclib}"
 )
 
-component_link(pc-lib pc-dep)
+buildmaster_link(pc-lib pc-dep)
 
 add_custom_target(pc_check_run
 	COMMAND ${CMAKE_COMMAND}

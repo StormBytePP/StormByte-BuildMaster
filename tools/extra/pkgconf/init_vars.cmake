@@ -1,7 +1,7 @@
 # Here we don't protect against double initialization as it is already done by extra tools helpers
 include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 set(BUILDMASTER_TOOLS_PKGCONF_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
@@ -33,14 +33,14 @@ endif()
 # Force build our pkgconf if none found or on Windows because it might have installed a broken pkgconfig (like Strawbery)
 if(NOT PKG_CONFIG_WORKING)
 	set(PKGCONF_SRCDIR "${BUILDMASTER_TOOLS_PKGCONF_SRCDIR}/src")
-	ensure_build_dir(PKGCONF_BUILD_DIR)
+	_bm_path_builddir(PKGCONF_BUILD_DIR)
 
 	set(PKGCONF_MESON_OPTIONS "-Ddefault_library=static")
 
 	set(PKGCONF_COMPONENT "pkgconf")
 	set(PKGCONF_OPTIONS "${PKGCONF_MESON_OPTIONS}")
 	set(PKGCONF_SRCDIR "${PKGCONF_SRCDIR}")
-	create_meson_stages(
+	_bm_tools_meson_stages(
 		PKGCONF_MESON_SETUP_FILE
 		_ignored_compile_file
 		_ignored_install_file
@@ -86,7 +86,7 @@ if(NOT PKG_CONFIG_WORKING)
 		_bm_log_message(PKGCONF STATUS "Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
 
 		# Propagate to parent scope and regenerate bootstrap env runner
-		update_env_runner()
+		_bm_env_update_runner()
 	endif()
 endif()
 

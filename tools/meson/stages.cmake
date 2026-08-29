@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/meson/stages.cmake — create_meson_stages
+# tools/meson/stages.cmake — _bm_tools_meson_stages
 # =============================================================================
 
 ## @brief Create setup/compile/install scripts for a Meson-built component.
@@ -48,7 +48,7 @@
 ## @note `_MESON_NATIVE_FILE` is the Meson `--native-file` for this component:
 ##       `TOOLCHAIN=` profile file, or this process's compiler family.
 ## @note Before writing templates, calls
-##       `buildmaster_apply_install_search_paths()` so `_MESON_C_ARGS` /
+##       `_bm_env_apply_install_search_paths()` so `_MESON_C_ARGS` /
 ##       `_MESON_CXX_ARGS` / `_MESON_LINK_ARGS` include the shared prefix
 ##       (`-I`/`-L` or `/I`/`/LIBPATH:`). Per-component runners also get
 ##       Windows `INCLUDE`/`LIB` when TOOLCHAIN= is set.
@@ -56,8 +56,8 @@
 ##       `debug`, `RelWithDebInfo` → `debugoptimized`, `MinSizeRel` →
 ##       `minsize`, `Release` or empty/multi-config → `release`). Meson
 ##       rejects an empty `-Dbuildtype=` (reports Value ".").
-function(create_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
-	_bm_log_message(MESON LOWLEVEL "Entering create_meson_stages")
+function(_bm_tools_meson_stages _file_setup _file_compile _file_install _component _component_title _srcdir _builddir _meson_options _library_mode _output_libraries)
+	_bm_log_message(MESON LOWLEVEL "Entering _bm_tools_meson_stages")
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
 		string(REPEAT "\t" ${_indent_level} _MESON_INDENT_)
@@ -77,7 +77,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# create_component / collect_outputs set these; raw callers get defaults
+	# _bm_comp_create / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
 	endif()
@@ -112,13 +112,13 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_BM_PC_OUT "")
 	endif()
 
-	buildmaster_validate_toolchain(_toolchain_name "${_toolchain_raw}")
+	_bm_tc_validate(_toolchain_name "${_toolchain_raw}")
 
 	# Profile native file when TOOLCHAIN= is set; otherwise this process's
 	# compiler family. Never keep the outer job default unless this process
 	# still uses that family.
-	if(COMMAND buildmaster_get_meson_native_file)
-		buildmaster_get_meson_native_file(_MESON_NATIVE_FILE
+	if(COMMAND _bm_tc_get_meson_native_file)
+		_bm_tc_get_meson_native_file(_MESON_NATIVE_FILE
 			TOOLCHAIN "${_toolchain_name}")
 	else()
 		set(_MESON_NATIVE_FILE "")
@@ -126,7 +126,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 	if(NOT _toolchain_name STREQUAL "")
 		set(_MESON_TOOLCHAIN_SUFFIX " (with toolchain ${_toolchain_name})")
-		_bm_log_message(MESON DEBUG "create_meson_stages(${_component}): TOOLCHAIN=${_toolchain_name}")
+		_bm_log_message(MESON DEBUG "_bm_tools_meson_stages(${_component}): TOOLCHAIN=${_toolchain_name}")
 	else()
 		set(_MESON_TOOLCHAIN_SUFFIX "")
 	endif()
@@ -140,7 +140,7 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_MESON_LIBRARY_TYPE "static")
 		list(APPEND _meson_options "-Db_staticpic=true")
 	else()
-		_bm_log_message(MESON FATAL "Unknown library mode '${_library_mode}' in create_meson_stages (expected static, shared, or headers)")
+		_bm_log_message(MESON FATAL "Unknown library mode '${_library_mode}' in _bm_tools_meson_stages (expected static, shared, or headers)")
 	endif()
 
 	set(_MESON_COMPONENT "${_component}")
@@ -176,16 +176,16 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	endif()
 
 	if(NOT _toolchain_name STREQUAL "")
-		buildmaster_load_toolchain_profile("${_toolchain_name}")
+		_bm_tc_load_profile("${_toolchain_name}")
 
 		# Short tool names + bindirs on PATH (avoid paths with spaces via cmd)
 		get_filename_component(_cmake_dir "${CMAKE_COMMAND}" DIRECTORY)
 		get_filename_component(_cmake_name "${CMAKE_COMMAND}" NAME)
-		normalize_cmake_path(_cmake_dir "${_cmake_dir}")
+		_bm_path_normalize(_cmake_dir "${_cmake_dir}")
 		if(MESON_EXECUTABLE)
 			get_filename_component(_meson_dir "${MESON_EXECUTABLE}" DIRECTORY)
 			get_filename_component(_meson_name "${MESON_EXECUTABLE}" NAME)
-			normalize_cmake_path(_meson_dir "${_meson_dir}")
+			_bm_path_normalize(_meson_dir "${_meson_dir}")
 		else()
 			set(_meson_dir "")
 			set(_meson_name "meson")
@@ -208,16 +208,16 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 
 		if(_toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl")
 			if(NOT _bm_c_compiler STREQUAL "" AND NOT IS_ABSOLUTE "${_bm_c_compiler}")
-				buildmaster_resolve_msvc_tool(_bm_c_compiler "${_bm_c_compiler}")
+				_bm_tc_resolve_msvc_tool(_bm_c_compiler "${_bm_c_compiler}")
 			endif()
 			if(NOT _bm_cxx_compiler STREQUAL "" AND NOT IS_ABSOLUTE "${_bm_cxx_compiler}")
-				buildmaster_resolve_msvc_tool(_bm_cxx_compiler "${_bm_cxx_compiler}")
+				_bm_tc_resolve_msvc_tool(_bm_cxx_compiler "${_bm_cxx_compiler}")
 			endif()
 			if(NOT _MESON_AR STREQUAL "" AND NOT IS_ABSOLUTE "${_MESON_AR}")
-				buildmaster_resolve_msvc_tool(_MESON_AR "${_MESON_AR}")
+				_bm_tc_resolve_msvc_tool(_MESON_AR "${_MESON_AR}")
 			endif()
 			if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_LINKER}")
-				buildmaster_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")
+				_bm_tc_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")
 			endif()
 		endif()
 
@@ -230,28 +230,28 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		endif()
 
 		if(NOT _MESON_AR STREQUAL "")
-			normalize_cmake_path(_MESON_AR "${_MESON_AR}")
+			_bm_path_normalize(_MESON_AR "${_MESON_AR}")
 		endif()
 		if(NOT _MESON_RANLIB STREQUAL "")
-			normalize_cmake_path(_MESON_RANLIB "${_MESON_RANLIB}")
+			_bm_path_normalize(_MESON_RANLIB "${_MESON_RANLIB}")
 		endif()
 
-		buildmaster_clean_ldflags(_MESON_LINK_ARGS
+		_bm_tc_clean_ldflags(_MESON_LINK_ARGS
 			"${_MESON_LINK_ARGS}" "${_toolchain_name}")
-		buildmaster_clean_cflags(CMAKE_C_FLAGS
+		_bm_tc_clean_cflags(CMAKE_C_FLAGS
 			"${CMAKE_C_FLAGS}" "${_toolchain_name}")
-		buildmaster_clean_cflags(CMAKE_CXX_FLAGS
+		_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
 			"${CMAKE_CXX_FLAGS}" "${_toolchain_name}")
 
-		if(COMMAND buildmaster_apply_install_search_paths)
-			buildmaster_apply_install_search_paths()
+		if(COMMAND _bm_env_apply_install_search_paths)
+			_bm_env_apply_install_search_paths()
 		endif()
 
 		# -fuse-ld= must be a driver flavor name, never an absolute path
 		if(BM_TC_FORCE_LLD)
-			buildmaster_fuse_ld_flag(_bm_fuse_ld "LLD" "")
+			_bm_tc_fuse_ld_flag(_bm_fuse_ld "LLD" "")
 		elseif(_toolchain_name STREQUAL "msvc")
-			buildmaster_fuse_ld_flag(_bm_fuse_ld "MSVC" "")
+			_bm_tc_fuse_ld_flag(_bm_fuse_ld "MSVC" "")
 		else()
 			set(_bm_tc_lt "")
 			if(DEFINED BM_TC_LINKER_TYPE)
@@ -261,13 +261,13 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 			if(DEFINED BM_TC_LINKER)
 				set(_bm_tc_lnk "${BM_TC_LINKER}")
 			endif()
-			buildmaster_fuse_ld_flag(_bm_fuse_ld "${_bm_tc_lt}" "${_bm_tc_lnk}")
+			_bm_tc_fuse_ld_flag(_bm_fuse_ld "${_bm_tc_lt}" "${_bm_tc_lnk}")
 		endif()
 		if(NOT _bm_fuse_ld STREQUAL "")
 			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
 
-		buildmaster_create_component_env_runners(
+		_bm_env__bm_comp_create_runners(
 			_bm_tc_runner
 			_bm_tc_runner_silent
 			"${_component}"
@@ -292,16 +292,16 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	else()
 		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
 		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-			buildmaster_clean_ldflags(_MESON_LINK_ARGS
+			_bm_tc_clean_ldflags(_MESON_LINK_ARGS
 				"${_MESON_LINK_ARGS}" "clang-cl")
-			buildmaster_clean_cflags(CMAKE_C_FLAGS
+			_bm_tc_clean_cflags(CMAKE_C_FLAGS
 				"${CMAKE_C_FLAGS}" "clang-cl")
-			buildmaster_clean_cflags(CMAKE_CXX_FLAGS
+			_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
 				"${CMAKE_CXX_FLAGS}" "clang-cl")
 		endif()
 
-		if(COMMAND buildmaster_apply_install_search_paths)
-			buildmaster_apply_install_search_paths()
+		if(COMMAND _bm_env_apply_install_search_paths)
+			_bm_env_apply_install_search_paths()
 		endif()
 
 		set(_bm_lt "")
@@ -312,32 +312,32 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		if(DEFINED CMAKE_LINKER)
 			set(_bm_lnk "${CMAKE_LINKER}")
 		endif()
-		buildmaster_fuse_ld_flag(_bm_fuse_ld "${_bm_lt}" "${_bm_lnk}")
+		_bm_tc_fuse_ld_flag(_bm_fuse_ld "${_bm_lt}" "${_bm_lnk}")
 		if(NOT _bm_fuse_ld STREQUAL "")
 			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
 
 		if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
-			normalize_cmake_path(_MESON_AR "${CMAKE_AR}")
+			_bm_path_normalize(_MESON_AR "${CMAKE_AR}")
 		elseif(DEFINED ENV{AR} AND NOT "$ENV{AR}" STREQUAL "")
-			normalize_cmake_path(_MESON_AR "$ENV{AR}")
+			_bm_path_normalize(_MESON_AR "$ENV{AR}")
 		endif()
 		if(DEFINED CMAKE_RANLIB AND NOT CMAKE_RANLIB STREQUAL "")
-			normalize_cmake_path(_MESON_RANLIB "${CMAKE_RANLIB}")
+			_bm_path_normalize(_MESON_RANLIB "${CMAKE_RANLIB}")
 		elseif(DEFINED ENV{RANLIB} AND NOT "$ENV{RANLIB}" STREQUAL "")
-			normalize_cmake_path(_MESON_RANLIB "$ENV{RANLIB}")
+			_bm_path_normalize(_MESON_RANLIB "$ENV{RANLIB}")
 		endif()
 	endif()
 
 	string(STRIP "${_MESON_LINK_ARGS}" _MESON_LINK_ARGS)
 
-	if(COMMAND buildmaster_apply_install_search_paths)
-		buildmaster_apply_install_search_paths()
+	if(COMMAND _bm_env_apply_install_search_paths)
+		_bm_env_apply_install_search_paths()
 	endif()
 
-	buildmaster_quote_cmd_list_for_script(_MESON_CMD_PREFIX ${ENV_MESON_COMMAND})
-	buildmaster_quote_cmd_list_for_script(_MESON_SILENT_CMD_PREFIX ${ENV_MESON_SILENT_COMMAND})
-	buildmaster_quote_cmd_list_for_script(_MESON_COMPILE_CMD_PREFIX ${ENV_MESON_COMPILE_COMMAND})
+	_bm_env_quote_cmd_list(_MESON_CMD_PREFIX ${ENV_MESON_COMMAND})
+	_bm_env_quote_cmd_list(_MESON_SILENT_CMD_PREFIX ${ENV_MESON_SILENT_COMMAND})
+	_bm_env_quote_cmd_list(_MESON_COMPILE_CMD_PREFIX ${ENV_MESON_COMPILE_COMMAND})
 
 	if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
 		set(LTO_ENABLED "true")
@@ -364,8 +364,8 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 		set(_MESON_COMPILE_VERBOSE_ARGS "")
 	endif()
 
-	list_join(_MESON_OPTIONS "${_meson_options}" " ")
-	sanitize_for_filename(_MESON_COMPONENT_SAFE "${_component}")
+	_bm_list_join(_MESON_OPTIONS "${_meson_options}" " ")
+	_bm_path_sanitize(_MESON_COMPONENT_SAFE "${_component}")
 
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
@@ -434,8 +434,8 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(BM_COMPONENT_ENV_MESON_COMPILE_COMMAND ${ENV_MESON_COMPILE_COMMAND} PARENT_SCOPE)
 
 	set(_MESON_GIT_POST_INSTALL_RESET "")
-	if(COMMAND buildmaster_git_post_install_marker_for_srcdir)
-		buildmaster_git_post_install_marker_for_srcdir(_MESON_GIT_POST_INSTALL_RESET "${_srcdir}")
+	if(COMMAND _bm_tools_git_marker)
+		_bm_tools_git_marker(_MESON_GIT_POST_INSTALL_RESET "${_srcdir}")
 	endif()
 
 	set(_MESON_SETUP_FILE
@@ -484,5 +484,5 @@ function(create_meson_stages _file_setup _file_compile _file_install _component 
 	set(${_file_compile} "${_MESON_COMPILE_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_MESON_INSTALL_FILE}" PARENT_SCOPE)
 	_bm_log_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE} buildtype=${MESON_BUILD_TYPE}")
-	_bm_log_message(MESON LOWLEVEL "Exiting create_meson_stages")
+	_bm_log_message(MESON LOWLEVEL "Exiting _bm_tools_meson_stages")
 endfunction()

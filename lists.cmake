@@ -7,10 +7,10 @@
 ## @param[in] var_name Name of the variable to toggle; the current value
 ##            is read and the negated value is written into the parent
 ##            scope.
-function(toggle_bool _var)
-	_bm_log_message(CORE LOWLEVEL "Entering toggle_bool")
+function(_bm_list_toggle_bool _var)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_list_toggle_bool")
 	if(NOT ARGC EQUAL 1)
-		_bm_log_message(CORE FATAL "toggle_bool requires one variable name")
+		_bm_log_message(CORE FATAL "_bm_list_toggle_bool requires one variable name")
 	endif()
 
 	if(${${_var}})
@@ -18,7 +18,7 @@ function(toggle_bool _var)
 	else()
 		set(${_var} TRUE PARENT_SCOPE)
 	endif()
-	_bm_log_message(CORE LOWLEVEL "Exiting toggle_bool")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_list_toggle_bool")
 endfunction()
 
 ## @brief Join a CMake list into a single string while preserving
@@ -34,8 +34,8 @@ endfunction()
 ##       Does not validate matching quotes; unbalanced quotes may produce
 ##       unexpected output. Quote characters themselves are not copied
 ##       into the result (the joined string is wrapped in one pair of `"`).
-function(list_join _out_var _raw_string _separator)
-	_bm_log_message(CORE LOWLEVEL "Entering list_join")
+function(_bm_list_join _out_var _raw_string _separator)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_list_join")
 	set(result "\"")
 	set(in_single_quote FALSE)
 	set(in_double_quote FALSE)
@@ -51,14 +51,14 @@ function(list_join _out_var _raw_string _separator)
 
 			if(ch STREQUAL "'")
 				if(NOT in_double_quote)
-					toggle_bool(in_single_quote)
+					_bm_list_toggle_bool(in_single_quote)
 				endif()
 				continue()
 			endif()
 
 			if(ch STREQUAL "\"")
 				if(NOT in_single_quote)
-					toggle_bool(in_double_quote)
+					_bm_list_toggle_bool(in_double_quote)
 				endif()
 				continue()
 			endif()
@@ -77,5 +77,5 @@ function(list_join _out_var _raw_string _separator)
 
 	set(result "${result}\"")
 	set(${_out_var} "${result}" PARENT_SCOPE)
-	_bm_log_message(CORE LOWLEVEL "Exiting list_join")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_list_join")
 endfunction()

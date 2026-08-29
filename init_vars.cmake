@@ -85,8 +85,8 @@ if(NOT BUILDMASTER_CONFIGURED)
 		"${BUILDMASTER_GIT_CONFIGURE_STAMP}")
 
 	if(NOT TARGET buildmaster_build_init)
-		if(COMMAND buildmaster_log_comment)
-			buildmaster_log_comment(_bm_init_cmt CORE "reset fail markers")
+		if(COMMAND _bm_log_comment)
+			_bm_log_comment(_bm_init_cmt CORE "reset fail markers")
 		else()
 			set(_bm_init_cmt "[BuildMaster/Core     ]: reset fail markers")
 		endif()
@@ -98,6 +98,6 @@ if(NOT BUILDMASTER_CONFIGURED)
 		)
 	endif()
 
-	# Toolchain dump is registered via buildmaster_toolchain_export* and written
-	# once at the end of the root CMakeLists.txt (buildmaster_toolchain_write).
+	# Toolchain dump is registered via _bm_tc_export* and written
+	# once at the end of the root CMakeLists.txt (_bm_tc_write).
 endif()

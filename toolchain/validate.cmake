@@ -14,14 +14,14 @@
 ##       Both forms are accepted.
 ## @note Windows-only profiles: `msvc`, `clang-cl`. Non-Windows-only:
 ##       `gcc`, `clang`.
-function(buildmaster_validate_toolchain out_normalized input)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_validate_toolchain")
+function(_bm_tc_validate out_normalized input)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_validate")
 	string(STRIP "${input}" _t)
 	string(TOLOWER "${_t}" _t)
 
 	if(_t STREQUAL "")
 		set(${out_normalized} "" PARENT_SCOPE)
-		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_validate")
 		return()
 	endif()
 
@@ -59,5 +59,5 @@ function(buildmaster_validate_toolchain out_normalized input)
 
 	set(${out_normalized} "${_t}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN DEBUG "Validated TOOLCHAIN=${_t}")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_validate_toolchain")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_validate")
 endfunction()

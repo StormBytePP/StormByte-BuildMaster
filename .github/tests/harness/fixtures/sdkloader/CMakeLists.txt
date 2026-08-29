@@ -1,5 +1,5 @@
-ensure_build_dir(LOADER_BUILD_DIR "sdkloader")
-create_cmake_component(
+_bm_path_builddir(LOADER_BUILD_DIR "sdkloader")
+_bm_comp_cmake_create(
 	sdkloader
 	"Harness SDK loader"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -8,4 +8,4 @@ create_cmake_component(
 	static
 	"loaderlib"
 )
-component_dependency(sdkloader sdk-headers)
+buildmaster_depend(sdkloader sdk-headers)

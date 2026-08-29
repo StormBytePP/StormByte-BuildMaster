@@ -5,10 +5,10 @@ set(BUILDMASTER_VERSION "2.0.1-9999")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
 # -----------------------------------------------------------------------------
-# 0. Log API (init_vars and helpers may call buildmaster_loglevel_init)
+# 0. Log API (init_vars and helpers may call _bm_log_level_init)
 # -----------------------------------------------------------------------------
 include(log.cmake)
-buildmaster_loglevel_init()
+_bm_log_level_init()
 
 # -----------------------------------------------------------------------------
 # 1. Core directory variables
@@ -25,9 +25,9 @@ include(init_vars.cmake)
 # Nested projects (e.g. Buffer → Logger → Base) load the *same* shared
 # BUILDMASTER_TOOLCHAIN_FILE as CMAKE_TOOLCHAIN_FILE. They then
 # add_subdirectory(buildmaster). If we ran the full bootstrap again we would:
-#   - buildmaster_toolchain_reset() clear the in-memory registry
+#   - _bm_tc_reset() clear the in-memory registry
 #   - re-export only the root update_toolchain lines
-#   - buildmaster_toolchain_write() overwrite the parent toolchain.cmake with an
+#   - _bm_tc_write() overwrite the parent toolchain.cmake with an
 #     incomplete file (missing TOOLS_CMAKE_SRCDIR, COMPONENT_SRCDIR, ENV_*, …)
 # That incomplete file is what later causes:
 #   File /configure.cmake.in does not exist
@@ -42,11 +42,11 @@ if(BUILDMASTER_CONFIGURED)
 	include("${BUILDMASTER_SRCDIR}/tools/helpers.cmake")
 	include(propagate_vars.cmake)
 	include(persist.cmake)
-	buildmaster_persist_bootstrap()
+	_bm_core_persist_bootstrap()
 	return()
 endif()
 
-buildmaster_message(CORE STATUS
+_bm_log_message(CORE STATUS
 	"Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")
 
 # -----------------------------------------------------------------------------
@@ -60,7 +60,7 @@ include(helpers.cmake)
 # Reset must run before any export*. Modules register lines into a global
 # property; a single write at the end materializes toolchain.cmake. Never call
 # reset/write from a nested bootstrap (guard above).
-buildmaster_toolchain_reset()
+_bm_tc_reset()
 include("${BUILDMASTER_SRCDIR}/update_toolchain.cmake")
 
 # -----------------------------------------------------------------------------
@@ -98,7 +98,7 @@ include(component/propagate_vars.cmake)
 # -----------------------------------------------------------------------------
 # Single write after every module has registered. This file is the sole source
 # of truth for nested projects (CONFIGURED=TRUE path above).
-buildmaster_toolchain_write("${BUILDMASTER_TOOLCHAIN_FILE}")
+_bm_tc_write("${BUILDMASTER_TOOLCHAIN_FILE}")
 
 # -----------------------------------------------------------------------------
 # 9. Final propagation to the parent scope
@@ -111,4 +111,4 @@ include(propagate_vars.cmake)
 # Hosts that add_subdirectory(thirdparty/buildmaster) only receive PARENT_SCOPE
 # one directory up (thirdparty). Finalize runs in the host root.
 include(persist.cmake)
-buildmaster_persist_bootstrap()
+_bm_core_persist_bootstrap()

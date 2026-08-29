@@ -5,8 +5,8 @@ if(NOT BM_TEST_REPO_ROOT)
 	)
 endif()
 
-ensure_build_dir(NEST_MESON_BUILD_DIR "nest-meson")
-create_cmake_component(
+_bm_path_builddir(NEST_MESON_BUILD_DIR "nest-meson")
+_bm_comp_cmake_create(
 	nest-meson
 	"Recursive meson nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"
@@ -15,8 +15,8 @@ create_cmake_component(
 	static
 	"recursive/meson/nestlib"
 )
-component_link(nest-meson "recursive/meson/midlib")
-component_link(nest-meson "recursive/meson/leaflib")
+buildmaster_link(nest-meson "recursive/meson/midlib")
+buildmaster_link(nest-meson "recursive/meson/leaflib")
 
 add_executable(recursion_meson_link_test
 	"${CMAKE_CURRENT_SOURCE_DIR}/recursion_meson_link_test.c"

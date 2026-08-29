@@ -19,8 +19,8 @@ add_subdirectory(
 )
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
-ensure_build_dir(_mid_cmake_build "mid-cmake")
-create_cmake_component(
+_bm_path_builddir(_mid_cmake_build "mid-cmake")
+_bm_comp_cmake_create(
 	mid-cmake
 	"Harness TOOLCHAIN mid-cmake"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-cmake"
@@ -31,8 +31,8 @@ create_cmake_component(
 	"TOOLCHAIN=${HARNESS_TOOLCHAIN}"
 )
 
-ensure_build_dir(_mid_meson_build "mid-meson")
-create_meson_component(
+_bm_path_builddir(_mid_meson_build "mid-meson")
+_bm_comp_meson_create(
 	mid-meson
 	"Harness TOOLCHAIN mid-meson"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-meson"
@@ -42,7 +42,7 @@ create_meson_component(
 	"toolchain/tcmidmeson;toolchain/tcleafmeson"
 	"TOOLCHAIN=${HARNESS_TOOLCHAIN}"
 )
-_buildmaster_finalize_components()
+_bm_graph_finalize()
 
 add_library(tclib STATIC tc_nest.c)
 target_include_directories(tclib PUBLIC

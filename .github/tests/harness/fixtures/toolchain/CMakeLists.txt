@@ -30,15 +30,15 @@ else()
 endif()
 
 if(NOT _bm_tc_other)
-	buildmaster_message(CORE FATAL
+	_bm_log_message(CORE FATAL
 		"Harness toolchain swap: unsupported compiler '${CMAKE_C_COMPILER_ID}' (${CMAKE_C_COMPILER})")
 endif()
 
-buildmaster_message(CORE STATUS
+_bm_log_message(CORE STATUS
 	"Harness toolchain swap: ${CMAKE_C_COMPILER_ID} → TOOLCHAIN=${_bm_tc_other}")
 
-ensure_build_dir(NEST_TC_BUILD_DIR "nest-tc")
-create_cmake_component(
+_bm_path_builddir(NEST_TC_BUILD_DIR "nest-tc")
+_bm_comp_cmake_create(
 	nest-tc
 	"Harness TOOLCHAIN nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"
@@ -47,5 +47,5 @@ create_cmake_component(
 	static
 	"toolchain/tclib"
 )
-component_link(nest-tc "toolchain/tcmidcmake")
-component_link(nest-tc "toolchain/tcmidmeson")
+buildmaster_link(nest-tc "toolchain/tcmidcmake")
+buildmaster_link(nest-tc "toolchain/tcmidmeson")

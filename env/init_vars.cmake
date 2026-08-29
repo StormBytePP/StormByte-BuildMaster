@@ -119,11 +119,11 @@ if(NOT BUILDMASTER_CONFIGURED)
 	# CMAKE_*_FLAGS here live in this directory; create_*_stages must
 	# call the same helper so nested configure.cmake.in is not empty.
 	include("${CMAKE_CURRENT_LIST_DIR}/prefix_search.cmake")
-	if(COMMAND buildmaster_apply_install_search_paths)
-		buildmaster_apply_install_search_paths()
+	if(COMMAND _bm_env_apply_install_search_paths)
+		_bm_env_apply_install_search_paths()
 	endif()
 
-	prepare_command(ENV_RUNNER "${ENV_RUNNER}")
+	_bm_env_prepare_command(ENV_RUNNER "${ENV_RUNNER}")
 
 	# Compile-only runner: silent by default; full output when BUILDMASTER_VERBOSE
 	if(BUILDMASTER_VERBOSE)
@@ -132,7 +132,7 @@ if(NOT BUILDMASTER_CONFIGURED)
 		set(ENV_RUNNER_COMPILE ${ENV_RUNNER_SILENT})
 	endif()
 
-	update_env_runner()
+	_bm_env_update_runner()
 
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

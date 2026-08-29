@@ -1,4 +1,4 @@
-# file_decompress then component_dependency on the unpack target.
+# buildmaster_decompress then buildmaster_depend on the unpack target.
 
 set(_pack_src "${CMAKE_CURRENT_BINARY_DIR}/pack_src")
 set(_archive "${CMAKE_CURRENT_BINARY_DIR}/payload.tar.gz")
@@ -14,17 +14,17 @@ execute_process(
 	RESULT_VARIABLE _tar_rc
 )
 if(NOT _tar_rc EQUAL 0)
-	buildmaster_message(CORE FATAL "file-to-component: tar failed")
+	_bm_log_message(CORE FATAL "file-to-component: tar failed")
 endif()
 
-file_decompress(payload_unpack
+buildmaster_decompress(payload_unpack
 	"${_archive}"
 	"${_extract}"
 	TITLE "Harness payload"
 )
 
-ensure_build_dir(PAYLOAD_LIB_BUILD "payload-lib")
-create_cmake_component(
+_bm_path_builddir(PAYLOAD_LIB_BUILD "payload-lib")
+_bm_comp_cmake_create(
 	payload-lib
 	"Harness file-to-component library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -33,4 +33,4 @@ create_cmake_component(
 	static
 	"payloadlib"
 )
-component_dependency(payload-lib payload_unpack)
+buildmaster_depend(payload-lib payload_unpack)

@@ -27,9 +27,9 @@ add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 # check_dependant_edges.cmake, and friends run during *this* configure, after
 # fixtures are declared but before this CMakeLists finishes. Without an
 # explicit materialize, those checks would see no targets or dependency edges.
-# _buildmaster_finalize_components is internal and idempotent; the deferred
+# _bm_graph_finalize is internal and idempotent; the deferred
 # callback later is a no-op.
-_buildmaster_finalize_components()
+_bm_graph_finalize()
 
 # ---------------------------------------------------------------------------
 # Contract checks

@@ -19,7 +19,7 @@ Logging is `buildmaster_message(<MODULE> <LEVEL> …)`. Configure
 | `component/helpers.cmake` | `options.cmake`, `graph.cmake`, `materialize.cmake` (+ `meta.cmake`, `repack.cmake`; backends `component/{cmake,meson}/`) |
 | `env/helpers.cmake` | `runner.cmake`, `command.cmake` |
 | `toolchain/helpers.cmake` | `validate.cmake`, `profile.cmake`, `flags.cmake`, `msvc.cmake`, `export.cmake` |
-| `tools/helpers.cmake` | `add_tool.cmake`, `extra_tools.cmake` |
+| `tools/helpers.cmake` | `_bm_tools_add.cmake`, `extra_tools.cmake` |
 | `tools/cmake/helpers.cmake` | `stages.cmake` |
 | `tools/meson/helpers.cmake` | `stages.cmake` |
 | `tools/file/helpers.cmake` | `checksum.cmake`, `download.cmake`, `decompress.cmake` |
@@ -33,7 +33,7 @@ Logging is `buildmaster_message(<MODULE> <LEVEL> …)`. Configure
 Declarative component API (order of declaration does not matter; materialize
 is deferred to the end of `CMAKE_SOURCE_DIR`):
 
-- `create_component()` — core factory
+- `_bm_comp_create()` — core factory
 - `create_cmake_component()` / `create_meson_component()`
 - `create_cmake_headers_component()` / `create_meson_headers_component()`
 - `component_dependency()`, `component_link()`, `component_prerequisite()`
@@ -49,12 +49,12 @@ or INTERFACE libraries.
 
 @subsection uf_tools_cmake tools/cmake/
 
-`create_cmake_stages()` — writes configure / build / install scripts into
+`_bm_cmake_stages()` — writes configure / build / install scripts into
 `${BUILDMASTER_SCRIPTS_CMAKEDIR}` from `tools/cmake/*.cmake.in`.
 
 @subsection uf_tools_meson tools/meson/
 
-`create_meson_stages()` — same pattern (`setup` / `compile` / `install`).
+`_bm_meson_stages()` — same pattern (`setup` / `compile` / `install`).
 Always pass a Meson native file when a toolchain profile is active so
 compiler caches stay valid.
 
@@ -83,36 +83,36 @@ to a git root.
 
 @subsection uf_env env/
 
-- `update_env_runner()` — regenerate the parent platform runner
-- `buildmaster_create_component_env_runners()` — per-component runners
+- `_bm_env_update_runner()` — regenerate the parent platform runner
+- `_bm_env__bm_comp_create_runners()` — per-component runners
   after a toolchain profile load
-- `prepare_command()` — tokenize for `execute_process(COMMAND …)`
-- `buildmaster_quote_cmd_list_for_script()` — quote tokens for generated `-P` scripts
+- `_bm_env_prepare_command()` — tokenize for `execute_process(COMMAND …)`
+- `_bm_env_quote_cmd_list()` — quote tokens for generated `-P` scripts
 
 @subsection uf_toolchain toolchain/
 
 - `buildmaster_validate_toolchain()` / `buildmaster_load_toolchain_profile()`
-- `buildmaster_clean_cflags()` / `buildmaster_clean_ldflags()`
-- `buildmaster_fuse_ld_flag()`
-- `buildmaster_resolve_msvc_tool()`
-- `buildmaster_toolchain_reset()` / `export()` / `export_raw()` / `write()` /
+- `_bm_tc_clean_cflags()` / `_bm_tc_clean_ldflags()`
+- `_bm_tc_fuse_ld_flag()`
+- `_bm_tc_resolve_msvc_tool()`
+- `_bm_tc_reset()` / `export()` / `export_raw()` / `write()` /
   `write_component()`
 
 Profiles: `gcc`, `clang`, `clang-cl`, `msvc` under `toolchain/profiles/`.
 
 @subsection uf_tools_core tools/
 
-Tool registration: `add_tool`, `configure_extra_tool`,
-`ensure_extra_tool_is_available`, extra-plugin propagation (e.g. pkgconf).
+Tool registration: `_bm_tools_add`, `_bm_tools_configure_extra`,
+`_bm_tools_ensure_extra`, extra-plugin propagation (e.g. pkgconf).
 
 @subsection uf_global helpers.cmake
 
 Shared utilities (loaded first):
 
-- `windows_path()`, `normalize_cmake_path()`, `sanitize_for_filename()`,
+- `_bm_path_windows()`, `_bm_path_normalize()`, `sanitize_for_filename()`,
   `ensure_build_dir()`
 - `library_import_hint()`, `library_import_static_hint()`
-- `toggle_bool()`, `list_join()`
+- `_bm_list_toggle_bool()`, `_bm_list_join()`
 - Then includes toolchain, env, cmake/file/git/meson/archive, component
 
 @section uf_log Logging

@@ -1,8 +1,8 @@
 # =============================================================================
 # component/materialize.cmake — fragment emit, links, deferred finalize
 # =============================================================================
-# Backends call _buildmaster_component_collect_outputs / write_fragment.
-# Finalize is scheduled by _buildmaster_component_defer_arm (graph.cmake).
+# Backends call _bm_comp_collect_outputs / write_fragment.
+# Finalize is scheduled by _bm_graph_defer_arm (graph.cmake).
 
 ## @brief Fill produced names/files/dlls and install/build contract outputs.
 ## @param[in] _component Registered component id.
@@ -12,7 +12,7 @@
 ##       `_toolchain`.
 ## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
-## @note Extra `component_link` dests that are library specs (`<name>` or
+## @note Extra `buildmaster_link` dests that are library specs (`<name>` or
 ##       `<subdir>/<name>`, not a component, meta, CMake target, or existing
 ##       file) are appended to the produced name/file lists so the fragment
 ##       can create IMPORTED targets. They are *not* added to stage `OUTPUT`:
@@ -23,17 +23,17 @@
 ##       rule”; Unix Makefiles often hide it via target-level dependencies.
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
-## @note `_BM_PC_*` comes from `_buildmaster_component_fill_pc_vars` (tools/pkgconfig).
+## @note `_BM_PC_*` comes from `_bm_pc_fill_vars` (tools/pkgconfig).
 ##       ENABLED is `1` only when `PC={…}` is on and not BUILDONLY (already FATAL
-##       at create_component).
-function(_buildmaster_component_collect_outputs _component)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_collect_outputs")
+##       at _bm_comp_create).
+function(_bm_comp_collect_outputs _component)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 
-	buildmaster_parse_component_options(
+	_bm_opt_parse(
 		_indent_level _toolchain _rename_on _buildonly _whole_ignored _stripres_on
 		"${_options_string}")
 
@@ -59,7 +59,7 @@ function(_buildmaster_component_collect_outputs _component)
 		set(_BM_STRIPRES_ENABLED "0")
 	endif()
 
-	_buildmaster_component_fill_pc_vars("${_component}")
+	_bm_pc_fill_vars("${_component}")
 
 	set(_LIBRARY_COMPONENT_NAMES "")
 	set(_LIBRARY_COMPONENT_FILES "")
@@ -80,7 +80,7 @@ function(_buildmaster_component_collect_outputs _component)
 			if(_spec STREQUAL "")
 				continue()
 			endif()
-			buildmaster_append_library_spec(
+			_bm_opt_append_spec(
 				"${_library_mode}" "${_spec}" "${_base_libdir}"
 				_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
 				_LIBRARY_COMPONENT_DLL_FILES)
@@ -97,8 +97,8 @@ function(_buildmaster_component_collect_outputs _component)
 					if(NOT _lsrc STREQUAL "${_component}")
 						continue()
 					endif()
-					_buildmaster_component_is_registered("${_ldst}" _ldst_comp)
-					_buildmaster_meta_is("${_ldst}" _ldst_meta)
+					_bm_comp_is_registered("${_ldst}" _ldst_comp)
+					_bm_meta_is("${_ldst}" _ldst_meta)
 					if(_ldst_comp OR _ldst_meta)
 						continue()
 					endif()
@@ -108,7 +108,7 @@ function(_buildmaster_component_collect_outputs _component)
 					if(EXISTS "${_ldst}" AND NOT IS_DIRECTORY "${_ldst}")
 						continue()
 					endif()
-					buildmaster_append_library_spec(
+					_bm_opt_append_spec(
 						"${_library_mode}" "${_ldst}" "${_base_libdir}"
 						_LIBRARY_COMPONENT_NAMES _LIBRARY_COMPONENT_FILES
 						_LIBRARY_COMPONENT_DLL_FILES)
@@ -139,7 +139,7 @@ function(_buildmaster_component_collect_outputs _component)
 	set(_BM_PC_OUT "${_BM_PC_OUT}" PARENT_SCOPE)
 	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_collect_outputs")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_collect_outputs")
 endfunction()
 
 ## @brief configure_file + include the shared component fragment template.
@@ -158,7 +158,7 @@ endfunction()
 ## @note `_BM_LINKFLAGS_ITEMS` is the CMake list stored on
 ##       `BUILDMASTER_COMPONENT_<id>_LINKFLAGS` (empty string if unset).
 ##       The template applies it INTERFACE via `target_link_options`.
-## @note Library-spec `component_link` dests are folded into FILES by
+## @note Library-spec `buildmaster_link` dests are folded into FILES by
 ##       `collect_outputs`. Stage `OUTPUT` is frozen at create_* (declared
 ##       produced specs only). After `include()`, each extra file that is
 ##       not in that declared list gets:
@@ -170,14 +170,14 @@ endfunction()
 ##       location. Do not drop this because Make passed locally.
 ## @note STRIPRES / WHOLE ignored on a non-static mode are INFO. STRIPRES
 ##       INFO only when the user wrote the key (default is ON).
-function(_buildmaster_component_write_fragment _component _deferred)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_component_write_fragment")
-	_buildmaster_component_collect_outputs("${_component}")
+function(_bm_comp_write_fragment _component _deferred)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_write_fragment")
+	_bm_comp_collect_outputs("${_component}")
 
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
-	buildmaster_parse_component_options(_il _toolchain _rn _bo _wh _sr "${_options_string}")
+	_bm_opt_parse(_il _toolchain _rn _bo _wh _sr "${_options_string}")
 	if(_bo)
 		set(_BM_BUILDONLY "1")
 	else()
@@ -200,7 +200,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	set(_LIBRARY_CONFIGURE_TARGET "${_component}_configure")
 	set(_LIBRARY_BUILD_TARGET "${_component}_build")
 
-	_buildmaster_component_dep_targets("${_component}" _LIBRARY_DEPENDENCIES)
+	_bm_graph_dep_targets("${_component}" _LIBRARY_DEPENDENCIES)
 
 	if(NOT _toolchain STREQUAL "")
 		set(_LIBRARY_TOOLCHAIN_SUFFIX " (with toolchain ${_toolchain})")
@@ -217,7 +217,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 				"WHOLE ignored for '${_component}' (mode '${_library_mode}'; only static is supported)")
 		elseif(_LIBRARY_COMPONENT_FILES)
 			set(_BM_WHOLE "1")
-			_buildmaster_whole_archive_link_items(_whole_list
+			_bm_opt_whole_items(_whole_list
 				${_LIBRARY_COMPONENT_FILES})
 			string(REPLACE ";" " " _BM_WHOLE_LINK_ITEMS "${_whole_list}")
 		endif()
@@ -259,7 +259,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 		endif()
 	endif()
 
-	sanitize_for_filename(_safe "${_component}")
+	_bm_path_sanitize(_safe "${_component}")
 	set(_LIBRARY_CREATE_FILE
 		"${BUILDMASTER_SCRIPTS_COMPONENTDIR}/component_${_safe}.cmake")
 
@@ -283,7 +283,7 @@ function(_buildmaster_component_write_fragment _component _deferred)
 			set(_pn "")
 			set(_pf "")
 			set(_pd "")
-			buildmaster_append_library_spec(
+			_bm_opt_append_spec(
 				"${_library_mode}" "${_spec}" "${_base_libdir}" _pn _pf _pd)
 			list(APPEND _declared ${_pf} ${_pd})
 		endforeach()
@@ -312,10 +312,10 @@ function(_buildmaster_component_write_fragment _component _deferred)
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES
 		"${_LIBRARY_COMPONENT_FILES}")
 	_bm_log_message(COMPONENT DEBUG "Wrote fragment ${_LIBRARY_CREATE_FILE} (${_tpl})")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_component_write_fragment")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_write_fragment")
 endfunction()
 
-## @brief Apply recorded component_link edges after all fragments are included.
+## @brief Apply recorded buildmaster_link edges after all fragments are included.
 ## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
 ## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
 ##       IMPORTED names), existing CMake target, an existing archive file,
@@ -326,12 +326,12 @@ endfunction()
 ##       (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}` on the producer,
 ##       not here.
 ## @note FATAL if source is not a target or dest is BUILDONLY.
-function(_buildmaster_apply_links)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_apply_links")
+function(_bm_comp_apply_links)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_links")
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 	get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 	if(NOT _lsrcs)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_apply_links")
 		return()
 	endif()
 	set(_i 0)
@@ -341,10 +341,10 @@ function(_buildmaster_apply_links)
 
 		if(NOT TARGET "${_src}")
 			_bm_log_message(COMPONENT FATAL
-				"component_link: source '${_src}' is not a target (missing create_*_component?)")
+				"buildmaster_link: source '${_src}' is not a target (missing create_*_component?)")
 		endif()
 
-		_buildmaster_meta_is("${_dst}" _dst_meta)
+		_bm_meta_is("${_dst}" _dst_meta)
 		if(_dst_meta)
 			if(TARGET "${_dst}")
 				target_link_libraries(${_src} INTERFACE ${_dst})
@@ -352,12 +352,12 @@ function(_buildmaster_apply_links)
 			continue()
 		endif()
 
-		_buildmaster_component_is_registered("${_dst}" _dst_comp)
+		_bm_comp_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
-			_buildmaster_component_is_buildonly("${_dst}" _dst_bo)
+			_bm_comp_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo)
 				_bm_log_message(COMPONENT FATAL
-					"component_link: cannot link to BUILDONLY component '${_dst}' (order only via component_dependency between BUILDONLY phases, or component_repack to publish)")
+					"buildmaster_link: cannot link to BUILDONLY component '${_dst}' (order only via buildmaster_depend between BUILDONLY phases, or buildmaster_repack to publish)")
 			endif()
 			# WHOLE dest: INTERFACE already carries whole-archive items; do not
 			# also link plain IMPORTED names (would drop whole or double-link).
@@ -406,30 +406,30 @@ function(_buildmaster_apply_links)
 			set(_spec_names "")
 			set(_spec_files "")
 			set(_spec_dlls "")
-			buildmaster_append_library_spec(
+			_bm_opt_append_spec(
 				"${_src_mode}" "${_dst}" "${BUILDMASTER_INSTALL_LIBDIR}"
 				_spec_names _spec_files _spec_dlls)
 			if(_spec_files)
 				target_link_libraries(${_src} INTERFACE ${_spec_files})
 				_bm_log_message(COMPONENT DEBUG
-					"component_link '${_src}' → spec '${_dst}' → ${_spec_files}")
+					"buildmaster_link '${_src}' → spec '${_dst}' → ${_spec_files}")
 				continue()
 			endif()
 		endif()
 
 		_bm_log_message(COMPONENT FATAL
-			"component_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, on-disk archive, or library spec (<name> or <subdir>/<name>). Raw system libraries belong in LINK= / LINK={…}.")
+			"buildmaster_link('${_src}', '${_dst}'): dest is not a BM component, meta, existing CMake target, on-disk archive, or library spec (<name> or <subdir>/<name>). Raw system libraries belong in LINK= / LINK={…}.")
 	endforeach()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_apply_links")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_apply_links")
 endfunction()
 
 ## @brief Deferred materialize: metas, toolchain inherit, components, repacks,
 ##        links, orphan warn, hooks.
-## @note Idempotent. Scheduled by `_buildmaster_component_defer_arm`; not public.
+## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
 ## @note Concrete and create_meta INTERFACE stubs already exist. This pass
 ##       emits stages, fragments, repack targets, meta stage anchors, member
-##       wiring and recorded `component_link` edges.
+##       wiring and recorded `buildmaster_link` edges.
 ## @note Order: flush queued git reset/patch → materialize metas →
 ##       propagate meta TOOLCHAIN → per-id cmake/meson materialize
 ##       (each id’s hooks after its fragment) → repacks → meta wire →
@@ -437,30 +437,30 @@ endfunction()
 ##       registered for an id that never materialized → graph hooks
 ##       (alias order).
 ## @note Git flush is first so eager nested configure sees patched sources.
-function(_buildmaster_finalize_components)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_finalize_components")
+function(_bm_graph_finalize)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_finalize")
 		return()
 	endif()
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED TRUE)
 
-	if(COMMAND _buildmaster_git_flush_all)
-		_buildmaster_git_flush_all()
+	if(COMMAND _bm_git_flush_all)
+		_bm_git_flush_all()
 	endif()
 
-	_buildmaster_materialize_metas()
-	_buildmaster_propagate_meta_toolchains()
+	_bm_meta_materialize()
+	_bm_tc_propagate_metas()
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
 		foreach(_id IN LISTS _ids)
 			get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
 			if(_sys STREQUAL "cmake")
-				_buildmaster_materialize_cmake("${_id}")
+				_bm_comp_cmake_materialize("${_id}")
 			elseif(_sys STREQUAL "meson")
-				_buildmaster_materialize_meson("${_id}")
+				_bm_comp_meson_materialize("${_id}")
 			else()
 				_bm_log_message(COMPONENT FATAL
 					"finalize: unknown system '${_sys}' for '${_id}'")
@@ -468,10 +468,10 @@ function(_buildmaster_finalize_components)
 		endforeach()
 	endif()
 
-	_buildmaster_materialize_repacks()
-	_buildmaster_meta_wire()
-	_buildmaster_apply_links()
-	_buildmaster_warn_orphans()
+	_bm_repack_materialize()
+	_bm_meta_wire()
+	_bm_comp_apply_links()
+	_bm_meta_warn_orphans()
 
 	get_property(_hook_ids GLOBAL PROPERTY BUILDMASTER_ON_MATERIALIZE_IDS)
 	if(_hook_ids)
@@ -481,13 +481,13 @@ function(_buildmaster_finalize_components)
 				BUILDMASTER_ON_MATERIALIZE_${_hid}_DONE)
 			if(NOT _hook_done)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_on_component_materialize('${_hid}'): component was never materialized")
+					"buildmaster_hook_component('${_hid}'): component was never materialized")
 			endif()
 		endforeach()
 	endif()
 
-	_buildmaster_hook_run_sorted("BUILDMASTER_ON_GRAPH_FINALIZED")
+	_bm_hook_run_sorted("BUILDMASTER_ON_GRAPH_FINALIZED")
 
 	_bm_log_message(COMPONENT DEBUG "Component graph finalized")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_finalize_components")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_finalize")
 endfunction()

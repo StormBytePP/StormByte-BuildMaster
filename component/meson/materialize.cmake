@@ -4,18 +4,18 @@
 
 ## @brief Emit Meson stages and include the component fragment (internal).
 ## @param[in] _component Registered component identifier.
-## @note Called only from `_buildmaster_finalize_components`. Uses
-##       `create_meson_stages` (not part of the public API) and shared
+## @note Called only from `_bm_graph_finalize`. Uses
+##       `_bm_tools_meson_stages` (not part of the public API) and shared
 ##       collect/write helpers from `component/materialize.cmake`.
 ## @note Eager components print `Configuring …` from the generated
 ##       setup script (parent include). Deferred components
-##       (`component_dependency` sources) print
+##       (`buildmaster_depend` sources) print
 ##       `Setting up <title> for build-time configure` here so parent
 ##       configure is not silent about them; the real Meson setup
 ##       still runs under `<id>_configure` at build time.
 ## @note Per-id hooks run after the fragment include (alias order).
-function(_buildmaster_materialize_meson _component)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_materialize_meson")
+function(_bm_comp_meson_materialize _component)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_meson_materialize")
 	get_property(_component_title GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_TITLE)
 	get_property(_srcdir GLOBAL PROPERTY
@@ -27,8 +27,8 @@ function(_buildmaster_materialize_meson _component)
 	get_property(_library_mode GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_MODE)
 
-	_buildmaster_component_collect_outputs("${_component}")
-	_buildmaster_component_has_deferred_configure("${_component}" _deferred)
+	_bm_comp_collect_outputs("${_component}")
+	_bm_comp_has_deferred_configure("${_component}" _deferred)
 	if(_deferred)
 		set(_via_target "1")
 		set(_tc_suffix "")
@@ -42,7 +42,7 @@ function(_buildmaster_materialize_meson _component)
 		set(_via_target "0")
 	endif()
 
-	create_meson_stages(
+	_bm_tools_meson_stages(
 		_LIBRARY_CONFIGURE_FILE
 		_LIBRARY_BUILD_FILE
 		_LIBRARY_INSTALL_FILE
@@ -58,8 +58,8 @@ function(_buildmaster_materialize_meson _component)
 		"${_via_target}"
 	)
 
-	_buildmaster_component_write_fragment("${_component}" "${_deferred}")
-	_buildmaster_run_component_materialize_hooks("${_component}")
+	_bm_comp_write_fragment("${_component}" "${_deferred}")
+	_bm_hook_run_component("${_component}")
 	_bm_log_message(COMPONENT DEBUG "Materialized meson component ${_component} deferred=${_deferred}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_materialize_meson")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_meson_materialize")
 endfunction()

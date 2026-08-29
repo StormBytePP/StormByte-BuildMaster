@@ -1,11 +1,11 @@
 # Intentionally reverse declaration order:
 # dependency edge and dependent component before the prerequisite.
 
-component_dependency(second first)
-component_link(second first)
+buildmaster_depend(second first)
+buildmaster_link(second first)
 
-ensure_build_dir(SECOND_BUILD_DIR "second")
-create_cmake_component(
+_bm_path_builddir(SECOND_BUILD_DIR "second")
+_bm_comp_cmake_create(
 	second
 	"Order-independent dependent"
 	"${CMAKE_CURRENT_SOURCE_DIR}/second"
@@ -15,8 +15,8 @@ create_cmake_component(
 	"secondlib"
 )
 
-ensure_build_dir(FIRST_BUILD_DIR "first")
-create_cmake_component(
+_bm_path_builddir(FIRST_BUILD_DIR "first")
+_bm_comp_cmake_create(
 	first
 	"Order-independent prerequisite"
 	"${CMAKE_CURRENT_SOURCE_DIR}/first"

@@ -1,5 +1,5 @@
-ensure_build_dir(_slow_build "slow-configure")
-create_cmake_component(
+_bm_path_builddir(_slow_build "slow-configure")
+_bm_comp_cmake_create(
 	slow-configure
 	"Harness slow configure"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
@@ -9,4 +9,4 @@ create_cmake_component(
 	"slowlib"
 )
 # Force build-time configure so Ninja prints the status line.
-component_dependency(slow-configure base)
+buildmaster_depend(slow-configure base)

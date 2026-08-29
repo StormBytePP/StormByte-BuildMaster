@@ -5,62 +5,62 @@
 ## @brief Clear the in-memory toolchain export registry.
 ## @note Empties the GLOBAL property `BUILDMASTER_TOOLCHAIN_LINES`.
 ## @note Call once at the start of a **primary** BuildMaster bootstrap, before
-##       any `buildmaster_toolchain_export` / `export_raw`. Nested bootstraps
+##       any `_bm_tc_export` / `export_raw`. Nested bootstraps
 ##       with `BUILDMASTER_CONFIGURED` must **not** call this (they would wipe
 ##       the parent dump). Safe to call more than once in the primary path.
-function(buildmaster_toolchain_reset)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_reset")
+function(_bm_tc_reset)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_reset")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_reset")
 endfunction()
 
 ## @brief Register a simple string assignment for the toolchain file dump.
 ## @param[in] name  CMake variable name (unquoted identifier).
 ## @param[in] value Value written as `set(name "value")`. Backslashes should
-##            already be normalized (prefer `normalize_cmake_path` for paths).
+##            already be normalized (prefer `_bm_path_normalize` for paths).
 ## @note Appends one line to the global `BUILDMASTER_TOOLCHAIN_LINES` property.
-##       Does not write the toolchain file; call `buildmaster_toolchain_write`.
+##       Does not write the toolchain file; call `_bm_tc_write`.
 ## @note Empty `name` is fatal.
-function(buildmaster_toolchain_export name value)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export")
+function(_bm_tc_export name value)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export")
 	if("${name}" STREQUAL "")
-		_bm_log_message(TOOLCHAIN FATAL "buildmaster_toolchain_export: empty name")
+		_bm_log_message(TOOLCHAIN FATAL "_bm_tc_export: empty name")
 	endif()
 	string(REPLACE "\\" "/" _bm_tc_val "${value}")
 	string(REPLACE "\"" "\\\"" _bm_tc_val "${_bm_tc_val}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES
 		"set(${name} \"${_bm_tc_val}\")")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export")
 endfunction()
 
 ## @brief Register a pre-formatted CMake line for the toolchain file dump.
 ## @param[in] line Full line without trailing newline (e.g. a `CACHE FORCE`
 ##            assignment, or `set(ENV_RUNNER ${ENV_RUNNER})` for list expansion).
-## @note Use when quoting rules differ from `buildmaster_toolchain_export`.
+## @note Use when quoting rules differ from `_bm_tc_export`.
 ##       Empty lines are ignored. Does not write the file until
-##       `buildmaster_toolchain_write` is called.
-function(buildmaster_toolchain_export_raw line)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_export_raw")
+##       `_bm_tc_write` is called.
+function(_bm_tc_export_raw line)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export_raw")
 	if("${line}" STREQUAL "")
-		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
+		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export_raw")
 		return()
 	endif()
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_TOOLCHAIN_LINES "${line}")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_export_raw")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export_raw")
 endfunction()
 
 ## @brief Write all registered toolchain lines to a file.
 ## @param[in] path Absolute or CMake-style path of the output `.cmake` file.
 ## @note Overwrites @p path. Creates parent directories if needed. Order of
 ##       lines matches registration order. Component TOOLCHAIN overlays should
-##       call `buildmaster_toolchain_write_component` instead.
+##       call `_bm_tc_write_component` instead.
 ## @note Empty `path` is fatal.
-function(buildmaster_toolchain_write path)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write")
+function(_bm_tc_write path)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write")
 	if("${path}" STREQUAL "")
-		_bm_log_message(TOOLCHAIN FATAL "buildmaster_toolchain_write: empty path")
+		_bm_log_message(TOOLCHAIN FATAL "_bm_tc_write: empty path")
 	endif()
-	normalize_cmake_path(_bm_tc_out "${path}")
+	_bm_path_normalize(_bm_tc_out "${path}")
 	get_filename_component(_bm_tc_dir "${_bm_tc_out}" DIRECTORY)
 	if(NOT _bm_tc_dir STREQUAL "")
 		file(MAKE_DIRECTORY "${_bm_tc_dir}")
@@ -74,7 +74,7 @@ function(buildmaster_toolchain_write path)
 	endforeach()
 	file(WRITE "${_bm_tc_out}" "${_bm_tc_body}")
 	_bm_log_message(TOOLCHAIN DEBUG "Wrote toolchain dump ${_bm_tc_out}")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_write")
 endfunction()
 
 ## @brief Write a component toolchain file: parent registry snapshot + profile overlay.
@@ -82,20 +82,20 @@ endfunction()
 ## @param[in] toolchain_name Profile name (for comments only; tools come from
 ##            `BM_TC_*` already loaded in the caller).
 ## @note Implemented as a **macro** so `BM_TC_*` from
-##       `buildmaster_load_toolchain_profile` are visible.
+##       `_bm_tc_load_profile` are visible.
 ## @note The generated file is the active toolchain while that component (and
 ##       any nested `create_*` stages generated under it) runs. After the
 ##       registry snapshot, appends `CACHE FORCE` lines for the loaded profile
 ##       and sets `BUILDMASTER_TOOLCHAIN_FILE` to this file's path so children
 ##       without an explicit `TOOLCHAIN` argument keep propagating the same
 ##       modified toolchain downward instead of falling back to the parent dump.
-## @note If `buildmaster_get_meson_native_file` exists, also records
+## @note If `_bm_tc_get_meson_native_file` exists, also records
 ##       `BUILDMASTER_MESON_NATIVE_FILE` for nested Meson under this component.
-macro(buildmaster_toolchain_write_component path toolchain_name)
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering buildmaster_toolchain_write_component")
-	buildmaster_toolchain_write("${path}")
+macro(_bm_tc_write_component path toolchain_name)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_component")
+	_bm_tc_write("${path}")
 
-	normalize_cmake_path(_bm_tc_self "${path}")
+	_bm_path_normalize(_bm_tc_self "${path}")
 
 	set(_bm_tc_overlay "")
 	string(APPEND _bm_tc_overlay
@@ -106,24 +106,24 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 	)
 
 	if(DEFINED BM_TC_C_COMPILER AND NOT BM_TC_C_COMPILER STREQUAL "")
-		normalize_cmake_path(_bm_tc_c "${BM_TC_C_COMPILER}")
+		_bm_path_normalize(_bm_tc_c "${BM_TC_C_COMPILER}")
 		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER \"${_bm_tc_c}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_CXX_COMPILER AND NOT BM_TC_CXX_COMPILER STREQUAL "")
-		normalize_cmake_path(_bm_tc_cxx "${BM_TC_CXX_COMPILER}")
+		_bm_path_normalize(_bm_tc_cxx "${BM_TC_CXX_COMPILER}")
 		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER \"${_bm_tc_cxx}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_LINKER_TYPE AND NOT BM_TC_LINKER_TYPE STREQUAL "")
 		string(APPEND _bm_tc_overlay "set(CMAKE_LINKER_TYPE \"${BM_TC_LINKER_TYPE}\" CACHE STRING \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "")
-		normalize_cmake_path(_bm_tc_link "${BM_TC_LINKER}")
+		_bm_path_normalize(_bm_tc_link "${BM_TC_LINKER}")
 		string(APPEND _bm_tc_overlay "set(CMAKE_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
 		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
 		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER_LINKER \"${_bm_tc_link}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "")
-		normalize_cmake_path(_bm_tc_ar "${BM_TC_AR}")
+		_bm_path_normalize(_bm_tc_ar "${BM_TC_AR}")
 		string(APPEND _bm_tc_overlay "set(CMAKE_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
 		string(APPEND _bm_tc_overlay "set(CMAKE_C_COMPILER_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
 		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
@@ -136,10 +136,10 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 	endif()
 
 	# Nested Meson under this component should use the profile native file
-	if(COMMAND buildmaster_get_meson_native_file)
-		buildmaster_get_meson_native_file(_bm_tc_nf TOOLCHAIN "${toolchain_name}")
+	if(COMMAND _bm_tc_get_meson_native_file)
+		_bm_tc_get_meson_native_file(_bm_tc_nf TOOLCHAIN "${toolchain_name}")
 		if(NOT _bm_tc_nf STREQUAL "")
-			normalize_cmake_path(_bm_tc_nf "${_bm_tc_nf}")
+			_bm_path_normalize(_bm_tc_nf "${_bm_tc_nf}")
 			string(APPEND _bm_tc_overlay
 				"set(BUILDMASTER_MESON_NATIVE_FILE \"${_bm_tc_nf}\")\n")
 		endif()
@@ -149,5 +149,5 @@ macro(buildmaster_toolchain_write_component path toolchain_name)
 	unset(_bm_tc_overlay)
 	unset(_bm_tc_self)
 	_bm_log_message(TOOLCHAIN DEBUG "Wrote component toolchain overlay ${path}")
-	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting buildmaster_toolchain_write_component")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_write_component")
 endmacro()

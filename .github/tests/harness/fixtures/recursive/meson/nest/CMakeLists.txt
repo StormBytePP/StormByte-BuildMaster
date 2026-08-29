@@ -13,8 +13,8 @@ add_subdirectory(
 )
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
-ensure_build_dir(_mid_build "mmid")
-create_cmake_component(
+_bm_path_builddir(_mid_build "mmid")
+_bm_comp_cmake_create(
 	mmid
 	"Recursive meson mid"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid"
@@ -23,7 +23,7 @@ create_cmake_component(
 	static
 	"recursive/meson/midlib"
 )
-_buildmaster_finalize_components()
+_bm_graph_finalize()
 
 add_library(nestlib STATIC nest.c)
 target_include_directories(nestlib PUBLIC

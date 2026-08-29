@@ -5,7 +5,7 @@ else()
     set(_RAW "LINK={m}")
 endif()
 
-create_cmake_component(
+_bm_comp_cmake_create(
     raw-lib
     "Harness raw LINK"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib"

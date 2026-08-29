@@ -17,8 +17,8 @@ add_subdirectory(
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../expect_family.cmake")
 
-ensure_build_dir(_leaf_build "leaf-cmake")
-create_cmake_component(
+_bm_path_builddir(_leaf_build "leaf-cmake")
+_bm_comp_cmake_create(
 	leaf-cmake
 	"Harness TOOLCHAIN leaf-cmake"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf-cmake"
@@ -27,7 +27,7 @@ create_cmake_component(
 	static
 	"toolchain/tcleafcmake"
 )
-_buildmaster_finalize_components()
+_bm_graph_finalize()
 
 add_library(tcmidcmake STATIC tc_mid_cmake.c)
 target_include_directories(tcmidcmake PUBLIC

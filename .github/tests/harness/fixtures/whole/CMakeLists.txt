@@ -10,7 +10,7 @@ set(_o_src "${CMAKE_CURRENT_SOURCE_DIR}/out")
 set(_o_build "${CMAKE_CURRENT_BINARY_DIR}/out_build")
 file(MAKE_DIRECTORY "${_w_build}" "${_p_build}" "${_o_build}")
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	whole-lib
 	"Harness WHOLE static library"
 	"${_w_src}"
@@ -21,7 +21,7 @@ create_cmake_component(
 	"WHOLE"
 )
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	plain-lib
 	"Harness plain static library (no WHOLE)"
 	"${_w_src}"
@@ -31,7 +31,7 @@ create_cmake_component(
 	"wlibplain"
 )
 
-create_cmake_component(
+_bm_comp_cmake_create(
 	out-lib
 	"Harness WHOLE outside library"
 	"${_o_src}"

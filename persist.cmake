@@ -9,8 +9,8 @@
 ##       templates substitute `@NPROC@` (`--jobs` / `--parallel`) at DEFER.
 ##       Without a cache entry the value is empty and Meson errors with
 ##       `argument -j/--jobs: expected one argument`.
-function(buildmaster_persist_bootstrap)
-	_bm_log_message(CORE LOWLEVEL "Entering buildmaster_persist_bootstrap")
+function(_bm_core_persist_bootstrap)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_core_persist_bootstrap")
 	get_cmake_property(_bm_vars VARIABLES)
 	foreach(_bm_v IN LISTS _bm_vars)
 		if(_bm_v MATCHES "^BUILDMASTER_" OR _bm_v MATCHES "^ENV_")
@@ -22,5 +22,5 @@ function(buildmaster_persist_bootstrap)
 		set(NPROC "${NPROC}" CACHE INTERNAL
 			"BuildMaster persisted job count")
 	endif()
-	_bm_log_message(CORE LOWLEVEL "Exiting buildmaster_persist_bootstrap")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_core_persist_bootstrap")
 endfunction()

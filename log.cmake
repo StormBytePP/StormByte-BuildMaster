@@ -4,7 +4,7 @@
 ## @note Directory-scope `set()` is invisible in the parent CMAKE_SOURCE_DIR
 ##       where cmake_language(DEFER) runs after add_subdirectory(buildmaster).
 ##       This function is idempotent and is the single source of the tables.
-function(_buildmaster_log_ensure_registry)
+function(_bm_log_ensure_registry)
 	get_property(_have GLOBAL PROPERTY BUILDMASTER_LOG_MODULES SET)
 	if(_have)
 		get_property(_mods GLOBAL PROPERTY BUILDMASTER_LOG_MODULES)
@@ -66,14 +66,14 @@ function(_buildmaster_log_ensure_registry)
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_PAD_MODULE "${_pad_mod}")
 endfunction()
 
-_buildmaster_log_ensure_registry()
+_bm_log_ensure_registry()
 
 ## @brief Pad or truncate `_text` to `_width` (spaces on the right).
 ## @param[out] _out   Parent-scope padded string.
 ## @param[in]  _text  Source text.
 ## @param[in]  _width Target width in characters.
 ## @note Used so [LEVEL] and [BuildMaster/Module] columns stay aligned.
-function(_buildmaster_log_pad _out _text _width)
+function(_bm_log_pad _out _text _width)
 	set(_t "${_text}")
 	string(LENGTH "${_t}" _n)
 	if(_n GREATER _width)
@@ -94,8 +94,8 @@ endfunction()
 ##       is FATAL and lists the accepted names. Used both for
 ##       BUILDMASTER_LOGLEVEL and for the level argument of
 ##       buildmaster_message().
-function(_buildmaster_log_parse_level _out _raw)
-	_buildmaster_log_ensure_registry()
+function(_bm_log_parse_level _out _raw)
+	_bm_log_ensure_registry()
 	set(_v "${_raw}")
 	string(TOUPPER "${_v}" _v)
 	string(STRIP "${_v}" _v)
@@ -128,7 +128,7 @@ endfunction()
 ## @note BUILDMASTER_DEBUG (cache and env) is ignored; it is not a log level.
 ## @note Must run in -P scripts after include(log.cmake) so generated stages
 ##       see the same filter as parent configure. Writes PARENT_SCOPE only.
-function(buildmaster_loglevel_init)
+function(_bm_log_level_init)
 	set(_raw "")
 	if(DEFINED BUILDMASTER_LOGLEVEL AND NOT "${BUILDMASTER_LOGLEVEL}" STREQUAL "")
 		set(_raw "${BUILDMASTER_LOGLEVEL}")
@@ -138,7 +138,7 @@ function(buildmaster_loglevel_init)
 	if(_raw STREQUAL "")
 		set(_raw "STATUS")
 	endif()
-	_buildmaster_log_parse_level(_canon "${_raw}")
+	_bm_log_parse_level(_canon "${_raw}")
 	set(BUILDMASTER_LOGLEVEL "${_canon}" PARENT_SCOPE)
 endfunction()
 
@@ -148,8 +148,8 @@ endfunction()
 ## @param[in]  _text   Comment body.
 ## @note Matches the STATUS layout of buildmaster_message() so configure
 ##       lines and ninja progress share one column. Unknown modules FATAL.
-function(buildmaster_log_comment _out _module _text)
-	_buildmaster_log_ensure_registry()
+function(_bm_log_comment _out _module _text)
+	_bm_log_ensure_registry()
 	string(TOUPPER "${_module}" _mod)
 	get_property(_mods GLOBAL PROPERTY BUILDMASTER_LOG_MODULES)
 	list(FIND _mods "${_mod}" _midx)
@@ -160,7 +160,7 @@ function(buildmaster_log_comment _out _module _text)
 	endif()
 	get_property(_lab GLOBAL PROPERTY BUILDMASTER_LOG_MOD_${_mod})
 	get_property(_pad GLOBAL PROPERTY BUILDMASTER_LOG_PAD_MODULE)
-	_buildmaster_log_pad(_modp "${_lab}" ${_pad})
+	_bm_log_pad(_modp "${_lab}" ${_pad})
 	set(${_out} "[BuildMaster/${_modp}]: ${_text}" PARENT_SCOPE)
 endfunction()
 
@@ -171,7 +171,7 @@ endfunction()
 ## @param[in] _indent Optional tab count after the header (default 0).
 ## @note Not public. Parent projects call `buildmaster_message`.
 function(_bm_log_message _module _level _message)
-	_buildmaster_log_ensure_registry()
+	_bm_log_ensure_registry()
 	if(ARGC LESS 3 OR ARGC GREATER 4)
 		message(FATAL_ERROR
 			"[BuildMaster/Core]: _bm_log_message requires module, level, message and optional indent")
@@ -187,12 +187,12 @@ function(_bm_log_message _module _level _message)
 			"[BuildMaster/Core]: unknown log module '${_module}'. Accepted: ${_acc}")
 	endif()
 
-	_buildmaster_log_parse_level(_lvl "${_level}")
+	_bm_log_parse_level(_lvl "${_level}")
 
 	if(NOT DEFINED BUILDMASTER_LOGLEVEL OR "${BUILDMASTER_LOGLEVEL}" STREQUAL "")
 		set(_cur "STATUS")
 	else()
-		_buildmaster_log_parse_level(_cur "${BUILDMASTER_LOGLEVEL}")
+		_bm_log_parse_level(_cur "${BUILDMASTER_LOGLEVEL}")
 	endif()
 
 	get_property(_n_msg GLOBAL PROPERTY BUILDMASTER_LOG_LEVEL_${_lvl})
@@ -217,8 +217,8 @@ function(_bm_log_message _module _level _message)
 	get_property(_lab GLOBAL PROPERTY BUILDMASTER_LOG_MOD_${_mod})
 	get_property(_pad_mod GLOBAL PROPERTY BUILDMASTER_LOG_PAD_MODULE)
 	get_property(_pad_lvl GLOBAL PROPERTY BUILDMASTER_LOG_PAD_LEVEL)
-	_buildmaster_log_pad(_modp "${_lab}" ${_pad_mod})
-	_buildmaster_log_pad(_lvlp "${_lvl}" ${_pad_lvl})
+	_bm_log_pad(_modp "${_lab}" ${_pad_mod})
+	_bm_log_pad(_lvlp "${_lvl}" ${_pad_lvl})
 
 	if(_lvl STREQUAL "STATUS")
 		set(_line "[BuildMaster/${_modp}]: ${_tabs}${_message}")

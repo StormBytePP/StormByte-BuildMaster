@@ -7,11 +7,11 @@
 ## @param[in]  _name Variable name to read from the current scope.
 ## @note Copy at call time. Undefined names become `set(NAME "")`.
 ##       A value that contains `]=]` is FATAL (bracket form would break).
-function(_buildmaster_hook_capture_line _out _name)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_hook_capture_line")
+function(_bm_hook_capture_line _out _name)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_hook_capture_line")
 	if(NOT DEFINED ${_name})
 		set(${_out} "set(${_name} \"\")" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_hook_capture_line")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_capture_line")
 		return()
 	endif()
 	set(_val "${${_name}}")
@@ -20,7 +20,7 @@ function(_buildmaster_hook_capture_line _out _name)
 			"hook CAPTURE '${_name}': value contains ']=]' and cannot be snapshotted")
 	endif()
 	set(${_out} "set(${_name} [=[${_val}]=])" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_hook_capture_line")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_capture_line")
 endfunction()
 
 ## @brief Write one hook script and append `alias|path` to a global list.
@@ -35,15 +35,15 @@ endfunction()
 ##       `${BUILDMASTER_SCRIPTS_HOOK_DIR}/<alias>__graph.cmake`.
 ##       Duplicate alias in `_list_prop` is FATAL. Empty sanitized alias
 ##       is FATAL.
-function(_buildmaster_hook_write _list_prop _kind _alias _function _component _captures)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_hook_write")
-	sanitize_for_filename(_safe_alias "${_alias}")
+function(_bm_hook_write _list_prop _kind _alias _function _component _captures)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_hook_write")
+	_bm_path_sanitize(_safe_alias "${_alias}")
 	if("${_safe_alias}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
 			"hook alias '${_alias}' sanitizes to an empty filename")
 	endif()
 	if(_kind STREQUAL "component")
-		sanitize_for_filename(_safe_id "${_component}")
+		_bm_path_sanitize(_safe_id "${_component}")
 		set(_file "${BUILDMASTER_SCRIPTS_HOOK_DIR}/${_safe_alias}__component_${_safe_id}.cmake")
 	else()
 		set(_file "${BUILDMASTER_SCRIPTS_HOOK_DIR}/${_safe_alias}__graph.cmake")
@@ -59,7 +59,7 @@ function(_buildmaster_hook_write _list_prop _kind _alias _function _component _c
 			_bm_log_message(COMPONENT FATAL
 				"hook CAPTURE: empty variable name")
 		endif()
-		_buildmaster_hook_capture_line(_line "${_n}")
+		_bm_hook_capture_line(_line "${_n}")
 		string(APPEND HOOK_CAPTURES "${_line}\n")
 	endforeach()
 
@@ -79,18 +79,18 @@ function(_buildmaster_hook_write _list_prop _kind _alias _function _component _c
 	endforeach()
 	set_property(GLOBAL APPEND PROPERTY ${_list_prop} "${_alias}|${_file}")
 	_bm_log_message(COMPONENT DEBUG "Wrote hook script ${_file}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_hook_write")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_write")
 endfunction()
 
 ## @brief Include hook scripts for one property, aliases sorted ASCII ascending.
 ## @param[in] _list_prop Global property of `alias|path` pairs.
 ## @note Order is the alias only. Registration order and graph order are
 ##       not a contract. A missing script file is FATAL.
-function(_buildmaster_hook_run_sorted _list_prop)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_hook_run_sorted")
+function(_bm_hook_run_sorted _list_prop)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_hook_run_sorted")
 	get_property(_pairs GLOBAL PROPERTY ${_list_prop})
 	if(NOT _pairs)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_hook_run_sorted")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_run_sorted")
 		return()
 	endif()
 	set(_aliases "")
@@ -114,7 +114,7 @@ function(_buildmaster_hook_run_sorted _list_prop)
 		endif()
 		include("${_file}")
 	endforeach()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_hook_run_sorted")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_run_sorted")
 endfunction()
 
 ## @brief Register a hook that runs after one concrete component materializes.
@@ -133,36 +133,36 @@ endfunction()
 ##       `${BUILDMASTER_SCRIPTS_HOOK_DIR}/<alias>__component_<id>.cmake`.
 ## @note The callback must not call `create_*` or graph mutators
 ##       (`BUILDMASTER_COMPONENTS_FINALIZED` is already set).
-function(buildmaster_on_component_materialize _component _function _alias)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_on_component_materialize")
+function(buildmaster_hook_component _component _function _alias)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_hook_component")
 	cmake_parse_arguments(ARG "" "" "CAPTURE" ${ARGN})
 	if(ARG_UNPARSED_ARGUMENTS)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize: unexpected arguments (${ARG_UNPARSED_ARGUMENTS})")
+			"buildmaster_hook_component: unexpected arguments (${ARG_UNPARSED_ARGUMENTS})")
 	endif()
 	if("${_component}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize: empty component id")
+			"buildmaster_hook_component: empty component id")
 	endif()
 	if("${_function}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize: empty function name")
+			"buildmaster_hook_component: empty function name")
 	endif()
 	if("${_alias}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize: empty alias")
+			"buildmaster_hook_component: empty alias")
 	endif()
 	if(NOT COMMAND "${_function}")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize('${_component}'): function '${_function}' does not exist yet")
+			"buildmaster_hook_component('${_component}'): function '${_function}' does not exist yet")
 	endif()
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_component_materialize: called after finalize")
+			"buildmaster_hook_component: called after finalize")
 	endif()
 
-	_buildmaster_hook_write(
+	_bm_hook_write(
 		"BUILDMASTER_ON_MATERIALIZE_${_component}"
 		"component"
 		"${_alias}"
@@ -171,67 +171,67 @@ function(buildmaster_on_component_materialize _component _function _alias)
 		"${ARG_CAPTURE}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_ON_MATERIALIZE_IDS
 		"${_component}")
-	_buildmaster_component_defer_arm()
+	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG
 		"on_component_materialize ${_component} alias=${_alias} → ${_function}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_on_component_materialize")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_hook_component")
 endfunction()
 
 ## @brief Register a hook that runs after the whole component graph materializes.
 ## @param[in] _function CMake function name. Must exist now (`COMMAND`).
 ## @param[in] _alias    Order key (ASCII ascending among graph hooks). Required.
 ## @param[in] CAPTURE   Optional names snapshotted now (copy). Empty CAPTURE
-##            keyword with no names is FATAL inside `_buildmaster_hook_write`
+##            keyword with no names is FATAL inside `_bm_hook_write`
 ##            only when a blank name is listed.
 ## @note Runs after git flush, metas, cmake/meson, repacks, links and
 ##       orphan warn. Alias sort only among graph hooks.
 ## @note Script: `${BUILDMASTER_SCRIPTS_HOOK_DIR}/<alias>__graph.cmake`.
 ## @note The callback must not call `create_*` or graph mutators.
-function(buildmaster_on_graph_finalized _function _alias)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_on_graph_finalized")
+function(buildmaster_hook_graph _function _alias)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_hook_graph")
 	cmake_parse_arguments(ARG "" "" "CAPTURE" ${ARGN})
 	if(ARG_UNPARSED_ARGUMENTS)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_graph_finalized: unexpected arguments (${ARG_UNPARSED_ARGUMENTS})")
+			"buildmaster_hook_graph: unexpected arguments (${ARG_UNPARSED_ARGUMENTS})")
 	endif()
 	if("${_function}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_graph_finalized: empty function name")
+			"buildmaster_hook_graph: empty function name")
 	endif()
 	if("${_alias}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_graph_finalized: empty alias")
+			"buildmaster_hook_graph: empty alias")
 	endif()
 	if(NOT COMMAND "${_function}")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_graph_finalized: function '${_function}' does not exist yet")
+			"buildmaster_hook_graph: function '${_function}' does not exist yet")
 	endif()
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_on_graph_finalized: called after finalize")
+			"buildmaster_hook_graph: called after finalize")
 	endif()
 
-	_buildmaster_hook_write(
+	_bm_hook_write(
 		"BUILDMASTER_ON_GRAPH_FINALIZED"
 		"graph"
 		"${_alias}"
 		"${_function}"
 		""
 		"${ARG_CAPTURE}")
-	_buildmaster_component_defer_arm()
+	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG
 		"on_graph_finalized alias=${_alias} → ${_function}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_on_graph_finalized")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_hook_graph")
 endfunction()
 
 ## @brief Include per-id hook scripts (alias order) and mark the id done.
 ## @param[in] _component Component id that just finished cmake/meson materialize.
 ## @note Sets `BUILDMASTER_ON_MATERIALIZE_<id>_DONE` so finalize can detect
 ##       hooks whose id was never materialized.
-function(_buildmaster_run_component_materialize_hooks _component)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _buildmaster_run_component_materialize_hooks")
-	_buildmaster_hook_run_sorted("BUILDMASTER_ON_MATERIALIZE_${_component}")
+function(_bm_hook_run_component _component)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_hook_run_component")
+	_bm_hook_run_sorted("BUILDMASTER_ON_MATERIALIZE_${_component}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_ON_MATERIALIZE_${_component}_DONE TRUE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _buildmaster_run_component_materialize_hooks")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_hook_run_component")
 endfunction()

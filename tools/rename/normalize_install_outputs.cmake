@@ -22,8 +22,8 @@ if(NOT DEFINED BUILDMASTER_SRCDIR OR BUILDMASTER_SRCDIR STREQUAL "")
 endif()
 
 include("${BUILDMASTER_SRCDIR}/log.cmake")
-if(COMMAND buildmaster_loglevel_init)
-	buildmaster_loglevel_init()
+if(COMMAND _bm_log_level_init)
+	_bm_log_level_init()
 endif()
 
 include("${BUILDMASTER_SRCDIR}/tools/rename/variants.cmake")

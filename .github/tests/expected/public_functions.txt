@@ -1,46 +1,26 @@
 # One public command per line (sections and names alphabetical)
 
 # Component API
-buildmaster_on_component_materialize
-buildmaster_on_graph_finalized
-component_dependency
-component_link
-component_prerequisite
-component_repack
-create_cmake_component
-create_cmake_headers_component
-create_component
-create_meson_component
-create_meson_headers_component
-create_meta_component
-meta_component_add
 buildmaster_component
+buildmaster_depend
+buildmaster_hook_component
+buildmaster_hook_graph
+buildmaster_link
+buildmaster_meta
+buildmaster_meta_add
+buildmaster_prerequisite
+buildmaster_repack
 
 # File helpers
-file_checksum_correct
-file_decompress
-file_download
-file_download_cached
+buildmaster_decompress
+buildmaster_download
+buildmaster_download_cached
 
 # Git helpers
-buildmaster_git_post_install_marker_for_srcdir
-create_git_fetch
-create_git_patch_file
-create_git_reset_file
-create_git_switch_branch
+buildmaster_git_fetch
+buildmaster_git_patch
+buildmaster_git_reset
+buildmaster_git_switch
 
 # Logging
 buildmaster_message
-
-# Path and utility helpers
-buildmaster_find_archiver
-ensure_build_dir
-library_import_hint
-library_import_static_hint
-sanitize_for_filename
-
-# Toolchain and options
-buildmaster_load_toolchain_profile
-buildmaster_parse_component_options
-buildmaster_parse_subcomponent
-buildmaster_validate_toolchain

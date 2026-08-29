@@ -19,7 +19,7 @@ include(@_LIBRARY_INSTALL_FILE@)
 target_include_directories(@_LIBRARY_NAME@ SYSTEM INTERFACE "@BUILDMASTER_INSTALL_INCLUDEDIR@")
 add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
 
-# Headers have no link line. LINK is already cleared at create_component.
+# Headers have no link line. LINK is already cleared at _bm_comp_create.
 set(_bm_link "@_BM_LINK_ITEMS@")
 if(NOT _bm_link STREQUAL "")
 	message(WARNING

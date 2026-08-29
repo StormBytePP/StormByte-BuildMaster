@@ -4,24 +4,24 @@
 # A meta with TOOLCHAIN=<profile> pushes that profile onto:
 #   - expanded leaves (real components)
 #   - nested metas (members that are metas)
-#   - component_dependency / component_link dests whose source is the meta
+#   - buildmaster_depend / buildmaster_link dests whose source is the meta
 #
 # A destination that already has TOOLCHAIN set by the user (create_* options
-# or create_meta_component) is left unchanged — that is the documented
+# or buildmaster_meta) is left unchanged — that is the documented
 # exception, not an error.
 #
 # FATAL only when two metas both inherit onto the same empty destination
 # with different profiles (TOOLCHAIN_FROM already names a meta).
 #
-# Runs after _buildmaster_materialize_metas (leaves known) and before
+# Runs after _bm_meta_materialize (leaves known) and before
 # cmake/meson materialize so create_*_stages reads the updated OPTSTR.
 
 ## @brief TOOLCHAIN value stored on a registered component (from OPTSTR).
 ## @param[in]  id     Component id.
 ## @param[out] out_tc Parent-scope profile (empty if unset).
-function(_buildmaster_component_stored_toolchain id out_tc)
+function(_bm_tc_stored id out_tc)
 	get_property(_optstr GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_OPTSTR)
-	buildmaster_parse_component_options(_i _tc _r _b _w _sr "${_optstr}")
+	_bm_opt_parse(_i _tc _r _b _w _sr "${_optstr}")
 	set(${out_tc} "${_tc}" PARENT_SCOPE)
 endfunction()
 
@@ -31,14 +31,14 @@ endfunction()
 ## @param[in] source_meta Meta id applying the profile (errors / DEBUG).
 ## @note Explicit TOOLCHAIN on the component is kept. A second meta that
 ##       would assign a different inherited profile is FATAL.
-function(_buildmaster_inherit_toolchain_component id tc source_meta)
+function(_bm_tc_inherit_comp id tc source_meta)
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Entering _buildmaster_inherit_toolchain_component")
-	_buildmaster_component_stored_toolchain("${id}" _have)
+		"Entering _bm_tc_inherit_comp")
+	_bm_tc_stored("${id}" _have)
 	if(NOT "${_have}" STREQUAL "")
 		if("${_have}" STREQUAL "${tc}")
 			_bm_log_message(COMPONENT LOWLEVEL
-				"Exiting _buildmaster_inherit_toolchain_component")
+				"Exiting _bm_tc_inherit_comp")
 			return()
 		endif()
 		get_property(_from GLOBAL PROPERTY
@@ -47,7 +47,7 @@ function(_buildmaster_inherit_toolchain_component id tc source_meta)
 			_bm_log_message(COMPONENT DEBUG
 				"meta '${source_meta}' TOOLCHAIN=${tc} skipped for '${id}' (explicit TOOLCHAIN=${_have})")
 			_bm_log_message(COMPONENT LOWLEVEL
-				"Exiting _buildmaster_inherit_toolchain_component")
+				"Exiting _bm_tc_inherit_comp")
 			return()
 		endif()
 		_bm_log_message(COMPONENT FATAL
@@ -66,7 +66,7 @@ function(_buildmaster_inherit_toolchain_component id tc source_meta)
 	_bm_log_message(COMPONENT DEBUG
 		"meta '${source_meta}' TOOLCHAIN=${tc} → component '${id}'")
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Exiting _buildmaster_inherit_toolchain_component")
+		"Exiting _bm_tc_inherit_comp")
 endfunction()
 
 ## @brief Apply profile @p tc to meta @p id if it has none.
@@ -75,14 +75,14 @@ endfunction()
 ## @param[in] source_meta Meta applying the profile.
 ## @note Explicit TOOLCHAIN on the nested meta is kept. Two parent metas
 ##       inheriting different profiles onto the same empty nested meta is FATAL.
-function(_buildmaster_inherit_toolchain_meta id tc source_meta)
+function(_bm_tc_inherit_meta id tc source_meta)
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Entering _buildmaster_inherit_toolchain_meta")
+		"Entering _bm_tc_inherit_meta")
 	get_property(_have GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN)
 	if(NOT "${_have}" STREQUAL "")
 		if("${_have}" STREQUAL "${tc}")
 			_bm_log_message(COMPONENT LOWLEVEL
-				"Exiting _buildmaster_inherit_toolchain_meta")
+				"Exiting _bm_tc_inherit_meta")
 			return()
 		endif()
 		get_property(_from GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN_FROM)
@@ -90,7 +90,7 @@ function(_buildmaster_inherit_toolchain_meta id tc source_meta)
 			_bm_log_message(COMPONENT DEBUG
 				"meta '${source_meta}' TOOLCHAIN=${tc} skipped for meta '${id}' (explicit TOOLCHAIN=${_have})")
 			_bm_log_message(COMPONENT LOWLEVEL
-				"Exiting _buildmaster_inherit_toolchain_meta")
+				"Exiting _bm_tc_inherit_meta")
 			return()
 		endif()
 		_bm_log_message(COMPONENT FATAL
@@ -102,7 +102,7 @@ function(_buildmaster_inherit_toolchain_meta id tc source_meta)
 	_bm_log_message(COMPONENT DEBUG
 		"meta '${source_meta}' TOOLCHAIN=${tc} → meta '${id}'")
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Exiting _buildmaster_inherit_toolchain_meta")
+		"Exiting _bm_tc_inherit_meta")
 endfunction()
 
 ## @brief Apply @p tc to @p dest if dest is a component or meta.
@@ -110,24 +110,24 @@ endfunction()
 ## @param[in] tc          Profile name.
 ## @param[in] source_meta Meta applying the profile.
 ## @note file_* / custom targets are ignored.
-function(_buildmaster_inherit_toolchain_dest dest tc source_meta)
+function(_bm_tc_inherit_dest dest tc source_meta)
 	if("${dest}" STREQUAL "" OR "${tc}" STREQUAL "")
 		return()
 	endif()
-	_buildmaster_meta_is("${dest}" _is_meta)
+	_bm_meta_is("${dest}" _is_meta)
 	if(_is_meta)
-		_buildmaster_inherit_toolchain_meta("${dest}" "${tc}" "${source_meta}")
+		_bm_tc_inherit_meta("${dest}" "${tc}" "${source_meta}")
 		return()
 	endif()
-	_buildmaster_component_is_registered("${dest}" _is_comp)
+	_bm_comp_is_registered("${dest}" _is_comp)
 	if(_is_comp)
-		_buildmaster_inherit_toolchain_component("${dest}" "${tc}" "${source_meta}")
+		_bm_tc_inherit_comp("${dest}" "${tc}" "${source_meta}")
 	endif()
 endfunction()
 
 ## @brief One pass: every meta with TOOLCHAIN pushes it to leaves / members / edges.
 ## @param[out] out_changed Parent-scope TRUE if any OPTSTR/meta TOOLCHAIN changed.
-function(_buildmaster_propagate_meta_toolchains_pass out_changed)
+function(_bm_tc_propagate_pass out_changed)
 	set(_changed FALSE)
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	get_property(_dsrc GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
@@ -143,9 +143,9 @@ function(_buildmaster_propagate_meta_toolchains_pass out_changed)
 
 		get_property(_leaves GLOBAL PROPERTY BUILDMASTER_META_${_id}_LEAVES)
 		foreach(_leaf IN LISTS _leaves)
-			_buildmaster_component_stored_toolchain("${_leaf}" _before)
-			_buildmaster_inherit_toolchain_dest("${_leaf}" "${_tc}" "${_id}")
-			_buildmaster_component_stored_toolchain("${_leaf}" _after)
+			_bm_tc_stored("${_leaf}" _before)
+			_bm_tc_inherit_dest("${_leaf}" "${_tc}" "${_id}")
+			_bm_tc_stored("${_leaf}" _after)
 			if(NOT "${_before}" STREQUAL "${_after}")
 				set(_changed TRUE)
 			endif()
@@ -154,7 +154,7 @@ function(_buildmaster_propagate_meta_toolchains_pass out_changed)
 		get_property(_members GLOBAL PROPERTY BUILDMASTER_META_${_id}_MEMBERS)
 		foreach(_m IN LISTS _members)
 			get_property(_before GLOBAL PROPERTY BUILDMASTER_META_${_m}_TOOLCHAIN)
-			_buildmaster_inherit_toolchain_dest("${_m}" "${_tc}" "${_id}")
+			_bm_tc_inherit_dest("${_m}" "${_tc}" "${_id}")
 			get_property(_after GLOBAL PROPERTY BUILDMASTER_META_${_m}_TOOLCHAIN)
 			if(NOT "${_before}" STREQUAL "${_after}")
 				set(_changed TRUE)
@@ -173,7 +173,7 @@ function(_buildmaster_propagate_meta_toolchains_pass out_changed)
 			if(NOT "${_src}" STREQUAL "${_id}")
 				continue()
 			endif()
-			_buildmaster_inherit_toolchain_dest("${_dst}" "${_tc}" "${_id}")
+			_bm_tc_inherit_dest("${_dst}" "${_tc}" "${_id}")
 		endwhile()
 
 		set(_n 0)
@@ -188,7 +188,7 @@ function(_buildmaster_propagate_meta_toolchains_pass out_changed)
 			if(NOT "${_src}" STREQUAL "${_id}")
 				continue()
 			endif()
-			_buildmaster_inherit_toolchain_dest("${_dst}" "${_tc}" "${_id}")
+			_bm_tc_inherit_dest("${_dst}" "${_tc}" "${_id}")
 		endwhile()
 	endforeach()
 
@@ -197,14 +197,14 @@ endfunction()
 
 ## @brief Repeat inheritance until nested metas stabilize.
 ## @note FATAL after 64 passes (should be impossible: meta cycles already die
-##       in `_buildmaster_meta_collect_leaves`).
-function(_buildmaster_propagate_meta_toolchains)
+##       in `_bm_meta_collect_leaves`).
+function(_bm_tc_propagate_metas)
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Entering _buildmaster_propagate_meta_toolchains")
+		"Entering _bm_tc_propagate_metas")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
 	if(NOT _metas)
 		_bm_log_message(COMPONENT LOWLEVEL
-			"Exiting _buildmaster_propagate_meta_toolchains")
+			"Exiting _bm_tc_propagate_metas")
 		return()
 	endif()
 
@@ -216,9 +216,9 @@ function(_buildmaster_propagate_meta_toolchains)
 			_bm_log_message(COMPONENT FATAL
 				"TOOLCHAIN inherit: exceeded 64 passes")
 		endif()
-		_buildmaster_propagate_meta_toolchains_pass(_changed)
+		_bm_tc_propagate_pass(_changed)
 	endwhile()
 
 	_bm_log_message(COMPONENT LOWLEVEL
-		"Exiting _buildmaster_propagate_meta_toolchains")
+		"Exiting _bm_tc_propagate_metas")
 endfunction()
