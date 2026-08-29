@@ -138,6 +138,7 @@
 # harness-expand
 <include>/dupa.h|all
 <include>/dupb.h|all
+<include>/hook_generated.h|all
 <include>/hooka.h|all
 <include>/hookb.h|all
 <include>/latedst.h|all
@@ -148,12 +149,14 @@
 <lib>/dupblib.lib|windows
 <lib>/hookalib.lib|windows
 <lib>/hookblib.lib|windows
+<lib>/hooks-stamp.lib|windows
 <lib>/latedstlib.lib|windows
 <lib>/latesrclib.lib|windows
 <lib>/libdupalib.a|unix
 <lib>/libdupblib.a|unix
 <lib>/libhookalib.a|unix
 <lib>/libhookblib.a|unix
+<lib>/libhooks-stamp.a|unix
 <lib>/liblatedstlib.a|unix
 <lib>/liblatesrclib.a|unix
 <lib>/libomitlib.a|unix

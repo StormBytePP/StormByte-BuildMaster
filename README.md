@@ -426,17 +426,19 @@ dest is **FATAL**. `PC={…}` on a meta is **FATAL**.
 
 ## Hooks
 
-A function you already defined, fired after materialize, with an
-**alias** that is the only order key (ASCII ascending). `CAPTURE`
-snapshots variables **by copy** into the generated script.
+A function you already defined, with an **alias** that is the only
+order key (ASCII ascending). Component hooks run while that id is
+materialized. Graph hooks run after the whole graph. `CAPTURE`
+snapshots the named variables **by copy** from the caller scope.
 
 ```cmake
 function(print_enabled_flags)
 	buildmaster_message(STATUS "enabled: ${CAPTURED_FLAGS}")
 endfunction()
 
+set(CAPTURED_FLAGS "${ENGINE_FLAGS}")
 buildmaster_hook_component(engine print_enabled_flags zz
-	CAPTURE CAPTURED_FLAGS "${ENGINE_FLAGS}")
+	CAPTURE CAPTURED_FLAGS)
 buildmaster_hook_graph(print_enabled_flags summary)
 ```
 
@@ -444,6 +446,21 @@ buildmaster_hook_graph(print_enabled_flags summary)
 FATAL, not CMake’s trace. An id that never materializes is FATAL.
 There is **no** guarantee beyond alias order: project layout decides
 when a given id is walked.
+
+### When the hook runs versus nested configure
+
+An **eager** component also configures in the same materialize pass.
+BuildMaster does **not** promise the hook finishes before the nested
+`cmake` / `meson setup`.
+
+| You need the hook artifact… | Do this |
+|-----------------------------|---------|
+| at **compile** / install (a generated `.h`, a stamp the sources `#include`) | Graph hook, or a component hook plus no configure-time check. The Ninja compile sees the file. |
+| at **nested configure** (`if(NOT EXISTS)`, `configure_file` input) | Record a wait edge (`buildmaster_depend` / `buildmaster_prerequisite`) so that id is **deferred**. Hooks then run at parent finalize; nested configure runs later under `<id>_configure`. |
+
+A hook is not an edge. Attaching `buildmaster_hook_component` does
+**not** flip the component to deferred. If the nested project must see
+the file during setup, say so with a dependency — not with hope.
 
 ---
 

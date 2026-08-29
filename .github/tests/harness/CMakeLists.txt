@@ -120,6 +120,7 @@ add_custom_target(run_buildmaster_smoke
 		whole_link_test_nowhole_run whole_link_test_run
 		# harness-expand
 		hook-a_install hook-b_install
+		hooks-stamp_install
 		late-dst_install late-src_install
 		omit-lib_install
 		dup-a_install dup-b_install

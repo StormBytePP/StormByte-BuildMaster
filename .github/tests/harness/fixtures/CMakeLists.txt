@@ -90,6 +90,7 @@ add_subdirectory(whole)
 # harness-expand
 # ---------------------------------------------------------------------------
 add_subdirectory(hooks)
+add_subdirectory(hooks-stamp)
 add_subdirectory(late-link)
 add_subdirectory(omit-builddir)
 add_subdirectory(dup-link)
