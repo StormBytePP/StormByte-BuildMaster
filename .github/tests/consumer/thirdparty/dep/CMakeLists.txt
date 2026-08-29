@@ -42,7 +42,7 @@ buildmaster_git_reset(
 	"${CONSUMERDEP_SRCDIR}"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	consumer-dep
 	"Consumer-style dependant library"
 	"${CONSUMERDEP_SRCDIR}"

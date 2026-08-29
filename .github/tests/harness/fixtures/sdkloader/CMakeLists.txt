@@ -1,5 +1,5 @@
 _bm_path_builddir(LOADER_BUILD_DIR "sdkloader")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	sdkloader
 	"Harness SDK loader"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"

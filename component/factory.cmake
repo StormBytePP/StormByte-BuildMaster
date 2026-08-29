@@ -29,7 +29,7 @@ function(_bm_factory_detect srcdir out_var)
 
 	if(_cmake AND _meson)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use _bm_comp_cmake_create or _bm_comp_meson_create")
+			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use _bm_backend_cmake_create or _bm_backend_meson_create")
 	endif()
 	if(_cmake)
 		set(${out_var} "cmake" PARENT_SCOPE)
@@ -185,8 +185,8 @@ endfunction()
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Source directory. Must contain exactly one of
 ##            `CMakeLists.txt` or `meson.build`.
-## @param[in] … Same remaining arity as `_bm_comp_cmake_create` /
-##            `_bm_comp_meson_create`:
+## @param[in] … Same remaining arity as `_bm_backend_cmake_create` /
+##            `_bm_backend_meson_create`:
 ##            2.1: `options mode produced [optstr]`
 ##            with path: `builddir options mode produced [optstr]`.
 ## @param[in] options CMake list of `KEY=value`. Allowed keys (all
@@ -207,7 +207,7 @@ function(buildmaster_component _component _component_title _srcdir)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: expected 6–8 arguments (same arity as _bm_comp_cmake_create)")
+			"buildmaster_component: expected 6–8 arguments (same arity as _bm_backend_cmake_create)")
 	endif()
 	if("${_srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
@@ -256,24 +256,24 @@ function(buildmaster_component _component _component_title _srcdir)
 
 	if(_legacy)
 		if(_sys STREQUAL "cmake")
-			_bm_comp_cmake_create(
+			_bm_backend_cmake_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_builddir}" "${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		else()
-			_bm_comp_meson_create(
+			_bm_backend_meson_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_builddir}" "${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		endif()
 	else()
 		if(_sys STREQUAL "cmake")
-			_bm_comp_cmake_create(
+			_bm_backend_cmake_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")
 		else()
-			_bm_comp_meson_create(
+			_bm_backend_meson_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_xopts}" "${_library_mode}"
 				"${_produced}" "${_options_string}")

@@ -49,12 +49,12 @@ or INTERFACE libraries.
 
 @subsection uf_tools_cmake tools/cmake/
 
-`_bm_cmake_stages()` — writes configure / build / install scripts into
+`_bm_backend_cmake_stages()` — writes configure / build / install scripts into
 `${BUILDMASTER_SCRIPTS_CMAKEDIR}` from `tools/cmake/*.cmake.in`.
 
 @subsection uf_tools_meson tools/meson/
 
-`_bm_meson_stages()` — same pattern (`setup` / `compile` / `install`).
+`_bm_backend_meson_stages()` — same pattern (`setup` / `compile` / `install`).
 Always pass a Meson native file when a toolchain profile is active so
 compiler caches stay valid.
 

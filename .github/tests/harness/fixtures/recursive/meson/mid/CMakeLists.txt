@@ -14,7 +14,7 @@ add_subdirectory(
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 _bm_path_builddir(_leaf_build "mleaf")
-_bm_comp_meson_create(
+_bm_backend_meson_create(
 	mleaf
 	"Recursive meson leaf"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf"

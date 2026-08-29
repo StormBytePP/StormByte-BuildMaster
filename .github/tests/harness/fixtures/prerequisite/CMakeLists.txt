@@ -7,7 +7,7 @@ buildmaster_prerequisite(prereq_touch
 )
 
 _bm_path_builddir(PREREQ_LIB_BUILD_DIR "prereq-lib")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	prereq-lib
 	"Harness prerequisite consumer"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"

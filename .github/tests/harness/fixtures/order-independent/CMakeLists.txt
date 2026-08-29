@@ -5,7 +5,7 @@ buildmaster_depend(second first)
 buildmaster_link(second first)
 
 _bm_path_builddir(SECOND_BUILD_DIR "second")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	second
 	"Order-independent dependent"
 	"${CMAKE_CURRENT_SOURCE_DIR}/second"
@@ -16,7 +16,7 @@ _bm_comp_cmake_create(
 )
 
 _bm_path_builddir(FIRST_BUILD_DIR "first")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	first
 	"Order-independent prerequisite"
 	"${CMAKE_CURRENT_SOURCE_DIR}/first"

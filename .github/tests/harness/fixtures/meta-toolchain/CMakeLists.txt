@@ -54,7 +54,7 @@ file(MAKE_DIRECTORY "${_inh_build}" "${_pin_build}")
 buildmaster_meta_add(meta-tc mtc-inherit)
 buildmaster_meta_add(meta-tc mtc-pinned)
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	mtc-inherit
 	"Harness meta-toolchain inherit leaf"
 	"${_inh_src}"
@@ -64,7 +64,7 @@ _bm_comp_cmake_create(
 	"meta-toolchain/mtcinherit"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	mtc-pinned
 	"Harness meta-toolchain pinned leaf"
 	"${_pin_src}"

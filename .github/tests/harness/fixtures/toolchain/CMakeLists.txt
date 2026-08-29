@@ -38,7 +38,7 @@ _bm_log_message(CORE STATUS
 	"Harness toolchain swap: ${CMAKE_C_COMPILER_ID} → TOOLCHAIN=${_bm_tc_other}")
 
 _bm_path_builddir(NEST_TC_BUILD_DIR "nest-tc")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	nest-tc
 	"Harness TOOLCHAIN nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"

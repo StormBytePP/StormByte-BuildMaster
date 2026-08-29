@@ -15,7 +15,7 @@ buildmaster_meta_add(meta-inner leaf-a)
 buildmaster_meta_add(meta-inner leaf-b)
 buildmaster_meta_add(meta-plugins meta-inner)
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	leaf-a
 	"Harness meta leaf A"
 	"${_a_src}"
@@ -25,7 +25,7 @@ _bm_comp_cmake_create(
 	"metaleafa"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	leaf-b
 	"Harness meta leaf B"
 	"${_b_src}"
@@ -35,7 +35,7 @@ _bm_comp_cmake_create(
 	"metaleafb"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	meta-out
 	"Harness meta outside library"
 	"${_out_src}"

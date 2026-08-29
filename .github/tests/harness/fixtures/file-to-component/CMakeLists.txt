@@ -24,7 +24,7 @@ buildmaster_decompress(payload_unpack
 )
 
 _bm_path_builddir(PAYLOAD_LIB_BUILD "payload-lib")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	payload-lib
 	"Harness file-to-component library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"

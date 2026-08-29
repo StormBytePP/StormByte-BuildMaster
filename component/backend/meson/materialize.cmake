@@ -1,5 +1,5 @@
 # =============================================================================
-# component/meson/materialize.cmake — emit Meson stages + fragment
+# component/backend/meson/materialize.cmake — emit Meson stages + fragment
 # =============================================================================
 
 ## @brief Emit Meson stages and include the component fragment (internal).
@@ -14,8 +14,8 @@
 ##       configure is not silent about them; the real Meson setup
 ##       still runs under `<id>_configure` at build time.
 ## @note Per-id hooks run after the fragment include (alias order).
-function(_bm_comp_meson_materialize _component)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_meson_materialize")
+function(_bm_backend_meson_materialize _component)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_meson_materialize")
 	get_property(_component_title GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_TITLE)
 	get_property(_srcdir GLOBAL PROPERTY
@@ -61,5 +61,5 @@ function(_bm_comp_meson_materialize _component)
 	_bm_comp_write_fragment("${_component}" "${_deferred}")
 	_bm_hook_run_component("${_component}")
 	_bm_log_message(COMPONENT DEBUG "Materialized meson component ${_component} deferred=${_deferred}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_meson_materialize")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_backend_meson_materialize")
 endfunction()

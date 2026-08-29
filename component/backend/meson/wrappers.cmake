@@ -1,20 +1,8 @@
 # =============================================================================
-# component/cmake/wrappers.cmake — public CMake component factories
+# component/backend/meson/wrappers.cmake — public Meson component factories
 # =============================================================================
 
-## @brief Whether `val` is a library mode token.
-## @param[in]  val     Raw argument.
-## @param[out] out_var Parent-scope TRUE/FALSE.
-function(_bm_comp_is_library_mode val out_var)
-	string(TOLOWER "${val}" _v)
-	if(_v STREQUAL "static" OR _v STREQUAL "shared" OR _v STREQUAL "headers")
-		set(${out_var} TRUE PARENT_SCOPE)
-	else()
-		set(${out_var} FALSE PARENT_SCOPE)
-	endif()
-endfunction()
-
-## @brief Register a CMake-backed component (INTERFACE `<id>` exists on return).
+## @brief Register a Meson-backed component (INTERFACE `<id>` exists on return).
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
@@ -27,15 +15,9 @@ endfunction()
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See _bm_comp_create for supported keys.
-## @note Mode token (`static`/`shared`/`headers`) selects the arity:
-##       6/7 without a path in the builddir slot uses
-##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. 7/8 with a path before
-##       options uses that path. Ambiguous 7-arg where both slots look
-##       like mode is treated as the path form.
-## @note Delegates to _bm_comp_create. Stages and the fragment run at
-##       deferred finalize. No fragment path. No include() is required.
-function(_bm_comp_cmake_create _component _component_title _srcdir)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_cmake_create")
+## @note Same arity rules as _bm_backend_cmake_create.
+function(_bm_backend_meson_create _component _component_title _srcdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_meson_create")
 
 	set(_builddir "")
 	set(_options "")
@@ -46,7 +28,7 @@ function(_bm_comp_cmake_create _component _component_title _srcdir)
 
 	if(ARGC LESS 6 OR ARGC GREATER 8)
 		_bm_log_message(COMPONENT FATAL
-			"_bm_comp_cmake_create: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
+			"_bm_backend_meson_create: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
 	endif()
 
 	if(ARGC EQUAL 6)
@@ -83,22 +65,21 @@ function(_bm_comp_cmake_create _component _component_title _srcdir)
 
 	_bm_comp_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "${_library_mode}" "cmake" "${_produced}"
+		"${_options}" "${_library_mode}" "meson" "${_produced}"
 		"${_options_string}"
 	)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_cmake_create")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_backend_meson_create")
 endfunction()
 
-## @brief Register a header-only CMake component (INTERFACE `<id>` on return).
+## @brief Register a header-only Meson component (INTERFACE `<id>` on return).
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Optional. 2.1-style: `id title srcdir options [optstr]`
-##            (4 or 5 args). With path: `id title srcdir builddir options [optstr]`
-##            (5 or 6 args).
-## @note 5 arguments are always the path form (existing callers).
-function(_bm_comp_cmake_create_headers _component _component_title _srcdir)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_cmake_create_headers")
+## @param[in] _builddir Optional. Same 4–6 arity as
+##            _bm_backend_cmake_create_headers.
+## @note 5 arguments are always the path form.
+function(_bm_backend_meson_create_headers _component _component_title _srcdir)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_meson_create_headers")
 
 	set(_builddir "")
 	set(_options "")
@@ -107,7 +88,7 @@ function(_bm_comp_cmake_create_headers _component _component_title _srcdir)
 
 	if(ARGC LESS 4 OR ARGC GREATER 6)
 		_bm_log_message(COMPONENT FATAL
-			"_bm_comp_cmake_create_headers: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
+			"_bm_backend_meson_create_headers: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
 	endif()
 
 	if(ARGC EQUAL 4)
@@ -129,8 +110,8 @@ function(_bm_comp_cmake_create_headers _component _component_title _srcdir)
 
 	_bm_comp_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
-		"${_options}" "headers" "cmake" ""
+		"${_options}" "headers" "meson" ""
 		"${_options_string}"
 	)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_cmake_create_headers")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_backend_meson_create_headers")
 endfunction()

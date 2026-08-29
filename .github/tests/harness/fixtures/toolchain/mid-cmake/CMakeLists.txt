@@ -18,7 +18,7 @@ include("${BUILDMASTER_ROOT}/helpers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../expect_family.cmake")
 
 _bm_path_builddir(_leaf_build "leaf-cmake")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	leaf-cmake
 	"Harness TOOLCHAIN leaf-cmake"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf-cmake"

@@ -1,4 +1,4 @@
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
     dup-a
     "Harness dup A"
     "${CMAKE_CURRENT_SOURCE_DIR}/a"
@@ -7,7 +7,7 @@ _bm_comp_cmake_create(
     static
     "dupalib"
 )
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
     dup-b
     "Harness dup B"
     "${CMAKE_CURRENT_SOURCE_DIR}/b"

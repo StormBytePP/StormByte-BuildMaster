@@ -14,7 +14,7 @@ add_subdirectory(
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 _bm_path_builddir(_mid_build "mmid")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	mmid
 	"Recursive meson mid"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid"

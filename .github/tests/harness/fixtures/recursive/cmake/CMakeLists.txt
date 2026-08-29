@@ -6,7 +6,7 @@ if(NOT BM_TEST_REPO_ROOT)
 endif()
 
 _bm_path_builddir(NEST_CMAKE_BUILD_DIR "nest-cmake")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	nest-cmake
 	"Recursive cmake nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"

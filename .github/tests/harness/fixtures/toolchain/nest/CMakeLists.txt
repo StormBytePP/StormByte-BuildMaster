@@ -20,7 +20,7 @@ add_subdirectory(
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 _bm_path_builddir(_mid_cmake_build "mid-cmake")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	mid-cmake
 	"Harness TOOLCHAIN mid-cmake"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-cmake"
@@ -32,7 +32,7 @@ _bm_comp_cmake_create(
 )
 
 _bm_path_builddir(_mid_meson_build "mid-meson")
-_bm_comp_meson_create(
+_bm_backend_meson_create(
 	mid-meson
 	"Harness TOOLCHAIN mid-meson"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-meson"

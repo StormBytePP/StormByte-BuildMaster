@@ -14,7 +14,7 @@ add_subdirectory(
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 _bm_path_builddir(_leaf_build "leaf")
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	leaf
 	"Recursive cmake leaf"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../leaf"

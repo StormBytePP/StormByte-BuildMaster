@@ -20,7 +20,7 @@ function(hook_graph_zz)
     file(APPEND "${HOOK_STAMP}" "zz-graph\n")
 endfunction()
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
     hook-a
     "Harness hook A"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib-a"
@@ -30,7 +30,7 @@ _bm_comp_cmake_create(
     "hookalib"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
     hook-b
     "Harness hook B"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib-b"

@@ -22,7 +22,7 @@ buildmaster_hook_graph(hooks_stamp_write stamp-hdr
 	CAPTURE HOOK_STAMP_INCLUDE
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	hooks-stamp
 	"Harness hook stamp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/upstream"

@@ -11,7 +11,7 @@ set(_unix_src "${CMAKE_CURRENT_SOURCE_DIR}/unix")
 set(_unix_build "${CMAKE_CURRENT_BINARY_DIR}/unix_build")
 file(MAKE_DIRECTORY "${_os_build}" "${_unix_build}")
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	lf-os
 	"Harness LINKFLAGS OS library"
 	"${_os_src}"
@@ -22,7 +22,7 @@ _bm_comp_cmake_create(
 	"LINKFLAGS={WINDOWS={/ALTERNATENAME:bm_lf_ok=__ImageBase};LINUX={-Wl,--defsym,bm_lf_ok=1};MAC={-Wl,-alias,__mh_execute_header,_bm_lf_ok}}"
 )
 
-_bm_comp_cmake_create(
+_bm_backend_cmake_create(
 	lf-unix
 	"Harness LINKFLAGS UNIX library"
 	"${_unix_src}"

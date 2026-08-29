@@ -27,7 +27,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 # Deferred materialize + fragment emit + finalize.
 include("${CMAKE_CURRENT_LIST_DIR}/materialize.cmake")
 
-# Backend wrappers (create_cmake_* / create_meson_*).
-include("${CMAKE_CURRENT_LIST_DIR}/cmake/helpers.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/meson/helpers.cmake")
+# CMake / Meson backends.
+include("${CMAKE_CURRENT_LIST_DIR}/backend/helpers.cmake")
+
 include("${CMAKE_CURRENT_LIST_DIR}/factory.cmake")
