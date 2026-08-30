@@ -1,83 +1,122 @@
 # path|platform
-# Tokens: <lib> and <include> become CMAKE_INSTALL_LIBDIR / INCLUDEDIR.
-# A leading ! means the path must NOT exist under the install prefix.
-# Sections and paths alphabetical within each platform group.
+# Tokens: <lib> <include> → CMAKE_INSTALL_LIBDIR / INCLUDEDIR
+# Leading ! → must NOT exist under the install prefix
+# One section per fixture. Entries alphabetical inside the section.
 
-# BUILDONLY must not publish to the shared prefix
+# base
+<include>/base.h|all
+<lib>/baselib.lib|windows
+<lib>/libbaselib.a|unix
+
+# buildonly
 !<include>/bolib.h|all
 !<lib>/bolib.lib|windows
 !<lib>/libbolib.a|unix
 
-# Flat libraries
-<lib>/grpmaudio.lib|windows
-<lib>/libgrpmaudio.a|unix
-<lib>/grpmfilter.lib|windows
-<lib>/libgrpmfilter.a|unix
-<lib>/alinklib.lib|windows
-<lib>/baselib.lib|windows
-<lib>/blinklib.lib|windows
+# dep
+<include>/dep.h|all
 <lib>/deplib.lib|windows
-<lib>/firstlib.lib|windows
+<lib>/libdeplib.a|unix
+
+# dup-link
+<include>/dupa.h|all
+<include>/dupb.h|all
+<lib>/dupalib.lib|windows
+<lib>/dupblib.lib|windows
+<lib>/libdupalib.a|unix
+<lib>/libdupblib.a|unix
+
+# file-decompress
+# no prefix artifacts (unpack under the fixture binary dir)
+
+# file-to-component
+<include>/payload.h|all
+<lib>/libpayloadlib.a|unix
+<lib>/payloadlib.lib|windows
+
+# git-reset-patch
+# no prefix artifacts
+
+# git-sandbox
+# no prefix artifacts
+
+# groups
+<include>/grpmaudio.h|all
+<include>/grpmfilter.h|all
+<include>/grpopus.h|all
+<include>/grporphan.h|all
+<include>/grpspeex.h|all
+<include>/grpssim.h|all
+<include>/grpvmaf.h|all
+<lib>/grpmaudio.lib|windows
+<lib>/grpmfilter.lib|windows
+<lib>/grpopus.lib|windows
+<lib>/grporphan.lib|windows
+<lib>/grpspeex.lib|windows
+<lib>/grpssim.lib|windows
+<lib>/grpvmaf.lib|windows
+<lib>/libgrpmaudio.a|unix
+<lib>/libgrpmfilter.a|unix
+<lib>/libgrpopus.a|unix
+<lib>/libgrporphan.a|unix
+<lib>/libgrpspeex.a|unix
+<lib>/libgrpssim.a|unix
+<lib>/libgrpvmaf.a|unix
+
+# hooks
+<include>/hooka.h|all
+<include>/hookb.h|all
+<lib>/hookalib.lib|windows
+<lib>/hookblib.lib|windows
+<lib>/libhookalib.a|unix
+<lib>/libhookblib.a|unix
+
+# hooks-stamp
+<include>/hook_generated.h|all
+<lib>/hooks-stamp.lib|windows
+<lib>/libhooks-stamp.a|unix
+
+# late-link
+<include>/latedst.h|all
+<include>/latesrc.h|all
+<lib>/latedstlib.lib|windows
+<lib>/latesrclib.lib|windows
+<lib>/liblatedstlib.a|unix
+<lib>/liblatesrclib.a|unix
+
+# link-component
+<include>/a.h|all
+<include>/b.h|all
+<lib>/alinklib.lib|windows
+<lib>/blinklib.lib|windows
+<lib>/libalinklib.a|unix
+<lib>/libblinklib.a|unix
+
+# link-raw
+<include>/raw.h|all
+<lib>/librawlib.a|unix
+<lib>/rawlib.lib|windows
+
+# linkflags
+<include>/lfos.h|all
+<include>/lfunix.h|all
 <lib>/lfos.lib|windows
 <lib>/lfunix.lib|windows
-<lib>/libalinklib.a|unix
-<lib>/libbaselib.a|unix
-<lib>/libblinklib.a|unix
-<lib>/libdeplib.a|unix
-<lib>/libfirstlib.a|unix
 <lib>/liblfos.a|unix
 <lib>/liblfunix.a|unix
-<lib>/libloaderlib.a|unix
-<lib>/libmergedlib.a|unix
+
+# meta
+<include>/leaf_a.h|all
+<include>/leaf_b.h|all
+<include>/metaout.h|all
 <lib>/libmetaleafa.a|unix
 <lib>/libmetaleafb.a|unix
 <lib>/libmetaout.a|unix
-<lib>/liboutlib.a|unix
-<lib>/libpayloadlib.a|unix
-<lib>/libpcdeplib.a|unix
-<lib>/libpclib.a|unix
-<lib>/libsecondlib.a|unix
-<lib>/libslowlib.a|unix
-<lib>/libwlib.a|unix
-<lib>/libwlibplain.a|unix
-<lib>/loaderlib.lib|windows
-<lib>/mergedlib.lib|windows
 <lib>/metaleafa.lib|windows
 <lib>/metaleafb.lib|windows
 <lib>/metaout.lib|windows
-<lib>/outlib.lib|windows
-<lib>/payloadlib.lib|windows
-<lib>/pcdeplib.lib|windows
-<lib>/pclib.lib|windows
-<lib>/secondlib.lib|windows
-<lib>/slowlib.lib|windows
-<lib>/wlib.lib|windows
-<lib>/wlibplain.lib|windows
 
-# Headers
-<include>/grpmaudio.h|all
-<include>/grpmfilter.h|all
-<include>/a.h|all
-<include>/b.h|all
-<include>/base.h|all
-<include>/dep.h|all
-<include>/first.h|all
-<include>/leaf_a.h|all
-<include>/leaf_b.h|all
-<include>/lfos.h|all
-<include>/lfunix.h|all
-<include>/loader.h|all
-<include>/metaout.h|all
-<include>/outlib.h|all
-<include>/payload.h|all
-<include>/pc_dep.h|all
-<include>/pc_lib.h|all
-<include>/sdk.h|all
-<include>/second.h|all
-<include>/slow.h|all
-<include>/wlib.h|all
-
-# Meta TOOLCHAIN inherit
+# meta-toolchain
 <include>/meta-toolchain/mtc_inherit.h|all
 <include>/meta-toolchain/mtc_pinned.h|all
 <lib>/meta-toolchain/libmtcinherit.a|unix
@@ -85,11 +124,34 @@
 <lib>/meta-toolchain/mtcinherit.lib|windows
 <lib>/meta-toolchain/mtcpinned.lib|windows
 
-# Pkg-config helper
+# omit-builddir
+<include>/omit.h|all
+<lib>/libomitlib.a|unix
+<lib>/omitlib.lib|windows
+
+# order-independent
+<include>/first.h|all
+<include>/second.h|all
+<lib>/firstlib.lib|windows
+<lib>/libfirstlib.a|unix
+<lib>/libsecondlib.a|unix
+<lib>/secondlib.lib|windows
+
+# pc
+<include>/pc_dep.h|all
+<include>/pc_lib.h|all
+<lib>/libpcdeplib.a|unix
+<lib>/libpclib.a|unix
+<lib>/pcdeplib.lib|windows
+<lib>/pclib.lib|windows
 <lib>/pkgconfig/pcdep.pc|all
 <lib>/pkgconfig/pclib.pc|all
 
-# Recursive cmake
+# private-headers
+<lib>/libprivconsumer.a|unix
+<lib>/privconsumer.lib|windows
+
+# recursive/cmake
 <include>/recursive/cmake/leaf.h|all
 <include>/recursive/cmake/mid.h|all
 <include>/recursive/cmake/nest.h|all
@@ -100,7 +162,7 @@
 <lib>/recursive/cmake/midlib.lib|windows
 <lib>/recursive/cmake/nestlib.lib|windows
 
-# Recursive meson
+# recursive/meson
 <include>/recursive/meson/leaf.h|all
 <include>/recursive/meson/mid.h|all
 <include>/recursive/meson/nest.h|all
@@ -111,20 +173,35 @@
 <lib>/recursive/meson/midlib.lib|windows
 <lib>/recursive/meson/nestlib.lib|windows
 
-# Rename normalize (Meson zs to produced z)
+# rename
 <include>/z.h|all
 <lib>/libz.a|unix
 <lib>/z.lib|windows
 
-# Repack phases must not publish; merge does
+# repack
 !<lib>/aextra.lib|windows
 !<lib>/alib.lib|windows
 !<lib>/blib.lib|windows
 !<lib>/libaextra.a|unix
 !<lib>/libalib.a|unix
 !<lib>/libblib.a|unix
+<lib>/libmergedlib.a|unix
+<lib>/mergedlib.lib|windows
 
-# TOOLCHAIN
+# sdk-headers
+<include>/sdk.h|all
+
+# sdkloader
+<include>/loader.h|all
+<lib>/libloaderlib.a|unix
+<lib>/loaderlib.lib|windows
+
+# slow-configure
+<include>/slow.h|all
+<lib>/libslowlib.a|unix
+<lib>/slowlib.lib|windows
+
+# toolchain
 <include>/toolchain/tc_leaf_meson.h|all
 <include>/toolchain/tc_mid_cmake.h|all
 <include>/toolchain/tc_mid_meson.h|all
@@ -138,40 +215,12 @@
 <lib>/toolchain/tcmidcmake.lib|windows
 <lib>/toolchain/tcmidmeson.lib|windows
 
-# harness-expand
-<include>/dupa.h|all
-<include>/dupb.h|all
-<include>/hook_generated.h|all
-<include>/hooka.h|all
-<include>/hookb.h|all
-<include>/latedst.h|all
-<include>/latesrc.h|all
-<include>/omit.h|all
-<include>/raw.h|all
-<lib>/dupalib.lib|windows
-<lib>/dupblib.lib|windows
-<lib>/hookalib.lib|windows
-<lib>/hookblib.lib|windows
-<lib>/hooks-stamp.lib|windows
-<lib>/latedstlib.lib|windows
-<lib>/latesrclib.lib|windows
-<lib>/libdupalib.a|unix
-<lib>/libdupblib.a|unix
-<lib>/libhookalib.a|unix
-<lib>/libhookblib.a|unix
-<lib>/libhooks-stamp.a|unix
-<lib>/liblatedstlib.a|unix
-<lib>/liblatesrclib.a|unix
-<lib>/libomitlib.a|unix
-<lib>/librawlib.a|unix
-<lib>/omitlib.lib|windows
-<lib>/rawlib.lib|windows
-<include>/grpopus.h|all
-<include>/grpvmaf.h|all
-<include>/grporphan.h|all
-<lib>/grpopus.lib|windows
-<lib>/grpvmaf.lib|windows
-<lib>/grporphan.lib|windows
-<lib>/libgrpopus.a|unix
-<lib>/libgrpvmaf.a|unix
-<lib>/libgrporphan.a|unix
+# whole
+<include>/outlib.h|all
+<include>/wlib.h|all
+<lib>/liboutlib.a|unix
+<lib>/libwlib.a|unix
+<lib>/libwlibplain.a|unix
+<lib>/outlib.lib|windows
+<lib>/wlib.lib|windows
+<lib>/wlibplain.lib|windows

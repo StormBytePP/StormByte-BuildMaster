@@ -1,75 +1,127 @@
 # cmake --build <harness-build> --target <name>
-# All targets required by run_buildmaster_smoke
+# Contract of run_buildmaster_smoke DEPENDS (minus consumer / negative).
+# One section per fixture. Alphabetical inside the section.
 
-# BUILDONLY
+# base
+base_install
+
+# buildonly
 buildonly-lib_install
 
-# Core / flat
-base_install
+# dep
 dep_install
-first_install
+
+# dup-link
+dup-a_install
+dup-b_install
+
+# file-decompress
+buildmaster_decompress_check
+
+# file-to-component
+payload-lib_install
+
+# git-reset-patch
+# configure-time only
+
+# git-sandbox
+# configure-time only
+
+# groups
+grp-maudio_install
+grp-mfilter_install
+grp-opus_install
+grp-orphan_install
+grp-speex_install
+grp-ssim_install
+grp-vmaf_install
+
+# hooks
+hook-a_install
+hook-b_install
+
+# hooks-stamp
+hooks-stamp_install
+
+# late-link
+late-dst_install
+late-src_install
+
+# link-component
 link-a_install
 link-b_install
-payload-lib_install
-sdk-headers_install
-sdkloader_install
-second_install
+link_component_test
 
-# Meta
+# link-raw
+raw-lib_install
+
+# linkflags
+lf-os_install
+lf-unix_install
+linkflags_os_test_run
+# unix-only (NOT WIN32): linkflags_unix_test_run
+
+# meta
 leaf-a_install
 leaf-b_install
 meta-inner_install
 meta-out_install
 meta-plugins_install
-meta-tc_install
 meta_link_test_run
+
+# meta-toolchain
+meta-tc_install
 mtc-inherit_install
 mtc-pinned_install
 
-# Groups
-grp-opus_install
-grp-vmaf_install
-grp-orphan_install
-grp-maudio_install
-grp-mfilter_install
+# omit-builddir
+omit-lib_install
 
-# Order / link tests
-link_component_test
+# order-independent
+first_install
+second_install
 order_independent_link_test
 
-# LINKFLAGS
-lf-os_install
-lf-unix_install
-linkflags_os_test_run
-
-# Pkg-config helper
+# pc
 pc-dep_install
 pc-lib_install
 pc_check_run
 
-# Recursive
+# private-headers
+priv-consumer_install
+priv-h_install
+
+# recursive/cmake
 nest-cmake_install
-nest-meson_install
 recursion_cmake_link_test
+
+# recursive/meson
+nest-meson_install
 recursion_meson_link_test
 
-# Rename
+# rename
 rename-variant_install
 rename_variant_link_test
 
-# Repack
+# repack
+mergedlib_install
 repack-a_install
 repack-b_install
-repack-merged_install
 repack_link_test
 
-# Slow configure
+# sdk-headers
+sdk-headers_install
+
+# sdkloader
+sdkloader_install
+
+# slow-configure
 slow-configure_install
 
-# TOOLCHAIN
+# toolchain
 nest-tc_install
 
-# WHOLE
+# whole
 out-lib_install
 plain-lib_install
 whole-lib_install
