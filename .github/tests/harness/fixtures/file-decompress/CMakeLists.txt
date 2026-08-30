@@ -1,4 +1,4 @@
-# Build a tiny archive under the binary dir, then buildmaster_decompress into extract/.
+# Build a tiny archive under the binary dir, then _bm_file_decompress into extract/.
 
 set(_pack_src "${CMAKE_CURRENT_BINARY_DIR}/pack_src")
 set(_archive "${CMAKE_CURRENT_BINARY_DIR}/sample.tar.gz")
@@ -16,7 +16,7 @@ if(NOT _tar_rc EQUAL 0)
 	message(FATAL_ERROR "file-decompress fixture: failed to create sample.tar.gz")
 endif()
 
-buildmaster_decompress(bm_buildmaster_decompress
+_bm_file_decompress(bm_file_decompress
 	"${_archive}"
 	"${_extract}"
 	TITLE "Harness sample archive"
@@ -24,12 +24,12 @@ buildmaster_decompress(bm_buildmaster_decompress
 )
 
 add_custom_target(buildmaster_decompress_check
-	DEPENDS bm_buildmaster_decompress
+	DEPENDS bm_file_decompress
 	COMMAND ${CMAKE_COMMAND}
 		-DFILE=${_extract}/hello.txt
 		-DEXPECT=buildmaster-file-decompress
 		-P "${CMAKE_CURRENT_SOURCE_DIR}/check_hello.cmake"
-	COMMENT "Verify buildmaster_decompress output"
+	COMMENT "Verify _bm_file_decompress output"
 	VERBATIM
 )
 

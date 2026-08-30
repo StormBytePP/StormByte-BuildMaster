@@ -213,12 +213,11 @@ endfunction()
 ## @brief Download / unpack every FILES group stored on `_id`.
 ## @param[in] _id Registered component.
 ## @note Runs at finalize, before pending detect and nested configure.
-## @note Cache file is `${BUILDMASTER_DOWNLOADSDIR}/<url-basename>` — the
-##       file helpers have no DESTINATION= (ignored if passed).
+## @note Cache file is `${BUILDMASTER_DOWNLOADSDIR}/<url-basename>`.
 ##       Unpack: `${BUILDMASTER_BINDIR}/files/<sanitized NAME>/`.
 ## @note SOURCE group rewrites `BUILDMASTER_COMPONENT_<id>_SRCDIR`.
 ##       Other UNPACK groups append to `FILES_INCLUDES` (private `-I`).
-## @note FORCE uses `buildmaster_download` (always fetch). Else cached.
+## @note FORCE uses `_bm_file_download`. Else `_bm_file_download_cached`.
 function(_bm_comp_apply_files _id)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_files")
 	get_property(_urls GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_FILES_URLS)
@@ -278,13 +277,13 @@ function(_bm_comp_apply_files _id)
 		if(_frc)
 			_bm_log_message(COMPONENT DEBUG
 				"${_id}: FILES FORCE download ${_url} → ${_archive}")
-			buildmaster_download("${_tgt}" "${_url}"
+			_bm_file_download("${_tgt}" "${_url}"
 				${_hash_args}
 				TITLE "${_title}")
 		else()
 			_bm_log_message(COMPONENT DEBUG
 				"${_id}: FILES cached download ${_url} → ${_archive}")
-			buildmaster_download_cached("${_tgt}" "${_url}"
+			_bm_file_download_cached("${_tgt}" "${_url}"
 				${_hash_args}
 				TITLE "${_title}")
 		endif()
@@ -301,7 +300,7 @@ function(_bm_comp_apply_files _id)
 			file(REMOVE_RECURSE "${_udir}")
 		endif()
 		file(MAKE_DIRECTORY "${_udir}")
-		buildmaster_decompress("${_tgt}_unpack" "${_archive}" "${_udir}"
+		_bm_file_decompress("${_tgt}_unpack" "${_archive}" "${_udir}"
 			TITLE "${_title} unpack")
 		if(NOT "${_src}" STREQUAL "")
 			if(_src STREQUAL ".")

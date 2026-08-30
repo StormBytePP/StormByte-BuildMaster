@@ -1,11 +1,10 @@
 # =============================================================================
-# tools/file/download.cmake — buildmaster_download / buildmaster_download_cached
+# tools/file/download.cmake — _bm_file_download / _bm_file_download_cached
 # =============================================================================
-# Public calls create a CMake custom target of the same name (no out-var,
-# no include()). The generated -P script also runs during the caller's
-# configure so artifacts exist before create_*_component. Wire extra graph
-# edges with buildmaster_depend(<component> <file_target>) only when the
-# component must wait on a later rebuild of the file target.
+# Internal. Public surface is FILES={…} on buildmaster_component.
+# Each helper creates a CMake custom target of the same name. The generated
+# -P script also runs during the caller's configure so the file is on disk
+# before nested configure.
 
 ## @brief Generate the force-download script and return its path (internal).
 ## @param[out] out_script Parent-scope path of the generated -P script.
@@ -60,15 +59,14 @@ function(_bm_file_generate_download_script out_script url title expected_hash
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_generate_download_script")
 endfunction()
 
-## @brief Create a file prerequisite target and run its -P script now.
+## @brief Create a file target and run its -P script now.
 ## @param[in] name    Target name.
 ## @param[in] script  Path to cmake -P script.
 ## @param[in] comment Progress COMMENT (wrapped with the File log header).
 ## @param[in] depends Optional list of target dependencies (build-graph only).
-## @note `execute_process(-P script)` runs at configure so callers can
-##       _bm_graph_create against the artifact in the same directory.
-##       The custom target remains for incremental rebuilds / graph edges.
-##       The script must be idempotent (cached download, extract-if-missing).
+## @note `execute_process(-P script)` runs at configure so FILES= can unpack
+##       in the same finalize pass. The custom target remains for incremental
+##       rebuilds. The script must be idempotent.
 function(_bm_file_add_prerequisite_target name script comment depends)
 	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_add_prerequisite_target")
 	if(TARGET "${name}")
@@ -108,7 +106,7 @@ function(_bm_file_add_prerequisite_target name script comment depends)
 endfunction()
 
 ## @brief Always download a file (retries + optional hash); creates a target.
-## @param[in] name Target name used with buildmaster_depend / prerequisite.
+## @param[in] name Target name (internal FILES slot id).
 ## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
 ## @param[in] TITLE         Optional human-readable title (default: URL basename).
 ## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
@@ -116,15 +114,14 @@ endfunction()
 ## @param[in] COMMENT       Optional custom target COMMENT.
 ## @param[in] DEPENDS       Optional list of CMake targets this waits on.
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
-## @note No out-variable and no include(). The -P script runs during this
-##       call (configure) and again if `name` is built.
-function(buildmaster_download name url)
-	_bm_log_message(FILE LOWLEVEL "Entering buildmaster_download")
+## @note Not a public command. Callers: `_bm_comp_apply_files` (FORCE).
+function(_bm_file_download name url)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_download")
 	if("${name}" STREQUAL "")
-		_bm_log_message(FILE FATAL "buildmaster_download: empty name")
+		_bm_log_message(FILE FATAL "_bm_file_download: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		_bm_log_message(FILE FATAL "buildmaster_download: empty url")
+		_bm_log_message(FILE FATAL "_bm_file_download: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -153,12 +150,12 @@ function(buildmaster_download name url)
 
 	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	_bm_log_message(FILE DEBUG "buildmaster_download target ${name}")
-	_bm_log_message(FILE LOWLEVEL "Exiting buildmaster_download")
+	_bm_log_message(FILE DEBUG "_bm_file_download target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_download")
 endfunction()
 
 ## @brief Cache-aware download; creates a target named `name`.
-## @param[in] name Target name used with buildmaster_depend / prerequisite.
+## @param[in] name Target name (internal FILES slot id).
 ## @param[in] url  URL to download (basename under BUILDMASTER_DOWNLOADSDIR).
 ## @param[in] TITLE         Optional human-readable title (default: URL basename).
 ## @param[in] EXPECTED_HASH Optional "ALGO=hex" or bare hex (SHA256).
@@ -166,17 +163,14 @@ endfunction()
 ## @param[in] COMMENT       Optional custom target COMMENT.
 ## @param[in] DEPENDS       Optional list of CMake targets this waits on.
 ## @param[in] INDENT        Optional status indent tabs for the generated script.
-## @note Generates force-download + cached wrapper scripts. The cached
-##       wrapper runs during this call (configure) so the file is on disk
-##       before create_*_component. Building `name` re-runs the same
-##       idempotent wrapper. No out-variable / include().
-function(buildmaster_download_cached name url)
-	_bm_log_message(FILE LOWLEVEL "Entering buildmaster_download_cached")
+## @note Not a public command. Callers: `_bm_comp_apply_files` (default).
+function(_bm_file_download_cached name url)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_download_cached")
 	if("${name}" STREQUAL "")
-		_bm_log_message(FILE FATAL "buildmaster_download_cached: empty name")
+		_bm_log_message(FILE FATAL "_bm_file_download_cached: empty name")
 	endif()
 	if("${url}" STREQUAL "")
-		_bm_log_message(FILE FATAL "buildmaster_download_cached: empty url")
+		_bm_log_message(FILE FATAL "_bm_file_download_cached: empty url")
 	endif()
 
 	cmake_parse_arguments(ARG
@@ -233,6 +227,6 @@ function(buildmaster_download_cached name url)
 
 	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
-	_bm_log_message(FILE DEBUG "buildmaster_download_cached target ${name}")
-	_bm_log_message(FILE LOWLEVEL "Exiting buildmaster_download_cached")
+	_bm_log_message(FILE DEBUG "_bm_file_download_cached target ${name}")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_download_cached")
 endfunction()
