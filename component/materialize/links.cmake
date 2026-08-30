@@ -1,5 +1,5 @@
 # =============================================================================
-# component/materialize/links.cmake — PRIVATE -I inject + apply_links
+# component/materialize/links.cmake — PRIVATE -I inject + LINKFLAGS fold + apply_links
 # =============================================================================
 
 ## @brief Fold one `-I<path>` token into cmake/meson OPTIONS (configure only).
@@ -41,6 +41,49 @@ function(_bm_materialize_options_add_include _sys _opts_var _tok)
 	endforeach()
 	set(${_opts_var} "${_opts}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_options_add_include")
+endfunction()
+
+## @brief Fold one raw linker flag into cmake/meson OPTIONS (configure only).
+## @param[in] _sys `cmake` or `meson`.
+## @param[in,out] _opts_var Name of a CMake list variable holding OPTIONS.
+## @param[in] _tok Single raw flag (`-Wl,-Bsymbolic`, `/FORCE:MULTIPLE`).
+## @note CMake: `-DCMAKE_EXE_LINKER_FLAGS=…`, `-DCMAKE_SHARED_LINKER_FLAGS=…`,
+##       `-DCMAKE_MODULE_LINKER_FLAGS=…` (append). Not `CMAKE_STATIC_LINKER_FLAGS`
+##       (that is the archiver).
+##       Meson: `-Dc_link_args=…` and `-Dcpp_link_args=…` (append).
+##       Does not write ENV, the native file, or INTERFACE.
+##       Several flags → several tokens in the same `-D` value.
+function(_bm_materialize_options_add_linkflag _sys _opts_var _tok)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_options_add_linkflag")
+	set(_opts "${${_opts_var}}")
+	if(_sys STREQUAL "cmake")
+		set(_keys CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS)
+	else()
+		set(_keys c_link_args cpp_link_args)
+	endif()
+	foreach(_k IN LISTS _keys)
+		set(_found FALSE)
+		set(_new "")
+		foreach(_o IN LISTS _opts)
+			if(_o MATCHES "^-D${_k}=")
+				set(_found TRUE)
+				string(REGEX REPLACE "^-D${_k}=" "" _val "${_o}")
+				if(_val STREQUAL "")
+					list(APPEND _new "-D${_k}=${_tok}")
+				else()
+					list(APPEND _new "-D${_k}=${_val} ${_tok}")
+				endif()
+			else()
+				list(APPEND _new "${_o}")
+			endif()
+		endforeach()
+		if(NOT _found)
+			list(APPEND _new "-D${_k}=${_tok}")
+		endif()
+		set(_opts "${_new}")
+	endforeach()
+	set(${_opts_var} "${_opts}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_options_add_linkflag")
 endfunction()
 
 ## @brief Fold every path in a list onto `_id` OPTIONS via `_bm_path_compile_include`.
@@ -126,6 +169,45 @@ function(_bm_materialize_inject_private_headers)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_inject_private_headers")
 endfunction()
 
+## @brief Fold each concrete id's LINKFLAGS into that id's nested OPTIONS.
+## @note Walks `BUILDMASTER_COMPONENT_IDS`. Skips `none` / empty / `pending`
+##       (pending must already have been resolved). A meta is not in this
+##       list; `buildmaster_meta` WARNING + clears before finalize.
+## @note Does not write INTERFACE. Does not walk `buildmaster_link` edges:
+##       flags belong to the declaring id's nested cmake / meson only.
+## @note Must run after FILES / pending resolve and PRIVATE `-I` inject,
+##       before backend materialize so stages see the folded `-D`.
+function(_bm_materialize_inject_linkflags)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_inject_linkflags")
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	if(NOT _ids)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_inject_linkflags")
+		return()
+	endif()
+	foreach(_id IN LISTS _ids)
+		get_property(_flags GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_LINKFLAGS)
+		if(NOT _flags)
+			continue()
+		endif()
+		get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
+		if(_sys STREQUAL "none" OR _sys STREQUAL "" OR _sys STREQUAL "pending")
+			_bm_log_message(COMPONENT NOTICE
+				"'${_id}': LINKFLAGS not applied (no cmake/meson backend)")
+			continue()
+		endif()
+		get_property(_opts GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_OPTIONS)
+		foreach(_tok IN LISTS _flags)
+			if(_tok STREQUAL "")
+				continue()
+			endif()
+			_bm_materialize_options_add_linkflag("${_sys}" _opts "${_tok}")
+			_bm_log_message(COMPONENT DEBUG "${_id}: LINKFLAGS ${_tok}")
+		endforeach()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_OPTIONS "${_opts}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_inject_linkflags")
+endfunction()
+
 ## @brief Apply recorded buildmaster_link edges after all fragments are included.
 ## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
 ## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
@@ -154,7 +236,7 @@ function(_bm_materialize_apply_links)
 
 		if(NOT TARGET "${_src}")
 			_bm_log_message(COMPONENT FATAL
-				"buildmaster_link: source '${_src}' is not a target (missing create_*_component?)")
+				"buildmaster_link: source '${_src}' is not a target (missing buildmaster_component?)")
 		endif()
 
 		_bm_meta_is("${_dst}" _dst_meta)

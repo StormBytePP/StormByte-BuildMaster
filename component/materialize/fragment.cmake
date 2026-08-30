@@ -141,18 +141,20 @@ endfunction()
 ## @brief configure_file + include the shared component fragment template.
 ## @param[in] _component Registered component id.
 ## @param[in] _deferred  TRUE → deferred template (configure at build time).
-## @note Collects outputs, WHOLE, LINK, LINKFLAGS and recorded dependencies,
-##       then generates `component_<id>.cmake` under
+## @note Collects outputs, WHOLE, LINK and recorded dependencies, then
+##       generates `component_<id>.cmake` under
 ##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it.
 ##       `<id>` is already an INTERFACE from `_bm_graph_create`; the fragment
-##       only attaches includes, IMPORTED archives, WHOLE, LINK and LINKFLAGS.
+##       attaches includes, IMPORTED archives, WHOLE and LINK.
+##       LINKFLAGS is **not** applied here: `_bm_materialize_inject_linkflags`
+##       already folded them into OPTIONS before stages ran.
 ## @note `_BM_LINK_ITEMS` is the CMake list stored on
 ##       `BUILDMASTER_COMPONENT_<id>_LINK` (empty string if unset). The
 ##       template applies it INTERFACE on `<id>` so consumers propagate
 ##       those raw names to the final artefact.
-## @note `_BM_LINKFLAGS_ITEMS` is the CMake list stored on
-##       `BUILDMASTER_COMPONENT_<id>_LINKFLAGS` (empty string if unset).
-##       The template applies it INTERFACE via `target_link_options`.
+## @note `_BM_LINKFLAGS_ITEMS` is read only for DEBUG. The template does
+##       not call `target_link_options`. An unused `@ONLY` substitution
+##       is harmless if a leftover `@ _BM_LINKFLAGS_ITEMS @` remains.
 ## @note Library-spec `buildmaster_link` dests are folded into FILES by
 ##       `collect_outputs`. Stage `OUTPUT` is the declared produced specs
 ##       from `_bm_tools_*_stages`. After `include()`, each extra file
@@ -233,7 +235,7 @@ function(_bm_materialize_write_fragment _component _deferred)
 	endif()
 	if(_BM_LINKFLAGS_ITEMS)
 		_bm_log_message(COMPONENT DEBUG
-			"${_component}: LINKFLAGS (raw) → ${_BM_LINKFLAGS_ITEMS}")
+			"${_component}: LINKFLAGS (nested OPTIONS, not INTERFACE) → ${_BM_LINKFLAGS_ITEMS}")
 	endif()
 
 	if(_deferred)

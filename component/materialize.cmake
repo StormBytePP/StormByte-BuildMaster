@@ -1,7 +1,8 @@
 # =============================================================================
 # component/materialize.cmake — deferred finalize
 # =============================================================================
-# Children: fragment emit, PRIVATE -I inject + apply_links, headers-none.
+# Children: fragment emit, PRIVATE -I inject + LINKFLAGS fold + apply_links,
+#           headers-none.
 # Scheduled by _bm_graph_defer_arm (graph.cmake).
 
 include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
@@ -10,21 +11,25 @@ include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 ##        links, orphan warn, hooks.
 ## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
-## @note Concrete and `buildmaster_meta` INTERFACE stubs already exist. This
+##       Concrete and `buildmaster_meta` INTERFACE stubs already exist. This
 ##       pass emits stages, fragments, headers-none stamps, REPACK merge
 ##       targets, meta stage anchors, member wiring and recorded
 ##       `buildmaster_link` edges.
 ## @note Order: flush queued git reset/patch → FILES download/unpack →
 ##       resolve pending SOURCE backends → inject PRIVATE headers
-##       `-I` into linker OPTIONS → materialize metas → propagate meta
-##       TOOLCHAIN → per-id cmake / meson / none materialize → REPACK →
-##       meta wire → apply links → orphan warning → fail if a per-id hook
-##       was registered for an id that never materialized → graph hooks
-##       (alias order).
+##       `-I` into linker OPTIONS → fold LINKFLAGS into the owner's nested
+##       OPTIONS → materialize metas → propagate meta TOOLCHAIN → per-id
+##       cmake / meson / none materialize → REPACK → meta wire → apply
+##       links → orphan warning → fail if a per-id hook was registered for
+##       an id that never materialized → graph hooks (alias order).
 ## @note Git flush is first so eager nested configure sees patched sources.
 ## @note FILES runs next so SOURCE trees exist before autodetect / configure.
 ## @note PRIVATE `-I` injection is before any nested configure so several
 ##       `buildmaster_link` edges to headers trees each add their own token.
+## @note LINKFLAGS fold is next so the owner's nested cmake / meson sees
+##       `-DCMAKE_*_LINKER_FLAGS` / `-Dc_link_args` before stages run.
+##       Flags stay on that id; they do not walk the graph and do not become
+##       INTERFACE on the imported artefact.
 ## @note `SYSTEM=none` is headers without a backend (`_bm_materialize_none`).
 function(_bm_materialize_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_finalize")
@@ -48,6 +53,7 @@ function(_bm_materialize_finalize)
 	endif()
 
 	_bm_materialize_inject_private_headers()
+	_bm_materialize_inject_linkflags()
 
 	_bm_meta_materialize()
 	_bm_tc_propagate_metas()

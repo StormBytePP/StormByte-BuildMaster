@@ -57,6 +57,8 @@ endfunction()
 ##       function does `add_library(INTERFACE)` only for lazy metas.
 ##       Always creates empty `<id>_install` / `_build` / `_configure`
 ##       if missing.
+## @note Meta `LINK=` is applied as INTERFACE `target_link_libraries`.
+##       Meta `LINKFLAGS` is never applied here (cleared at registration).
 function(_bm_meta_materialize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_materialize")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -95,11 +97,6 @@ function(_bm_meta_materialize)
 		if(_meta_link)
 			target_link_libraries(${_id} INTERFACE ${_meta_link})
 			_bm_log_message(COMPONENT DEBUG "${_id}: LINK (raw) → ${_meta_link}")
-		endif()
-		get_property(_meta_linkflags GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS)
-		if(_meta_linkflags)
-			target_link_options(${_id} INTERFACE ${_meta_linkflags})
-			_bm_log_message(COMPONENT DEBUG "${_id}: LINKFLAGS (raw) → ${_meta_linkflags}")
 		endif()
 		if(NOT TARGET "${_id}_install")
 			add_custom_target(${_id}_install)

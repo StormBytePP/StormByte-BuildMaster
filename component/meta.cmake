@@ -79,6 +79,11 @@ endfunction()
 ## @note `FILES={…}` is FATAL on a meta (no srcdir, no configure). Empty
 ##       `FILES` / `FILES={}` is still FATAL here: a leftover on a meta is
 ##       not a download.
+## @note `LINK=` is kept on the meta INTERFACE (raw syslibs propagate to
+##       whoever links the collection).
+## @note `LINKFLAGS=` is WARNING + ignored. A meta has no nested
+##       cmake/meson link step to fold flags into. Put LINKFLAGS on the
+##       concrete member that actually builds.
 ## @note A second `buildmaster_meta()` for the same id is FATAL.
 function(buildmaster_meta _id _title)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta")
@@ -155,6 +160,11 @@ function(buildmaster_meta _id _title)
 		_bm_log_message(COMPONENT INFO
 			"buildmaster_meta('${_id}'): STRIPRES ignored (meta has no produced archives of its own)")
 	endif()
+	if(_meta_linkflags)
+		_bm_log_message(COMPONENT WARNING
+			"buildmaster_meta('${_id}'): LINKFLAGS ignored (a meta has no nested link step; put LINKFLAGS on the member that builds)")
+		set(_meta_linkflags "")
+	endif()
 
 	set(_disp "${_title}")
 	if("${_disp}" STREQUAL "")
@@ -165,7 +175,7 @@ function(buildmaster_meta _id _title)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_INDENT "${_indent}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_TOOLCHAIN "${_tc}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINK "${_meta_link}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS "${_meta_linkflags}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS "")
 	if(_whole)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE TRUE)
 	else()
@@ -182,9 +192,9 @@ function(buildmaster_meta _id _title)
 	_bm_graph_defer_arm()
 	if(_repack)
 		_bm_log_message(COMPONENT DEBUG "Registered meta ${_id} REPACK")
-	elseif(_meta_link OR _meta_linkflags)
+	elseif(_meta_link)
 		_bm_log_message(COMPONENT DEBUG
-			"Registered meta ${_id} LINK=${_meta_link} LINKFLAGS=${_meta_linkflags}")
+			"Registered meta ${_id} LINK=${_meta_link}")
 	else()
 		_bm_log_message(COMPONENT DEBUG "Registered meta ${_id}")
 	endif()
@@ -220,7 +230,7 @@ function(buildmaster_meta_add meta)
 		list(FIND _comp_ids "${meta}" _cidx)
 		if(NOT _cidx EQUAL -1)
 			_bm_log_message(COMPONENT FATAL
-				"buildmaster_meta_add: '${meta}' is a create_*_component id, not a meta")
+				"buildmaster_meta_add: '${meta}' is a buildmaster_component id, not a meta")
 		endif()
 	endif()
 

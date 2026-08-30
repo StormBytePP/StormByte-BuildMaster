@@ -12,6 +12,10 @@ fragment to `include()`, no public dependant factories, no public
 `create_cmake_component` / `create_meson_component`. A 1.x
 `CMakeLists.txt` will not configure. That is the point.
 
+What 1.0.1 already did internally (headers mode, per-component
+toolchains, nested binutils, env runners) is still there; the caller
+and the declaration shape changed.
+
 ### Added
 
 - **Declarative component graph.**
@@ -25,15 +29,14 @@ fragment to `include()`, no public dependant factories, no public
   archive stays link-only. Duplicate *explicit* edges are WARNING +
   no-op; internal auto-deps do not warn. Unresolvable dest at finalize
   is FATAL.
-- **Deferred materialization.** Registration only stores metadata.
-  Fragments and stage targets exist at the end of parent configure
-  (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order
-  does not matter. Components without edges still configure during
-  parent configure; components with edges configure at build time
-  under `<id>_configure`.
-- **Eager INTERFACE stub.** `add_library(<id> INTERFACE)` at
-  registration so a sibling `ALIAS` / `target_link_libraries` before
-  DEFER does not see a missing target.
+- **Deferred materialization + eager INTERFACE stub.**
+  Registration only stores metadata. Fragments and stage targets exist
+  at the end of parent configure (`cmake_language(DEFER)` on
+  `CMAKE_SOURCE_DIR`). Declaration order does not matter. Components
+  without edges still configure during parent configure; components
+  with edges configure at build time under `<id>_configure`.
+  `add_library(<id> INTERFACE)` at registration so a sibling `ALIAS` /
+  `target_link_libraries` before DEFER does not see a missing target.
 - **`buildmaster_component`.** Backend is inferred from `srcdir`
   (`CMakeLists.txt` vs `meson.build`; both markers FATAL; neither +
   `headers` → `none`). Arity is
@@ -64,13 +67,18 @@ fragment to `include()`, no public dependant factories, no public
   only (same rule as the headers island). `GIT={…}` + `SOURCE` is
   FATAL. Replaces the 1.x `file_download*` + dependant-component
   pattern.
-- **`LINK=` / `LINK={…}`.** Raw system linker names on the component or
-  meta INTERFACE. They propagate to whoever links that id. Not BM
+- **`LINK=` / `LINK={…}`.** Raw system linker *names* on the component
+  or meta INTERFACE. They propagate to whoever links that id. Not BM
   nodes. Revives 1.x `LINK_EXTRA` under a shorter name.
-- **`LINKFLAGS=` / `LINKFLAGS={…}`.** Raw linker flags via
-  `target_link_options` on the same INTERFACE. Groups: `WINDOWS`,
-  `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux + macOS). A group that does
-  not apply is skipped at INFO. Unknown platform key is FATAL.
+- **`LINKFLAGS=` / `LINKFLAGS={…}`.** Raw linker *flags*
+  (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`) for the **nested** cmake/meson
+  link only. Groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` (`UNIX` = Linux
+  + macOS). A group that does not apply is skipped at INFO. Unknown
+  platform key is FATAL. Folded into that id’s OPTIONS at finalize
+  (`CMAKE_EXE/SHARED/MODULE_LINKER_FLAGS` or Meson `c_link_args` /
+  `cpp_link_args`). **Not** `target_link_options` on the INTERFACE —
+  a consumer of this id does not inherit the flags. Meta: WARNING +
+  ignore (no nested link). Headers: WARNING + ignore.
 - **`GIT={FETCH;SWITCH=<branch>;RESET;PATCH=<file>;TITLE=…}`.** Srcdir
   git work on `buildmaster_component`. Flush order is fixed: FETCH →
   SWITCH → RESET → PATCH (PATCH order is declaration order). Relative
@@ -112,10 +120,11 @@ fragment to `include()`, no public dependant factories, no public
 - Prefix search injection so nested compiles see the shared install
   tree.
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
-  meta-toolchain, LINKFLAGS, hooks, late link, raw `LINK=`, duplicate
-  edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install
-  FATAL), `REPACK` meta, private-headers `-I`, `FILES=` unpack /
-  SOURCE, FILES-on-meta FATAL.
+  meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta
+  ignore), hooks, late link, raw `LINK=`, duplicate edges,
+  `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL),
+  `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE,
+  FILES-on-meta FATAL.
 
 ### Changed
 
@@ -165,6 +174,12 @@ fragment to `include()`, no public dependant factories, no public
   `buildmaster_link`, which waits).
 - **Breaking — `LINK_EXTRA` is gone.** Graph nodes: `buildmaster_link`.
   Raw system libs: `LINK=`.
+- **Breaking — `LINKFLAGS` is not INTERFACE.**
+  There is no `target_link_options` on `<id>`. Flags fold into that
+  id’s nested OPTIONS only. A parent that links the component does
+  **not** inherit `-Wl,-Bsymbolic` / `/FORCE:MULTIPLE`. Put flags on
+  the id that actually builds, or on the final executable yourself.
+  Meta `LINKFLAGS` is WARNING + ignored.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
 - **Breaking — options string.** One optional trailing `KEY=value;…`

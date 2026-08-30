@@ -23,9 +23,9 @@
 ##            MSVC/clang-cl archives after RENAME),
 ##            LINK=<name> / LINK={name;name2} (raw linker names on the
 ##            component INTERFACE; see below),
-##            LINKFLAGS=<flag> / LINKFLAGS={…} (raw linker flags on the
-##            component INTERFACE via target_link_options; platform groups
-##            WINDOWS / LINUX / MAC / UNIX),
+##            LINKFLAGS=<flag> / LINKFLAGS={…} (raw linker flags folded
+##            into this id's nested cmake/meson OPTIONS at finalize;
+##            platform groups WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers),
 ##            GIT={…}, FILES={…}.
@@ -46,11 +46,14 @@
 ##       They do not repair a third-party archive that was linked without
 ##       going through this INTERFACE. Not a substitute for `buildmaster_link()`.
 ## @note `LINKFLAGS` items are external raw linker flags
-##       (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`). Applied `INTERFACE` on `<id>`
-##       via `target_link_options` and propagate to the final artefact.
-##       They do not rewrite the nested third-party link line.
+##       (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`). They are **not** placed on
+##       the component INTERFACE. Finalize folds them into this id's
+##       OPTIONS (`CMAKE_EXE/SHARED/MODULE_LINKER_FLAGS` for cmake,
+##       `c_link_args` / `cpp_link_args` for meson) so only the nested
+##       build sees them. Consumers that `target_link_libraries` this id
+##       do not inherit those flags.
 ## @note Headers mode: `LINK` is INFO and ignored. `LINKFLAGS` is WARNING
-##       and ignored (no link line).
+##       and ignored (no nested link step).
 ## @note `STRIPRES` default is ON. INFO only when the user wrote the key and
 ##       mode is not static (shared/headers have nothing to strip).
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE

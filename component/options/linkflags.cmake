@@ -103,16 +103,19 @@ endfunction()
 ##            `buildmaster_component` / `buildmaster_meta`.
 ## @param[out] out_items      Parent-scope CMake list of raw linker flags
 ##            selected for the current host (empty if omitted or nothing applies).
-## @note Items are **external to BuildMaster**. They are forwarded verbatim
-##       onto the component INTERFACE via `target_link_options(<id> INTERFACE …)`
-##       and therefore propagate along the CMake link chain to the final
-##       artefact (`.dll` / `.so` / executable) that consumes that id.
-##       They do not rewrite the nested third-party build and they do not
-##       fix a link line that never goes through the BM INTERFACE.
-## @note Items are raw linker flags (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`),
-##       not component ids, not metas, not CMake targets, and not library
-##       specs. Use `LINK=` for system library names and `buildmaster_link()`
-##       for BM graph nodes.
+## @note Items are **external to BuildMaster**. They are raw linker flags
+##       (`/FORCE:MULTIPLE`, `-Wl,-Bsymbolic`), not component ids, not metas,
+##       not CMake targets, and not library specs. Use `LINK=` for system
+##       library names and `buildmaster_link()` for BM graph nodes.
+## @note On a concrete component they are folded into that id's nested
+##       cmake / meson `OPTIONS` at finalize (`CMAKE_EXE_LINKER_FLAGS` /
+##       `CMAKE_SHARED_LINKER_FLAGS` / `CMAKE_MODULE_LINKER_FLAGS`, or
+##       `c_link_args` / `cpp_link_args`). They rewrite **that** third-party
+##       link line only. They are never applied `INTERFACE` on `<id>` and
+##       do not propagate to a parent that links the artefact
+##       (Multimedia must not inherit FFmpeg's `-Wl,-Bsymbolic`).
+## @note On `buildmaster_meta` the parser still fills the list so the
+##       caller can WARNING + ignore. A meta has no nested link line.
 ## @note Forms:
 ##       - `LINKFLAGS=-Wl,-Bsymbolic` — one flag, every platform.
 ##       - `LINKFLAGS={-pthread;-Wl,-Bsymbolic}` — flags, every platform.
