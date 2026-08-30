@@ -160,3 +160,12 @@
 <lib>/librawlib.a|unix
 <lib>/omitlib.lib|windows
 <lib>/rawlib.lib|windows
+<include>/grpopus.h|all
+<include>/grpvmaf.h|all
+<include>/grporphan.h|all
+<lib>/grpopus.lib|windows
+<lib>/grpvmaf.lib|windows
+<lib>/grporphan.lib|windows
+<lib>/libgrpopus.a|unix
+<lib>/libgrpvmaf.a|unix
+<lib>/libgrporphan.a|unix

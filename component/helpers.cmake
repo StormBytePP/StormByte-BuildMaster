@@ -18,6 +18,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/hooks.cmake")
 # Meta components (no sources; membership + INTERFACE).
 include("${CMAKE_CURRENT_LIST_DIR}/meta.cmake")
 
+# Outline groups (banners + walk order; no targets).
+include("${CMAKE_CURRENT_LIST_DIR}/group.cmake")
+
 # Meta TOOLCHAIN → members / graph dests (empty child inherits).
 include("${CMAKE_CURRENT_LIST_DIR}/toolchain_inherit.cmake")
 

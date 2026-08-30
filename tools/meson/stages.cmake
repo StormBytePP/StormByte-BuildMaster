@@ -20,8 +20,10 @@
 ## @param[in] _output_libraries One or more full paths to the built
 ##            library/artifact(s) produced by the component; exported as
 ##            `_MESON_OUTPUT_LIBRARIES` for template use.
-## @param[in] _indent_level Optional (ARGV10) number of tab characters to
-##            prepend to generated lines; sets `_MESON_INDENT_` for templates.
+## @param[in] _indent_level Optional (ARGV10) tab count for eager setup
+##            STATUS. Exported as `_MESON_INDENT_LEVEL` (digit) and
+##            `_MESON_INDENT_` (tab characters) for `setup.cmake.in`.
+##            Compile/install COMMENT stays at 0.
 ## @param[in] _toolchain Optional (ARGV11) BuildMaster toolchain name
 ##            (`gcc`, `clang`, `clang-cl`, `msvc`). Empty means inherit the
 ##            parent job toolchain. When set, compilers, linker, archiver and
@@ -60,6 +62,14 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	_bm_log_message(MESON LOWLEVEL "Entering _bm_tools_meson_stages")
 	if(ARGC GREATER 10)
 		set(_indent_level "${ARGV10}")
+	else()
+		set(_indent_level 0)
+	endif()
+	if(NOT _indent_level MATCHES "^[0-9]+$")
+		set(_indent_level 0)
+	endif()
+	set(_MESON_INDENT_LEVEL "${_indent_level}")
+	if(_indent_level GREATER 0)
 		string(REPEAT "\t" ${_indent_level} _MESON_INDENT_)
 	else()
 		set(_MESON_INDENT_ "")

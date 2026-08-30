@@ -7,30 +7,29 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 
-## @brief Deferred materialize: metas, toolchain inherit, components, REPACK,
-##        links, orphan warn, hooks.
+## @brief Materialize one registered component by SYSTEM.
+function(_bm_materialize_one id)
+	get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_SYSTEM)
+	if("${_sys}" STREQUAL "")
+		return()
+	endif()
+	if(_sys STREQUAL "cmake")
+		_bm_backend_cmake_materialize("${id}")
+	elseif(_sys STREQUAL "meson")
+		_bm_backend_meson_materialize("${id}")
+	elseif(_sys STREQUAL "none")
+		_bm_materialize_none("${id}")
+	else()
+		_bm_log_message(COMPONENT FATAL
+			"finalize: unknown system '${_sys}' for '${id}'")
+	endif()
+endfunction()
+
+## @brief Deferred materialize: groups plan, metas, toolchain inherit,
+##        components, REPACK, links, orphan warn, hooks.
 ## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
-##       Harness may call this before configure-time contract checks.
-##       Concrete and `buildmaster_meta` INTERFACE stubs already exist. This
-##       pass emits stages, fragments, headers-none stamps, REPACK merge
-##       targets, meta stage anchors, member wiring and recorded
-##       `buildmaster_link` edges.
-## @note Order: flush queued git reset/patch → FILES download/unpack →
-##       resolve pending SOURCE backends → inject PRIVATE headers
-##       `-I` into linker OPTIONS → fold LINKFLAGS into the owner's nested
-##       OPTIONS → materialize metas → propagate meta TOOLCHAIN → per-id
-##       cmake / meson / none materialize → REPACK → meta wire → apply
-##       links → orphan warning → fail if a per-id hook was registered for
-##       an id that never materialized → graph hooks (alias order).
-## @note Git flush is first so eager nested configure sees patched sources.
-## @note FILES runs next so SOURCE trees exist before autodetect / configure.
-## @note PRIVATE `-I` injection is before any nested configure so several
-##       `buildmaster_link` edges to headers trees each add their own token.
-## @note LINKFLAGS fold is next so the owner's nested cmake / meson sees
-##       `-DCMAKE_*_LINKER_FLAGS` / `-Dc_link_args` before stages run.
-##       Flags stay on that id; they do not walk the graph and do not become
-##       INTERFACE on the imported artefact.
-## @note `SYSTEM=none` is headers without a backend (`_bm_materialize_none`).
+## @note Group events (`banner:id:depth` / `comp:id`) are played in order so
+##       a member configure sits under its group banner.
 function(_bm_materialize_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -52,25 +51,28 @@ function(_bm_materialize_finalize)
 		endforeach()
 	endif()
 
+	if(COMMAND _bm_group_plan)
+		_bm_group_plan()
+	endif()
+
 	_bm_materialize_inject_private_headers()
 	_bm_materialize_inject_linkflags()
 
 	_bm_meta_materialize()
 	_bm_tc_propagate_metas()
 
-	if(_ids)
-		foreach(_id IN LISTS _ids)
-			get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
-			if(_sys STREQUAL "cmake")
-				_bm_backend_cmake_materialize("${_id}")
-			elseif(_sys STREQUAL "meson")
-				_bm_backend_meson_materialize("${_id}")
-			elseif(_sys STREQUAL "none")
-				_bm_materialize_none("${_id}")
-			else()
-				_bm_log_message(COMPONENT FATAL
-					"finalize: unknown system '${_sys}' for '${_id}'")
+	get_property(_events GLOBAL PROPERTY BUILDMASTER_GROUP_EVENTS)
+	if(_events)
+		foreach(_ev IN LISTS _events)
+			if(_ev MATCHES "^banner:([^:]+):([0-9]+)$")
+				_bm_group_emit_banner("${CMAKE_MATCH_1}" "${CMAKE_MATCH_2}")
+			elseif(_ev MATCHES "^comp:(.+)$")
+				_bm_materialize_one("${CMAKE_MATCH_1}")
 			endif()
+		endforeach()
+	elseif(_ids)
+		foreach(_id IN LISTS _ids)
+			_bm_materialize_one("${_id}")
 		endforeach()
 	endif()
 

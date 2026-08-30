@@ -3,6 +3,8 @@
 # Component API
 buildmaster_component
 buildmaster_depend
+buildmaster_group
+buildmaster_group_add
 buildmaster_hook_component
 buildmaster_hook_graph
 buildmaster_link

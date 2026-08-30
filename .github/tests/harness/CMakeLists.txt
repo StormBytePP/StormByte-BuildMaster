@@ -42,6 +42,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_hooks.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -96,6 +97,9 @@ add_custom_target(run_buildmaster_smoke
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run
 		mtc-inherit_install mtc-pinned_install
+        # Groups
+        grp-opus_install grp-speex_install grp-vmaf_install grp-ssim_install
+        grp-orphan_install
 		# Order / link tests
 		link_component_test order_independent_link_test
 		# LINKFLAGS

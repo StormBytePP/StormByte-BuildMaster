@@ -11,7 +11,9 @@ endif()
 if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
 		OR NOT EXISTS "@_CMAKE_BUILD_DIR@/build.ninja")
 	if(NOT "@_BM_CONFIGURE_VIA_TARGET@" STREQUAL "1")
-		_bm_log_message(CMAKE STATUS "@_CMAKE_INDENT_@Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
+		_bm_log_message(CMAKE STATUS
+			"Configuring @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@"
+			"@_CMAKE_INDENT_LEVEL@")
 	endif()
 
 	# Prefix is ENV_CMAKE_*: runner tokens + cmake binary.

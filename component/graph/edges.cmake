@@ -57,6 +57,7 @@ endfunction()
 ## @param[in] source Component id or CMake target (resolved at finalize).
 ## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
 ##            or `<id>_install` / `<id>_configure` / `<id>_build`.
+## @note A group id is FATAL on either side (outline only).
 ## @note A non-BUILDONLY component must not depend on a BUILDONLY component
 ##       unless the dest is `PRIVATE_HEADERS` (checked at materialize).
 ##       BUILDONLY may depend on BUILDONLY or normal.
@@ -80,6 +81,10 @@ function(buildmaster_depend source dest)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_depend: called after finalize")
 	endif()
+	if(COMMAND _bm_group_forbid)
+		_bm_group_forbid("${source}" "buildmaster_depend")
+		_bm_group_forbid("${dest}" "buildmaster_depend")
+	endif()
 	_bm_graph_pair_in_lists(
 		BUILDMASTER_COMPONENT_DEP_SOURCES
 		BUILDMASTER_COMPONENT_DEP_DESTS
@@ -100,6 +105,7 @@ endfunction()
 ## @param[in] dest   Registered component or meta, existing CMake target,
 ##            an on-disk archive path, or a library spec
 ##            (`<name>` or `<subdir>/<name>`) under the BM prefix.
+## @note A group id is FATAL on either side (outline only).
 ## @note Dest that is none of the above is FATAL at materialize. Raw system
 ##       linker names (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}`
 ##       on the producer, not here.
@@ -127,6 +133,10 @@ function(buildmaster_link source dest)
 	if(_done)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_link: called after finalize")
+	endif()
+	if(COMMAND _bm_group_forbid)
+		_bm_group_forbid("${source}" "buildmaster_link")
+		_bm_group_forbid("${dest}" "buildmaster_link")
 	endif()
 	_bm_graph_pair_in_lists(
 		BUILDMASTER_COMPONENT_LINK_SOURCES

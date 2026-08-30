@@ -4,7 +4,8 @@
 
 ## @brief Parse the optional `KEY=VALUE;…` optstr of `buildmaster_component`
 ##        and `buildmaster_meta`.
-## @param[out] out_indent     Indent level (integer, default 0).
+## @param[out] out_indent     Always 0. `INDENT=` / `INDENT_LEVEL=` is WARNING
+##            and ignored; groups stamp indent at finalize.
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
 ## @param[out] out_rename     TRUE/FALSE — normalize variant archive names
 ##            (default TRUE).
@@ -40,6 +41,8 @@
 ##       meta at materialize.
 ##       `REPACK` on a component is FATAL in `_bm_graph_create`.
 ##       `REPACK` on a meta merges member archives (see `buildmaster_meta`).
+## @note `INDENT` / `INDENT_LEVEL` is accepted only so it is not “unknown”.
+##       Value is discarded. Use `buildmaster_group()`.
 function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres
 											options_string)
@@ -65,12 +68,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 			endif()
 
 			if(_key STREQUAL "INDENT" OR _key STREQUAL "INDENT_LEVEL")
-				if(_val MATCHES "^[0-9]+$")
-					set(_indent "${_val}")
-				else()
-					_bm_log_message(COMPONENT WARNING
-						"INDENT must be a non-negative integer, got '${_val}'")
-				endif()
+				_bm_log_message(COMPONENT WARNING
+					"INDENT= is ignored; put the component in a buildmaster_group() so the outline stamps indent")
 			elseif(_key STREQUAL "TOOLCHAIN")
 				set(_toolchain "${_val}")
 			elseif(_key STREQUAL "LINK")

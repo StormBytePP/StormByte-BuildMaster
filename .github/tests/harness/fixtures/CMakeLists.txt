@@ -2,10 +2,10 @@
 # One subdirectory per feature. recursive/ stays as cmake|meson.
 
 if(NOT BM_TEST_REPO_ROOT)
-	get_filename_component(BM_TEST_REPO_ROOT
-		"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
-		ABSOLUTE
-	)
+    get_filename_component(BM_TEST_REPO_ROOT
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+        ABSOLUTE
+    )
 endif()
 
 # ---------------------------------------------------------------------------
@@ -39,6 +39,11 @@ add_subdirectory(meta)
 add_subdirectory(meta-toolchain)
 
 # ---------------------------------------------------------------------------
+# Outline groups (banners + walk order)
+# ---------------------------------------------------------------------------
+add_subdirectory(groups)
+
+# ---------------------------------------------------------------------------
 # Order / link
 # ---------------------------------------------------------------------------
 add_subdirectory(link-component)
@@ -66,7 +71,7 @@ add_subdirectory(recursive/meson)
 add_subdirectory(rename)
 
 # ---------------------------------------------------------------------------
-# Static archive repack
+# Static archive merge
 # ---------------------------------------------------------------------------
 add_subdirectory(repack)
 
