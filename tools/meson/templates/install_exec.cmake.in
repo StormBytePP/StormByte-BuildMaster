@@ -15,6 +15,11 @@ if(EXISTS "@BUILDMASTER_FAIL_MARKER@")
 	_bm_log_message(MESON FATAL "Skipped @_MESON_COMPONENT_TITLE@")
 endif()
 
+if("$ENV{BUILDMASTER_SILENT_RUNNER}" STREQUAL "1")
+	_bm_log_message(NINJA STATUS
+		"Installing @_MESON_COMPONENT_TITLE@")
+endif()
+
 if(NOT "@_BM_BUILDONLY@" STREQUAL "1")
 	execute_process(
 		COMMAND @_MESON_SILENT_CMD_PREFIX@ install -C "@_MESON_BUILD_DIR@"

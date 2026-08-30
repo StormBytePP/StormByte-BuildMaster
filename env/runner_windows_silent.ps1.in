@@ -32,23 +32,7 @@ function Escape-Win32Arg([string]$Arg) {
 	return '"' + $escaped + '"'
 }
 
-function Replay-BuildMasterLine([string]$Raw) {
-	$s = $Raw
-	if ($s.StartsWith('-- ')) {
-		$s = $s.Substring(3)
-	}
-	$idx = $s.IndexOf('[BuildMaster/')
-	if ($idx -lt 0) {
-		return
-	}
-	$out = $s.Substring($idx)
-	if ($s.Contains('[WARNING ') -or $s.Contains('[FATAL ')) {
-		[Console]::Error.WriteLine($out)
-		return
-	}
-	[Console]::Out.WriteLine($out)
-}
-
+Set-IfNonEmpty 'BUILDMASTER_SILENT_RUNNER' '1'
 Set-IfNonEmpty 'PKG_CONFIG' '@PKG_CONFIG@'
 Prepend-IfNonEmpty 'PKG_CONFIG_PATH' '@PKG_CONFIG_PATH@' ';'
 Prepend-IfNonEmpty 'LIB' '@LIB@' ';'
@@ -102,6 +86,7 @@ if ($payload.Count -gt 1) {
 
 $log = Join-Path $env:TEMP ('buildmaster.' + [guid]::NewGuid().ToString('N') + '.log')
 $logLock = New-Object object
+$seen = New-Object 'System.Collections.Concurrent.ConcurrentDictionary[string,byte]'
 
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = $cmd
@@ -110,6 +95,7 @@ $psi.UseShellExecute = $false
 $psi.RedirectStandardOutput = $true
 $psi.RedirectStandardError = $true
 $psi.CreateNoWindow = $true
+$psi.EnvironmentVariables['BUILDMASTER_SILENT_RUNNER'] = '1'
 
 $p = New-Object System.Diagnostics.Process
 $p.StartInfo = $psi
@@ -117,17 +103,37 @@ $p.StartInfo = $psi
 $handler = {
 	if ($null -eq $EventArgs.Data) { return }
 	$line = $EventArgs.Data
-	[System.Threading.Monitor]::Enter($logLock)
+	$state = $Event.MessageData
+	[System.Threading.Monitor]::Enter($state.Lock)
 	try {
-		Add-Content -LiteralPath $log -Value $line -Encoding UTF8
+		Add-Content -LiteralPath $state.Log -Value $line -Encoding UTF8
 	} finally {
-		[System.Threading.Monitor]::Exit($logLock)
+		[System.Threading.Monitor]::Exit($state.Lock)
 	}
-	Replay-BuildMasterLine $line
+	$s = $line
+	if ($s.StartsWith('-- ')) {
+		$s = $s.Substring(3)
+	}
+	$idx = $s.IndexOf('[BuildMaster/')
+	if ($idx -lt 0) {
+		return
+	}
+	$out = $s.Substring($idx)
+	if ($s.Contains('[WARNING ') -or $s.Contains('[FATAL ')) {
+		[Console]::Error.WriteLine($out)
+		[Console]::Error.Flush()
+		return
+	}
+	if (-not $state.Seen.TryAdd($out, 0)) {
+		return
+	}
+	[Console]::Out.WriteLine($out)
+	[Console]::Out.Flush()
 }
 
-Register-ObjectEvent -InputObject $p -EventName OutputDataReceived -Action $handler | Out-Null
-Register-ObjectEvent -InputObject $p -EventName ErrorDataReceived -Action $handler | Out-Null
+$msg = @{ Log = $log; Lock = $logLock; Seen = $seen }
+Register-ObjectEvent -InputObject $p -EventName OutputDataReceived -Action $handler -MessageData $msg | Out-Null
+Register-ObjectEvent -InputObject $p -EventName ErrorDataReceived -Action $handler -MessageData $msg | Out-Null
 
 [void]$p.Start()
 $p.BeginOutputReadLine()

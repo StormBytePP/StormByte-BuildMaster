@@ -7,35 +7,45 @@
 
 set +e
 
+export BUILDMASTER_SILENT_RUNNER=1
+
 _log="$(mktemp "${TMPDIR:-/tmp}/buildmaster.XXXXXX")"
 trap 'rm -f "$_log"' EXIT HUP INT TERM
 
-# CMake prefixes message() with "-- ". Ninja prefixes COMMENT with
-# "[n/m ( p%)] ". Drop that progress tag on replay: it belongs to the
-# nested graph, not to the parent ninja job.
-_bm_replay_line() {
-	local _raw="$1"
-	local _s="$_raw"
-	local _out=""
-	if [[ $_s == --\ * ]]; then
-		_s="${_s:3}"
-	fi
-	if [[ $_s != *'[BuildMaster/'* ]]; then
-		return
-	fi
-	_out="${_s#*'[BuildMaster/'}"
-	_out="[BuildMaster/${_out}"
-	if [[ $_s == *'[WARNING '* || $_s == *'[FATAL '* ]]; then
-		printf '%s\n' "$_out" >&2
-		return
-	fi
-	printf '%s\n' "$_out"
-}
+_bm_cmd=( )
+if command -v stdbuf >/dev/null 2>&1; then
+	_bm_cmd=(stdbuf -oL -eL)
+fi
 
-@ENV_RUNNER_CMD@ "$@" 2>&1 | while IFS= read -r _line || [[ -n $_line ]]; do
-	printf '%s\n' "$_line" >>"$_log"
-	_bm_replay_line "$_line"
-done
+"${_bm_cmd[@]}" @ENV_RUNNER_CMD@ "$@" 2>&1 | {
+	declare -A _bm_seen
+	_bm_replay_line() {
+		local _raw="$1"
+		local _s="$_raw"
+		local _out=""
+		if [[ $_s == --\ * ]]; then
+			_s="${_s:3}"
+		fi
+		if [[ $_s != *'[BuildMaster/'* ]]; then
+			return
+		fi
+		_out="${_s#*'[BuildMaster/'}"
+		_out="[BuildMaster/${_out}"
+		if [[ $_s == *'[WARNING '* || $_s == *'[FATAL '* ]]; then
+			printf '%s\n' "$_out" >&2
+			return
+		fi
+		if [[ -n ${_bm_seen[$_out]+x} ]]; then
+			return
+		fi
+		_bm_seen["$_out"]=1
+		printf '%s\n' "$_out"
+	}
+	while IFS= read -r _line || [[ -n $_line ]]; do
+		printf '%s\n' "$_line" >>"$_log"
+		_bm_replay_line "$_line"
+	done
+}
 _rc=${PIPESTATUS[0]}
 
 if [[ $_rc -ne 0 ]]; then

@@ -9,6 +9,13 @@ if(EXISTS "@BUILDMASTER_FAIL_MARKER@")
 	_bm_log_message(CMAKE FATAL "Skipped @_CMAKE_COMPONENT_TITLE@")
 endif()
 
+# Parent Ninja already printed COMMENT on a TTY. STATUS is only for a
+# piped nested graph (silent runner sets BUILDMASTER_SILENT_RUNNER).
+if("$ENV{BUILDMASTER_SILENT_RUNNER}" STREQUAL "1")
+	_bm_log_message(NINJA STATUS
+		"Compiling @_CMAKE_COMPONENT_TITLE@@_CMAKE_TOOLCHAIN_SUFFIX@")
+endif()
+
 execute_process(
 	COMMAND @_CMAKE_COMPILE_CMD_PREFIX@ --build "@_CMAKE_BUILD_DIR@" --parallel @NPROC@ @_CMAKE_BUILD_VERBOSE_ARGS@
 	WORKING_DIRECTORY "@_CMAKE_BUILD_DIR@"
