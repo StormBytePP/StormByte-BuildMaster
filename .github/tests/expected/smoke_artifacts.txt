@@ -1,6 +1,6 @@
 # path|platform
-# Tokens: <lib> <include> → CMAKE_INSTALL_LIBDIR / INCLUDEDIR
-# Leading ! → must NOT exist under the install prefix
+# Tokens: <lib> <include> stand for CMAKE_INSTALL_LIBDIR / INCLUDEDIR
+# Leading ! means must NOT exist under the install prefix
 # One section per fixture. Entries alphabetical inside the section.
 
 # base
