@@ -10,24 +10,26 @@ set +e
 _log="$(mktemp "${TMPDIR:-/tmp}/buildmaster.XXXXXX")"
 trap 'rm -f "$_log"' EXIT HUP INT TERM
 
-# CMake prefixes message() with "-- ". Strip that only for matching.
+# CMake prefixes message() with "-- ". Ninja prefixes COMMENT with
+# "[n/m ( p%)] ". Drop that progress tag on replay: it belongs to the
+# nested graph, not to the parent ninja job.
 _bm_replay_line() {
 	local _raw="$1"
 	local _s="$_raw"
+	local _out=""
 	if [[ $_s == --\ * ]]; then
 		_s="${_s:3}"
 	fi
-	if [[ $_s == '[BuildMaster/'* ]]; then
-		printf '%s\n' "$_raw"
+	if [[ $_s != *'[BuildMaster/'* ]]; then
 		return
 	fi
-	if [[ $_s == '['*'][BuildMaster/'* ]]; then
-		if [[ $_s == '[WARNING '* || $_s == '[FATAL '* ]]; then
-			printf '%s\n' "$_raw" >&2
-		else
-			printf '%s\n' "$_raw"
-		fi
+	_out="${_s#*'[BuildMaster/'}"
+	_out="[BuildMaster/${_out}"
+	if [[ $_s == *'[WARNING '* || $_s == *'[FATAL '* ]]; then
+		printf '%s\n' "$_out" >&2
+		return
 	fi
+	printf '%s\n' "$_out"
 }
 
 @ENV_RUNNER_CMD@ "$@" 2>&1 | while IFS= read -r _line || [[ -n $_line ]]; do

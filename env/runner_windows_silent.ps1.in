@@ -37,18 +37,16 @@ function Replay-BuildMasterLine([string]$Raw) {
 	if ($s.StartsWith('-- ')) {
 		$s = $s.Substring(3)
 	}
-	if ($s.StartsWith('[BuildMaster/')) {
-		[Console]::Out.WriteLine($Raw)
+	$idx = $s.IndexOf('[BuildMaster/')
+	if ($idx -lt 0) {
 		return
 	}
-	$idx = $s.IndexOf('][BuildMaster/')
-	if ($idx -gt 0 -and $s.StartsWith('[')) {
-		if ($s.StartsWith('[WARNING ') -or $s.StartsWith('[FATAL ')) {
-			[Console]::Error.WriteLine($Raw)
-		} else {
-			[Console]::Out.WriteLine($Raw)
-		}
+	$out = $s.Substring($idx)
+	if ($s.Contains('[WARNING ') -or $s.Contains('[FATAL ')) {
+		[Console]::Error.WriteLine($out)
+		return
 	}
+	[Console]::Out.WriteLine($out)
 }
 
 Set-IfNonEmpty 'PKG_CONFIG' '@PKG_CONFIG@'
