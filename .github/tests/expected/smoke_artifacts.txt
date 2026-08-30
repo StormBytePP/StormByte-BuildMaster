@@ -9,6 +9,10 @@
 !<lib>/libbolib.a|unix
 
 # Flat libraries
+<lib>/grpmaudio.lib|windows
+<lib>/libgrpmaudio.a|unix
+<lib>/grpmfilter.lib|windows
+<lib>/libgrpmfilter.a|unix
 <lib>/alinklib.lib|windows
 <lib>/baselib.lib|windows
 <lib>/blinklib.lib|windows
@@ -51,6 +55,8 @@
 <lib>/wlibplain.lib|windows
 
 # Headers
+<include>/grpmaudio.h|all
+<include>/grpmfilter.h|all
 <include>/a.h|all
 <include>/b.h|all
 <include>/base.h|all

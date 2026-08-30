@@ -6,8 +6,11 @@
 ## @param[in] _component Registered component id.
 ## @note Sets parent-scope: `_LIBRARY_COMPONENT_NAMES`, `_LIBRARY_COMPONENT_FILES`,
 ##       `_LIBRARY_COMPONENT_DLL_FILES`, `_output_libraries`, `_BM_RENAME_ENABLED`,
-##       `_BM_BUILDONLY`, `_BM_STRIPRES_ENABLED`, `_BM_PC_*`, `_indent_level`,
-##       `_toolchain`.
+##       `_BM_BUILDONLY`, `_BM_STRIPRES_ENABLED`, `_BM_PC_*`, `_toolchain`.
+## @note Does **not** export `_indent_level`. Group plan stamps
+##       `BUILDMASTER_COMPONENT_<id>_INDENT`; the backend reads that
+##       *after* this function. OPTSTR `INDENT=` is create-time (usually 0)
+##       and must not overwrite the walk depth.
 ## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
 ## @note Extra `buildmaster_link` dests that are library specs (`<name>` or
@@ -30,7 +33,7 @@ function(_bm_materialize_collect_outputs _component)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 
 	_bm_opt_parse(
-		_indent_level _toolchain _rename_on _buildonly _whole_ignored _stripres_on
+		_indent_ignored _toolchain _rename_on _buildonly _whole_ignored _stripres_on
 		"${_options_string}")
 
 	if(_buildonly)
@@ -133,7 +136,6 @@ function(_bm_materialize_collect_outputs _component)
 	set(_BM_PC_REQUIRES "${_BM_PC_REQUIRES}" PARENT_SCOPE)
 	set(_BM_PC_CFLAGS "${_BM_PC_CFLAGS}" PARENT_SCOPE)
 	set(_BM_PC_OUT "${_BM_PC_OUT}" PARENT_SCOPE)
-	set(_indent_level "${_indent_level}" PARENT_SCOPE)
 	set(_toolchain "${_toolchain}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_collect_outputs")
 endfunction()

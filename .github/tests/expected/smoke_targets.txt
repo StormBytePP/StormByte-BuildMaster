@@ -30,6 +30,8 @@ mtc-pinned_install
 grp-opus_install
 grp-vmaf_install
 grp-orphan_install
+grp-maudio_install
+grp-mfilter_install
 
 # Order / link tests
 link_component_test

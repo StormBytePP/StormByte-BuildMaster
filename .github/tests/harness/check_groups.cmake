@@ -3,9 +3,11 @@
 #   banner:grp-audio:1
 #   comp:grp-opus
 #   comp:grp-speex
+#   comp:grp-maudio
 #   banner:grp-filters:1
 #   comp:grp-vmaf
 #   comp:grp-ssim
+#   comp:grp-mfilter
 # then leftover comps (grp-orphan among them).
 
 get_property(_gids GLOBAL PROPERTY BUILDMASTER_GROUP_IDS)
@@ -23,7 +25,7 @@ if(NOT _ev)
 endif()
 
 list(LENGTH _ev _n)
-if(_n LESS 7)
+if(_n LESS 9)
 	_bm_log_message(CORE FATAL
 		"groups: event list too short (${_n}): ${_ev}")
 endif()
@@ -35,38 +37,59 @@ list(GET _ev 3 _e3)
 list(GET _ev 4 _e4)
 list(GET _ev 5 _e5)
 list(GET _ev 6 _e6)
+list(GET _ev 7 _e7)
+list(GET _ev 8 _e8)
+
 set(_want0 "banner:grp-plugins:0")
 set(_want1 "banner:grp-audio:1")
 set(_want2 "comp:grp-opus")
 set(_want3 "comp:grp-speex")
-set(_want4 "banner:grp-filters:1")
-set(_want5 "comp:grp-vmaf")
-set(_want6 "comp:grp-ssim")
+set(_want4 "comp:grp-maudio")
+set(_want5 "banner:grp-filters:1")
+set(_want6 "comp:grp-vmaf")
+set(_want7 "comp:grp-ssim")
+set(_want8 "comp:grp-mfilter")
+
 if(NOT _e0 STREQUAL "${_want0}"
 		OR NOT _e1 STREQUAL "${_want1}"
 		OR NOT _e2 STREQUAL "${_want2}"
 		OR NOT _e3 STREQUAL "${_want3}"
 		OR NOT _e4 STREQUAL "${_want4}"
 		OR NOT _e5 STREQUAL "${_want5}"
-		OR NOT _e6 STREQUAL "${_want6}")
+		OR NOT _e6 STREQUAL "${_want6}"
+		OR NOT _e7 STREQUAL "${_want7}"
+		OR NOT _e8 STREQUAL "${_want8}")
 	_bm_log_message(CORE FATAL
-		"groups: outline prefix '${_e0};${_e1};${_e2};${_e3};${_e4};${_e5};${_e6}' != '${_want0};${_want1};${_want2};${_want3};${_want4};${_want5};${_want6}'")
+		"groups: outline prefix '${_e0};${_e1};${_e2};${_e3};${_e4};${_e5};${_e6};${_e7};${_e8}' != '${_want0};${_want1};${_want2};${_want3};${_want4};${_want5};${_want6};${_want7};${_want8}'")
 endif()
 
 list(FIND _ev "comp:grp-orphan" _i_orph)
-if(_i_orph LESS 7)
+if(_i_orph LESS 9)
 	_bm_log_message(CORE FATAL
 		"groups: grp-orphan should follow the outline prefix (index ${_i_orph})")
 endif()
 
 get_property(_iop GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-opus_INDENT)
 get_property(_isp GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-speex_INDENT)
+get_property(_ima GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-maudio_INDENT)
 get_property(_ivm GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-vmaf_INDENT)
 get_property(_iss GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-ssim_INDENT)
-if(NOT _iop STREQUAL "2" OR NOT _isp STREQUAL "2"
-		OR NOT _ivm STREQUAL "2" OR NOT _iss STREQUAL "2")
+get_property(_imf GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-mfilter_INDENT)
+if(NOT _iop STREQUAL "2"
+		OR NOT _isp STREQUAL "2"
+		OR NOT _ima STREQUAL "2"
+		OR NOT _ivm STREQUAL "2"
+		OR NOT _iss STREQUAL "2"
+		OR NOT _imf STREQUAL "2")
 	_bm_log_message(CORE FATAL
-		"groups: member INDENT opus='${_iop}' speex='${_isp}' vmaf='${_ivm}' ssim='${_iss}' (want 2)")
+		"groups: member INDENT opus='${_iop}' speex='${_isp}' maudio='${_ima}' vmaf='${_ivm}' ssim='${_iss}' mfilter='${_imf}' (want 2/2/2/2/2/2)")
+endif()
+
+get_property(_sma GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-maudio_SYSTEM)
+get_property(_smf GLOBAL PROPERTY BUILDMASTER_COMPONENT_grp-mfilter_SYSTEM)
+if(NOT _sma STREQUAL "meson" OR NOT _smf STREQUAL "meson")
+	_bm_log_message(CORE FATAL
+		"groups: meson leaves SYSTEM maudio='${_sma}' mfilter='${_smf}' (want meson/meson)")
 endif()
 
 _bm_log_message(CORE STATUS "groups: outline events OK")

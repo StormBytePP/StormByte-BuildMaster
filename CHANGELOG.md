@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+### Changed
+
+### Fixed
+
+[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
+
+## [2.0.0] - 2026-08-30
+
 2.x versus 1.0.x is a different product: declarative graph, no generated
 fragment to `include()`, no public dependant factories, no public
 `create_cmake_component` / `create_meson_component`. A 1.x
@@ -48,6 +58,17 @@ and the declaration shape changed.
   The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and
   `file(MAKE_DIRECTORY)`. The path is an internal property, not part
   of the DSL.
+- **Outline groups.**
+  `buildmaster_group(id [title])` and
+  `buildmaster_group_add(group member…)`. A group is **not** a
+  component, a meta, or a link: no targets, no edges, no install.
+  After the graph is complete it only walks members in **addition
+  order** and prints configure banners with indent. Nested groups
+  are allowed; a member must not contain a group. Cycles and id
+  clashes with a component/meta/group are FATAL (caller file:line).
+  Configure-time messages inherit the walk indent; compile/install
+  stay flat. Eager vs deferred is unchanged — the outline is
+  cosmetic order, not a wait edge.
 - **Headers island (mode `headers`, with or without a backend).**
   No backend, or `BUILDONLY` headers: private. Direct consumers get
   a quoted `-I` on *that* id’s nested configure only (CMake
@@ -124,18 +145,15 @@ and the declaration shape changed.
   ignore), hooks, late link, raw `LINK=`, duplicate edges,
   `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL),
   `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE,
-  FILES-on-meta FATAL.
-- Id origin: public `buildmaster_component` / `buildmaster_meta` /
-  `buildmaster_meta_add` are macros so a clash FATAL names the first
-  declaration as `file:line` (the caller's CMakeLists, not a BM
-  `.cmake`). Same id, different kind is FATAL. Internals stay functions.
+  FILES-on-meta FATAL, outline groups (CMake + Meson leaves).
 
 ### Changed
 
-- **Breaking — public API is `buildmaster_*` only.** Eight commands
+- **Breaking — public API is `buildmaster_*` only.** Ten commands
   (see `public_functions.txt`):
   `buildmaster_component`, `buildmaster_depend`, `buildmaster_link`,
   `buildmaster_meta`, `buildmaster_meta_add`,
+  `buildmaster_group`, `buildmaster_group_add`,
   `buildmaster_hook_component`, `buildmaster_hook_graph`,
   `buildmaster_message`. Internals are `_bm_<craft>_*` and are not a
   supported API. In particular:
@@ -161,6 +179,12 @@ and the declaration shape changed.
   - `ensure_build_dir`, `sanitize_for_filename`, import hints,
     toolchain profile/validate, archiver lookup, checksum and git
     marker are internal.
+- **Breaking — `INDENT=` is gone as a layout knob.**
+  The optstr key still parses so old trees configure, but it is
+  WARNING + ignored (`Use buildmaster_group / buildmaster_group_add
+  for configure outline`). Visual indent comes only from the group
+  walk at configure time. Compile and install comments stay at
+  indent 0.
 - **Breaking — no public build directory.**
   `buildmaster_component` / `_bm_backend_*_create` do not take a
   builddir. The 2.0/2.1 arity heuristic is gone. Extra arguments are
@@ -187,10 +211,10 @@ and the declaration shape changed.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
-  (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
+  (`TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
   `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`, `FILES={…}`).
-  `;` inside `{…}` is not a pair break. Unknown keys warn; extra
-  positionals are fatal.
+  `INDENT=` is accepted only to warn. `;` inside `{…}` is not a pair
+  break. Unknown keys warn; extra positionals are fatal.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
   use `[BuildMaster/Ninja]`.
 - Root `CMakeLists.txt` includes helpers before `init_vars`, so
@@ -198,7 +222,7 @@ and the declaration shape changed.
 - Root configure includes `GNUInstallDirs`.
 - Post-install git reset + clean runs only after a PATCH.
 
-[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
+[2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
 ## [1.0.1] - 2026-08-26
 

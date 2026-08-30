@@ -14,7 +14,9 @@
 ##       configure is not silent about them; the real Meson setup
 ##       still runs under `<id>_configure` at build time.
 ## @note Indent is `BUILDMASTER_COMPONENT_<id>_INDENT` at *this* call
-##       (group plan has already stamped it). Do not reuse the create-time 0.
+##       (group plan has already stamped it). Read it AFTER
+##       `_bm_materialize_collect_outputs` so a leftover PARENT_SCOPE
+##       `_indent_level` cannot overwrite the group depth.
 ## @note Per-id hooks run after the fragment include (alias order).
 function(_bm_backend_meson_materialize _component)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_meson_materialize")
@@ -30,13 +32,15 @@ function(_bm_backend_meson_materialize _component)
 		BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_toolchain GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_TOOLCHAIN)
+
+	_bm_materialize_collect_outputs("${_component}")
+
 	get_property(_indent_level GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_INDENT)
 	if("${_indent_level}" STREQUAL "")
 		set(_indent_level 0)
 	endif()
 
-	_bm_materialize_collect_outputs("${_component}")
 	_bm_graph_has_deferred_configure("${_component}" _deferred)
 	if(_deferred)
 		set(_via_target "1")

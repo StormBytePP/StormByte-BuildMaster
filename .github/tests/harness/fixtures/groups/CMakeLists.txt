@@ -3,9 +3,11 @@
 #     Audio
 #         Opus
 #         Speex
+#         Meson audio leaf
 #     Filters
 #         VMAF
 #         SSIM
+#         Meson filter leaf
 # leftover (ungrouped) after the tree
 
 buildmaster_component(
@@ -25,6 +27,14 @@ buildmaster_component(
 	"grpspeex"
 )
 buildmaster_component(
+	grp-maudio
+	"Meson audio leaf"
+	"${CMAKE_CURRENT_SOURCE_DIR}/maudio"
+	""
+	static
+	"grpmaudio"
+)
+buildmaster_component(
 	grp-vmaf
 	"VMAF filter"
 	"${CMAKE_CURRENT_SOURCE_DIR}/vmaf"
@@ -41,6 +51,14 @@ buildmaster_component(
 	"grpssim"
 )
 buildmaster_component(
+	grp-mfilter
+	"Meson filter leaf"
+	"${CMAKE_CURRENT_SOURCE_DIR}/mfilter"
+	""
+	static
+	"grpmfilter"
+)
+buildmaster_component(
 	grp-orphan
 	"Ungrouped leftover"
 	"${CMAKE_CURRENT_SOURCE_DIR}/orphan"
@@ -53,5 +71,5 @@ buildmaster_group(grp-plugins "FFmpeg plugins")
 buildmaster_group(grp-audio "Audio")
 buildmaster_group(grp-filters "Filters")
 buildmaster_group_add(grp-plugins grp-audio grp-filters)
-buildmaster_group_add(grp-audio grp-opus grp-speex)
-buildmaster_group_add(grp-filters grp-vmaf grp-ssim)
+buildmaster_group_add(grp-audio grp-opus grp-speex grp-maudio)
+buildmaster_group_add(grp-filters grp-vmaf grp-ssim grp-mfilter)

@@ -52,6 +52,7 @@ BuildMaster is that layer, written once:
 | Waiting on a slow tarball every `rm -rf build` | `BUILDMASTER_DOWNLOADSDIR` outside the build tree |
 | Four public git helpers plus an `include()` | `GIT={…}` on the component |
 | A download target plus a prerequisite edge | `FILES={…}` on the component |
+| Manual `INDENT=` so related leaves line up in the log | `buildmaster_group` |
 
 The cost is a short public API. The payoff is a parent tree that looks like
 a product, not a build blog.
@@ -61,12 +62,13 @@ a product, not a build blog.
 ## Table of contents
 
 - [Quick start](#quick-start)
-- [Eight commands](#eight-commands)
+- [Ten commands](#ten-commands)
 - [How a component works](#how-a-component-works)
 - [Dependencies and links](#dependencies-and-links)
 - [Raw system libraries (`LINK`)](#raw-system-libraries-link)
 - [Raw linker flags (`LINKFLAGS`)](#raw-linker-flags-linkflags)
 - [Meta components](#meta-components)
+- [Groups](#groups)
 - [Component options](#component-options)
 - [Build-only components and repack](#build-only-components-and-repack)
 - [Header-only components](#header-only-components)
@@ -139,9 +141,9 @@ consumer.
 
 ---
 
-## Eight commands
+## Ten commands
 
-Eight commands. If you need a ninth, the optstr is lying or the graph is.
+Ten commands. If you need an eleventh, the optstr is lying or the graph is.
 
 | Command | Role |
 |---------|------|
@@ -150,6 +152,8 @@ Eight commands. If you need a ninth, the optstr is lying or the graph is.
 | `buildmaster_link(source dest)` | Link on the component `INTERFACE` **and** a depend edge when `dest` is a graph node |
 | `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
 | `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
+| `buildmaster_group(id [title])` | Outline banner. No target, no edge |
+| `buildmaster_group_add(group member…)` | Membership (group / component / meta). Group must already exist |
 | `buildmaster_hook_component(id fn alias [CAPTURE …])` | Run `fn` after that id materializes |
 | `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
 | `buildmaster_message(level text [, indent])` | Log. Module is always `USER` |
@@ -161,12 +165,7 @@ Everything else is `_bm_*` and is **not** a supported API.
 
 Neutral entries in the `options` list (`CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
 `LDFLAGS`, `INCLUDES`, `DEFINITIONS`) are **private** to the nested
-compile and **append** to the parent job / toolchain. They are not
-`ENV{CFLAGS}`. Anything else in that list is FATAL.
-
-`CMakeLists.txt` **and** `meson.build` in `srcdir` is FATAL.
-Neither marker + mode `headers` → backend `none`.
-Neither marker + any other mode is FATAL.
+compile and **append** to the parent job / toolchain.
 
 ---
 
@@ -205,6 +204,8 @@ There is no public builddir argument and no `ensure_build_dir`.
 A **meta** uses the same anchor names (`<id>_install` waits on members)
 but has no sources and installs nothing of its own — unless `REPACK`.
 
+A **group** has none of those targets. It is a banner and a walk order.
+
 ---
 
 ## Dependencies and links
@@ -224,8 +225,10 @@ to a library spec or an on-disk archive. That dest is link-only.
 A second *explicit* call with the same `(source, dest)` is **WARNING**
 and a no-op. Unresolvable dest at finalize stays **FATAL**.
 
-`BUILDONLY` pack waits use `_build` instead of `_install` for that
-member. You do not write that by hand; `REPACK` does.
+`BUILDONLY` pack waits use `_build` instead of `_install` for
+that member. You do not write that by hand; `REPACK` does.
+
+A group is not a graph node. `buildmaster_depend(foo grp-audio)` is FATAL.
 
 ### `buildmaster_link(source dest)`
 
@@ -292,6 +295,39 @@ configure. `GIT=` / `FILES=` on a meta are FATAL. `LINKFLAGS=` on a
 meta is WARNING + ignore. `TOOLCHAIN=` on a meta copies onto members
 that did not pin one; an explicit child `TOOLCHAIN` wins.
 
+`INDENT=` on a meta is WARNING and ignored. Put the meta in a
+`buildmaster_group()` if you want the banner indent.
+
+A group cannot be a meta member. `buildmaster_meta_add(plugins grp-audio)`
+is FATAL.
+
+---
+
+## Groups
+
+Outline only. No `INTERFACE`, no stages, no edges.
+
+```cmake
+buildmaster_group(grp-audio "Audio")
+buildmaster_group_add(grp-audio opus speex maudio)
+
+buildmaster_group(grp-filters "Filters")
+buildmaster_group_add(grp-filters ssim mfilter)
+```
+
+`buildmaster_group(id [title])` stamps the banner. Empty title → the id.
+`buildmaster_group_add` requires the group to already exist. Members may
+be components, metas, or other groups. Duplicates are skipped. Self is
+FATAL. Cycles are FATAL.
+
+Finalize walks the forest, emits `banner:id:depth` then each member’s
+`comp:id` so a nested configure sits under its banner. Depth becomes
+the STATUS indent of that member (`INDENT=` on the leaf is overwritten
+by the walk).
+
+Groups are not consumption. Linking still goes through
+`buildmaster_link` / `target_link_libraries` on the real ids.
+
 ---
 
 ## Component options
@@ -313,7 +349,7 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 
 | Key | Default | Notes |
 |-----|---------|--------|
-| `INDENT` / `INDENT_LEVEL` | `0` | Tabs after the log header |
+| `INDENT` / `INDENT_LEVEL` | `0` | Tabs after the log header. A group walk overwrites this |
 | `TOOLCHAIN` | inherit | `gcc`, `clang`, `clang-cl`, `msvc` |
 | `RENAME` | ON | Canonical archive name after install (or in the build dir if `BUILDONLY`) |
 | `WHOLE` | OFF | Whole-archive link of **static** produced archives |
@@ -522,6 +558,9 @@ An id that is never linked, packed, or depended on produces one
 **WARNING** at finalize. It is cheap insurance against a plugin you
 built and then forgot to attach.
 
+Membership in a group does **not** consume the id. A leaf that only
+sits under a banner is still an orphan.
+
 ---
 
 ## Logging
@@ -532,18 +571,51 @@ buildmaster_message(STATUS "Setting up Foo" 1)
 
 There is no module argument. The module is always `USER`.
 `-DBUILDMASTER_LOGLEVEL=DEBUG` (or `INFO` / `STATUS` / `WARNING` /
-`LOWLEVEL`). `BUILDMASTER_DEBUG` is ignored.
+`LOWLEVEL` / `FATAL`). `BUILDMASTER_DEBUG` is ignored: it does not
+select a log level and it does not select a runner.
 
 `WARNING` and `FATAL` are never filtered.
+
+`BUILDMASTER_LOGLEVEL` filters **BuildMaster lines**. It does not
+decide whether `cmake --build` or `meson compile` print compiler
+command lines. That is the next section.
 
 ---
 
 ## Verbosity of tool output
 
-`BUILDMASTER_VERBOSE` (truthy) shows the nested compiler / linker
-stream. The silent env runner still captures the full child log and
-replays nested `[BuildMaster/…]` lines live; on failure the complete
-child output is dumped.
+`BUILDMASTER_VERBOSE` is independent of `BUILDMASTER_LOGLEVEL`.
+It selects how **nested compile** stages talk to the TTY, not which
+`[BuildMaster/…]` lines exist.
+
+| `BUILDMASTER_VERBOSE` | Compile stage (`*_build`) | Configure / install / git / files |
+|-----------------------|---------------------------|-----------------------------------|
+| OFF (default) | Silent env runner. Live TTY: BM headers only | Silent env runner |
+| ON | Live env runner **and** `cmake --build --verbose` / `meson compile -v` | Unchanged (still silent unless the child itself is noisy) |
+
+The silent runner always writes the full child log to disk and
+replays nested `[BuildMaster/…]` lines live. On failure the complete
+child output is dumped. Failures always surface.
+
+`VERBOSE` does **not** mean “every CMake check and every Meson setup
+line on the TTY”. That used to be the old `BUILDMASTER_DEBUG` runner
+swap; that switch is gone. Enable `BUILDMASTER_VERBOSE` when you want
+compiler command lines. Lower `BUILDMASTER_LOGLEVEL` when you want
+more BM diagnostics.
+
+```bash
+# compiler / linker command lines only
+cmake -DBUILDMASTER_VERBOSE=ON …
+
+# BM policy lines (ignored keys, rename skips, …)
+cmake -DBUILDMASTER_LOGLEVEL=INFO …
+
+# both
+cmake -DBUILDMASTER_VERBOSE=ON -DBUILDMASTER_LOGLEVEL=DEBUG …
+```
+
+Env `BUILDMASTER_VERBOSE=1` is accepted the same way as the cache
+entry.
 
 ---
 
@@ -601,6 +673,7 @@ nested compiler command. `LINKFLAGS` groups use `WINDOWS` / `LINUX` /
 | Per-component toolchain | No | Manual | **Optional** |
 | `LINK` / `LINKFLAGS` with different inheritance | Manual | Manual | **Yes** |
 | `BUILDONLY` + static `REPACK` | No | Manual | **Yes** |
+| Outline groups (banners + walk indent) | No | No | **`buildmaster_group`** |
 | Cached, hashed downloads that survive `rm -rf build` | Partial | Manual | **`FILES=`** |
 | Srcdir git flush + optional post-install reset | No | Manual | **`GIT=`** |
 | Unified log + live nested BM lines | No | No | **Yes** |
@@ -625,7 +698,7 @@ MIT. See [LICENSE](LICENSE).
 
 If this saved you from a third `POST_BUILD` rename script, a star is
 the polite nod. A well-aimed issue beats a vague “it broke”. Pull
-requests that keep the DSL at eight commands are the ones that land.
+requests that keep the DSL at ten commands are the ones that land.
 
 I wrote this because the alternative was another private graph in
 every product. Maintaining that difference takes evenings.
