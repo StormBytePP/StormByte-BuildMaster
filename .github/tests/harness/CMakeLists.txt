@@ -36,6 +36,7 @@ _bm_materialize_finalize()
 # ---------------------------------------------------------------------------
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_api.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_parse.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_propagation.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
