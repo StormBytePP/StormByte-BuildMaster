@@ -4,6 +4,8 @@
 
 ## @brief Parse one FILES group into parallel slot variables (append).
 ## @param[in] _group Inner text: URL=…;NAME=…;UNPACK;SOURCE[=rel];…
+##            A CMake list (function argument that contained `;`) is
+##            accepted and re-joined first via `_bm_opt_as_string`.
 ## @param[in,out] _urls_var _names_var _hashes_var _algos_var
 ## @param[in,out] _unpacks_var _forces_var _sources_var _titles_var
 ## @note SOURCE without UNPACK is FATAL. SOURCE with empty value means `.`.
@@ -15,6 +17,12 @@ function(_bm_opt_parse_files_group _group
 		_urls_var _names_var _hashes_var _algos_var
 		_unpacks_var _forces_var _sources_var _titles_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_files_group")
+	_bm_opt_as_string(_group ${_group})
+	string(LENGTH "${_group}" _n)
+	string(FIND "${_group}" ";" _semi)
+	string(REPLACE ";" " | " _dump "${_group}")
+	_bm_log_message(COMPONENT DEBUG
+		"FILES group: len=${_n} semi=${_semi} [${_dump}]")
 	set(_url "")
 	set(_name "")
 	set(_hash "")
@@ -24,6 +32,8 @@ function(_bm_opt_parse_files_group _group
 	set(_source "")
 	set(_title "")
 	_bm_opt_split_pairs("${_group}" _gpairs)
+	list(LENGTH _gpairs _np)
+	_bm_log_message(COMPONENT DEBUG "FILES group pairs n=${_np}")
 	foreach(_pair IN LISTS _gpairs)
 		string(REPLACE "${_BM_OPT_SEMI}" ";" _pair "${_pair}")
 		string(STRIP "${_pair}" _pair)
@@ -81,6 +91,8 @@ function(_bm_opt_parse_files_group _group
 				"FILES: unknown key '${_k}' ignored")
 		endif()
 	endforeach()
+	_bm_log_message(COMPONENT DEBUG
+		"FILES group result url='${_url}' name='${_name}' unpack=${_unpack} title='${_title}'")
 	if("${_url}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL "FILES group requires URL=")
 	endif()
@@ -120,6 +132,8 @@ endfunction()
 
 ## @brief Parse FILES= from an optstr.
 ## @param[in]  options_string Raw trailing optstr.
+##            A CMake list (function argument that contained `;`) is
+##            accepted and re-joined first via `_bm_opt_as_string`.
 ## @param[out] out_present TRUE if the FILES key appears (even empty).
 ## @param[out] out_urls out_names out_hashes out_algos
 ## @param[out] out_unpacks out_forces out_sources out_titles Parallel lists.
@@ -129,6 +143,9 @@ function(_bm_opt_parse_files options_string
 		out_present out_urls out_names out_hashes out_algos
 		out_unpacks out_forces out_sources out_titles)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_files")
+	_bm_opt_as_string(options_string ${options_string})
+	string(REPLACE ";" " | " _dump "${options_string}")
+	_bm_log_message(COMPONENT DEBUG "FILES optstr [${_dump}]")
 	set(_present FALSE)
 	set(_urls "")
 	set(_names "")
@@ -158,8 +175,11 @@ function(_bm_opt_parse_files options_string
 			_bm_log_message(COMPONENT WARNING "FILES={} is empty (ignored)")
 			continue()
 		endif()
+		_bm_opt_as_string(_body ${_body})
 		string(STRIP "${_body}" _body)
 		string(SUBSTRING "${_body}" 0 1 _ch0)
+		_bm_log_message(COMPONENT DEBUG
+			"FILES body ch0='${_ch0}' brace=${_brace}")
 		if(_ch0 STREQUAL "{")
 			_bm_opt_split_pairs("${_body}" _groups)
 			foreach(_g IN LISTS _groups)

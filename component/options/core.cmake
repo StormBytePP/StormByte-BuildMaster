@@ -27,59 +27,102 @@
 ##       nested configure).
 set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES")
 
-# CMake lists use ';' as the element separator. Tokens that contain ';'
-# (PC={VERSION=1;NAME=x}) are stored with this stand-in so foreach(IN LISTS)
-# does not re-split them. _bm_opt_split_pair restores ';'.
+# CMake lists use ';' as the element separator. A variable whose value is
+# exactly ';' is an empty list: string(SUBSTRING) of that character yields
+# length 0, and string(APPEND) of it appends nothing. Tokens that contain
+# ';' inside `{…}` are stored with this stand-in so foreach(IN LISTS) does
+# not re-split them. _bm_opt_split_pair restores ';'.
 set(_BM_OPT_SEMI "__BM_SEMI__")
+
+## @brief Re-join a value that `function()` split on `;`.
+## @param[out] out_var Parent-scope flat string.
+## @param[in]  ARGN    Pieces of the original string (quoted or not).
+## @note Out-first. Glue is a variable so `string(JOIN ; …)` cannot eat it.
+function(_bm_opt_as_string out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_as_string")
+	if(ARGC LESS 2)
+		_bm_log_message(COMPONENT DEBUG
+			"_bm_opt_as_string: empty (ARGC=${ARGC})")
+		set(${out_var} "" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_as_string")
+		return()
+	endif()
+	set(_glue ";")
+	string(JOIN "${_glue}" _flat ${ARGN})
+	string(LENGTH "${_flat}" _n)
+	string(FIND "${_flat}" ";" _semi)
+	string(REPLACE ";" " | " _dump "${_flat}")
+	_bm_log_message(COMPONENT DEBUG
+		"_bm_opt_as_string: ARGC=${ARGC} len=${_n} semi=${_semi} [${_dump}]")
+	set(${out_var} "${_flat}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_as_string")
+endfunction()
 
 ## @brief Split an options string on `;` that are not inside `{…}`.
 ## @param[in]  options_string Raw `"KEY=value;KEY2={A=1;B=2}"` string.
+##            A CMake list (function argument that contained `;`) is
+##            accepted and re-joined first.
 ## @param[out] out_pairs      Parent-scope CMake list of tokens. Embedded `;`
 ##            inside `{…}` are stored as `__BM_SEMI__`.
 ## @note Brace depth counts nested `{` / `}`. Unbalanced `{` / `}` is FATAL.
 ##       Empty tokens are dropped. Values still must not contain a raw `;`
 ##       outside braces.
+## @note A lone `;` cannot live in a CMake variable. After re-join, the
+##       string is read back as a CMake list (one token per `;`). Depth is
+##       counted per token from `{` / `}`. Separators that sit inside a
+##       brace group are stored as `__BM_SEMI__`; `_bm_opt_split_pair`
+##       restores `;`.
 function(_bm_opt_split_pairs options_string out_pairs)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_split_pairs")
+	_bm_opt_as_string(options_string ${options_string})
+	string(LENGTH "${options_string}" _n)
+	string(FIND "${options_string}" ";" _semi)
+	string(REPLACE ";" " | " _dump "${options_string}")
+	_bm_log_message(COMPONENT DEBUG
+		"_bm_opt_split_pairs: in len=${_n} semi=${_semi} [${_dump}]")
+
+	# Do not walk bytes. After re-join, unquoted expansion is the CMake
+	# list of tokens. Brace depth is counted per token; separators that
+	# sit inside `{…}` become __BM_SEMI__.
+	set(_segs ${options_string})
 	set(_pairs "")
 	set(_cur "")
 	set(_depth 0)
-	string(LENGTH "${options_string}" _n)
-	if(_n GREATER 0)
-		math(EXPR _last "${_n} - 1")
-		foreach(_i RANGE ${_last})
-			string(SUBSTRING "${options_string}" ${_i} 1 _ch)
-			if(_ch STREQUAL "{")
-				math(EXPR _depth "${_depth} + 1")
-				string(APPEND _cur "${_ch}")
-			elseif(_ch STREQUAL "}")
-				if(_depth EQUAL 0)
-					_bm_log_message(COMPONENT FATAL
-						"Unmatched '}' in options string")
-				endif()
-				math(EXPR _depth "${_depth} - 1")
-				string(APPEND _cur "${_ch}")
-			elseif(_ch STREQUAL ";" AND _depth EQUAL 0)
-				string(STRIP "${_cur}" _tok)
-				if(NOT _tok STREQUAL "")
-					string(REPLACE ";" "${_BM_OPT_SEMI}" _tok "${_tok}")
-					list(APPEND _pairs "${_tok}")
-				endif()
-				set(_cur "")
-			else()
-				string(APPEND _cur "${_ch}")
+	foreach(_seg IN LISTS _segs)
+		string(REGEX REPLACE "[^{]" "" _opens "${_seg}")
+		string(REGEX REPLACE "[^}]" "" _closes "${_seg}")
+		string(LENGTH "${_opens}" _nopen)
+		string(LENGTH "${_closes}" _nclose)
+		if(_cur STREQUAL "")
+			set(_cur "${_seg}")
+		else()
+			string(APPEND _cur "${_BM_OPT_SEMI}${_seg}")
+		endif()
+		math(EXPR _depth "${_depth} + ${_nopen} - ${_nclose}")
+		if(_depth LESS 0)
+			_bm_log_message(COMPONENT FATAL
+				"Unmatched '}' in options string")
+		endif()
+		if(_depth EQUAL 0)
+			string(STRIP "${_cur}" _tok)
+			if(NOT _tok STREQUAL "")
+				list(APPEND _pairs "${_tok}")
 			endif()
-		endforeach()
-	endif()
+			set(_cur "")
+		endif()
+	endforeach()
 	if(NOT _depth EQUAL 0)
 		_bm_log_message(COMPONENT FATAL
 			"Unclosed '{' in options string")
 	endif()
 	string(STRIP "${_cur}" _tok)
 	if(NOT _tok STREQUAL "")
-		string(REPLACE ";" "${_BM_OPT_SEMI}" _tok "${_tok}")
 		list(APPEND _pairs "${_tok}")
 	endif()
+	list(LENGTH _pairs _np)
+	string(REPLACE ";" " | " _pdump "${_pairs}")
+	_bm_log_message(COMPONENT DEBUG
+		"_bm_opt_split_pairs: out n=${_np} [${_pdump}]")
 	set(${out_pairs} "${_pairs}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_split_pairs")
 endfunction()
@@ -90,7 +133,8 @@ endfunction()
 ## @param[out] out_ok     TRUE if `val` is a single brace group.
 function(_bm_opt_unwrap_brace val out_inner out_ok)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_unwrap_brace")
-	string(STRIP "${val}" _v)
+	_bm_opt_as_string(_v ${val})
+	string(STRIP "${_v}" _v)
 	set(_ok FALSE)
 	set(_inner "")
 	string(LENGTH "${_v}" _len)
@@ -105,6 +149,9 @@ function(_bm_opt_unwrap_brace val out_inner out_ok)
 			set(_ok TRUE)
 		endif()
 	endif()
+	string(REPLACE ";" " | " _dump "${_inner}")
+	_bm_log_message(COMPONENT DEBUG
+		"_bm_opt_unwrap_brace: ok=${_ok} [${_dump}]")
 	set(${out_inner} "${_inner}" PARENT_SCOPE)
 	set(${out_ok} "${_ok}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_unwrap_brace")
@@ -127,6 +174,7 @@ function(_bm_opt_split_pair pair out_key out_val out_ok)
 	set(_key "")
 	set(_val "")
 
+	_bm_opt_as_string(pair ${pair})
 	string(REPLACE "${_BM_OPT_SEMI}" ";" pair "${pair}")
 
 	if("${pair}" STREQUAL "")
@@ -160,6 +208,9 @@ function(_bm_opt_split_pair pair out_key out_val out_ok)
 		endif()
 	endif()
 
+	string(REPLACE ";" " | " _vdump "${_val}")
+	_bm_log_message(COMPONENT DEBUG
+		"_bm_opt_split_pair: ok=${_ok} key='${_key}' val=[${_vdump}]")
 	set(${out_key} "${_key}" PARENT_SCOPE)
 	set(${out_val} "${_val}" PARENT_SCOPE)
 	set(${out_ok} "${_ok}" PARENT_SCOPE)
