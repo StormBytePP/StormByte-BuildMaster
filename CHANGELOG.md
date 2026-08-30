@@ -159,6 +159,13 @@ and the declaration shape changed.
   `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL),
   `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE,
   FILES-on-meta FATAL, outline groups (CMake + Meson leaves).
+- **Configure report (`BUILDMASTER_VERBOSE`).** After graph hooks, the
+  primary bootstrap prints `BuildMaster <version> Configuration:`
+  (module `Report`): parent toolchain paths/flags, then an alphabetical
+  component table (`ID` / `TYPE` / `LINK`) with one-level `NEEDED BY`
+  and explicit overrides only (`CFLAGS`, `CXXFLAGS`, `FILES`,
+  `LINKFLAGS`). Groups are omitted. Row order is readability, not the
+  graph walk. Nested bootstraps stay silent.
 
 ### Changed
 

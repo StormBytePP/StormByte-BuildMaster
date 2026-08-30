@@ -4,11 +4,13 @@
 ## @note Directory-scope `set()` is invisible in the parent CMAKE_SOURCE_DIR
 ##       where cmake_language(DEFER) runs after add_subdirectory(buildmaster).
 ##       This function is idempotent and is the single source of the tables.
+## @note Rebuilds the table if `REPORT` is missing so an older in-process
+##       registry (log.cmake included before this module existed) is not kept.
 function(_bm_log_ensure_registry)
 	get_property(_have GLOBAL PROPERTY BUILDMASTER_LOG_MODULES SET)
 	if(_have)
 		get_property(_mods GLOBAL PROPERTY BUILDMASTER_LOG_MODULES)
-		list(FIND _mods "COMPONENT" _idx)
+		list(FIND _mods "REPORT" _idx)
 		if(NOT _idx EQUAL -1)
 			return()
 		endif()
@@ -38,11 +40,12 @@ function(_bm_log_ensure_registry)
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_PKGCONF "Pkgconf")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_RENAME "Rename")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_REPACK "Repack")
+	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_REPORT "Report")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_TOOLCHAIN "Toolchain")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_TOOLS "Tools")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MOD_USER "User")
 	set_property(GLOBAL PROPERTY BUILDMASTER_LOG_MODULES
-		"ARCHIVE;BUNDLE;CMAKE;COMPONENT;CORE;ENV;EXTRA;FILE;GIT;MESON;META;NINJA;PKGCONF;RENAME;REPACK;TOOLCHAIN;TOOLS;USER")
+		"ARCHIVE;BUNDLE;CMAKE;COMPONENT;CORE;ENV;EXTRA;FILE;GIT;MESON;META;NINJA;PKGCONF;RENAME;REPACK;REPORT;TOOLCHAIN;TOOLS;USER")
 
 	set(_pad_level 0)
 	get_property(_levels GLOBAL PROPERTY BUILDMASTER_LOG_LEVELS)
@@ -191,7 +194,7 @@ endfunction()
 
 ## @brief STATUS-style header used by Ninja COMMENT (no level tag).
 ## @param[out] _out    Parent-scope string `[BuildMaster/<Mod>]: <text>`
-## @param[in]  _module Uppercase module key (CMAKE, MESON, USER, …).
+## @param[in]  _module Uppercase module key (CMAKE, MESON, USER, REPORT, …).
 ## @param[in]  _text   Comment body.
 ## @note Matches the STATUS layout of `_bm_log_message` /
 ##       `buildmaster_message` so configure lines and ninja progress share

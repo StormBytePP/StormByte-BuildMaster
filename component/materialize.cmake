@@ -8,6 +8,7 @@
 include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 
 ## @brief Materialize one registered component by SYSTEM.
+## @param[in] id Registered component id.
 function(_bm_materialize_one id)
 	get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_SYSTEM)
 	if("${_sys}" STREQUAL "")
@@ -26,10 +27,12 @@ function(_bm_materialize_one id)
 endfunction()
 
 ## @brief Deferred materialize: groups plan, metas, toolchain inherit,
-##        components, REPACK, links, orphan warn, hooks.
+##        components, REPACK, links, orphan warn, hooks, verbose report.
 ## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
 ## @note Group events (`banner:id:depth` / `comp:id`) are played in order so
 ##       a member configure sits under its group banner.
+## @note `_bm_report_emit` is the last BuildMaster output of this configure
+##       when `BUILDMASTER_VERBOSE` is ON.
 function(_bm_materialize_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -95,6 +98,10 @@ function(_bm_materialize_finalize)
 	endif()
 
 	_bm_hook_run_sorted("BUILDMASTER_ON_GRAPH_FINALIZED")
+
+	if(COMMAND _bm_report_emit)
+		_bm_report_emit()
+	endif()
 
 	_bm_log_message(COMPONENT DEBUG "Component graph finalized")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_finalize")
