@@ -125,6 +125,10 @@ and the declaration shape changed.
   `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL),
   `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE,
   FILES-on-meta FATAL.
+- Id origin: public `buildmaster_component` / `buildmaster_meta` /
+  `buildmaster_meta_add` are macros so a clash FATAL names the first
+  declaration as `file:line` (the caller's CMakeLists, not a BM
+  `.cmake`). Same id, different kind is FATAL. Internals stay functions.
 
 ### Changed
 

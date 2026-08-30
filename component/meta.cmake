@@ -12,7 +12,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/meta/helpers.cmake")
 ## @note Does not create CMake targets. Safe before `buildmaster_meta()`.
 ## @note First call appends to BUILDMASTER_META_IDS and sets TITLE=id,
 ##       WHOLE=FALSE, CREATED=FALSE, INDENT=0, TOOLCHAIN="". Later calls
-##       are no-ops.
+##       are no-ops. Does **not** stamp origin (that is the public macro).
 ## @note Empty id is FATAL.
 function(_bm_meta_ensure id)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_ensure")
@@ -63,6 +63,8 @@ endfunction()
 ## @param[in] _title  Human-readable title.
 ## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `LINK=`,
 ##                    `LINKFLAGS=`, `TOOLCHAIN=`, `INDENT=`).
+## @note Invoked only from the public macro `buildmaster_meta`.
+##       Not a project API.
 ## @note `REPACK` merges every produced *static* archive of the member leaves
 ##       into one prefix archive named after `_id`. Shared/DLL members are
 ##       not merged (WARNING); they stay INTERFACE links on the meta.
@@ -84,9 +86,10 @@ endfunction()
 ## @note `LINKFLAGS=` is WARNING + ignored. A meta has no nested
 ##       cmake/meson link step to fold flags into. Put LINKFLAGS on the
 ##       concrete member that actually builds.
-## @note A second `buildmaster_meta()` for the same id is FATAL.
-function(buildmaster_meta _id _title)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta")
+## @note A second `buildmaster_meta()` for the same id is FATAL and names
+##       the first origin (`file:line`) when known.
+function(_bm_meta_impl _id _title)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_impl")
 	if(ARGC GREATER 3)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta: too many arguments (expected at most one options string).")
@@ -105,16 +108,14 @@ function(buildmaster_meta _id _title)
 	if(_comp_ids)
 		list(FIND _comp_ids "${_id}" _cidx)
 		if(NOT _cidx EQUAL -1)
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_meta: '${_id}' is already a component id")
+			_bm_id_clash_fatal("buildmaster_meta" "${_id}")
 		endif()
 	endif()
 
 	_bm_meta_ensure("${_id}")
 	get_property(_created GLOBAL PROPERTY BUILDMASTER_META_${_id}_CREATED)
 	if(_created)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_meta: duplicate id '${_id}'")
+		_bm_id_clash_fatal("buildmaster_meta" "${_id}")
 	endif()
 
 	set(_optstr "")
@@ -198,7 +199,7 @@ function(buildmaster_meta _id _title)
 	else()
 		_bm_log_message(COMPONENT DEBUG "Registered meta ${_id}")
 	endif()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_meta")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_impl")
 endfunction()
 
 ## @brief Declare membership of one or more ids in a meta collection.
@@ -206,11 +207,13 @@ endfunction()
 ##                    called yet).
 ## @param[in] ARGN    Member ids (components, other metas). Duplicates are
 ##                    ignored. Order of first addition is flatten order.
+## @note Invoked only from the public macro `buildmaster_meta_add`.
+##       Not a project API.
 ## @note Membership is not consumption. Nothing compiles the collection until
 ##       some consumer buildmaster_link / buildmaster_depend / host
 ##       target_link_libraries points at the meta.
-function(buildmaster_meta_add meta)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta_add")
+function(_bm_meta_add_impl meta)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_add_impl")
 	if("${meta}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL "buildmaster_meta_add: empty meta id")
 	endif()
@@ -229,8 +232,7 @@ function(buildmaster_meta_add meta)
 	if(_comp_ids)
 		list(FIND _comp_ids "${meta}" _cidx)
 		if(NOT _cidx EQUAL -1)
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_meta_add: '${meta}' is a buildmaster_component id, not a meta")
+			_bm_id_clash_fatal("buildmaster_meta_add" "${meta}")
 		endif()
 	endif()
 
@@ -261,5 +263,34 @@ function(buildmaster_meta_add meta)
 
 	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG "buildmaster_meta_add ${meta} members=${_members}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_meta_add")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_add_impl")
 endfunction()
+
+## @brief Public meta declaration (macro so id origin is the caller's CMakeLists).
+## @see _bm_meta_impl
+macro(buildmaster_meta)
+	if(${ARGC} LESS 1)
+		_bm_log_message(COMPONENT FATAL "buildmaster_meta: missing id")
+	endif()
+	_bm_id_stamp("${ARGV0}" meta
+		"${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}")
+	if(${ARGC} EQUAL 2)
+		_bm_meta_impl("${ARGV0}" "${ARGV1}")
+	elseif(${ARGC} EQUAL 3)
+		_bm_meta_impl("${ARGV0}" "${ARGV1}" "${ARGV2}")
+	else()
+		_bm_log_message(COMPONENT FATAL
+			"buildmaster_meta: too many arguments (expected at most one options string).")
+	endif()
+endmacro()
+
+## @brief Public meta membership (macro so a lazy id is stamped at this call).
+## @see _bm_meta_add_impl
+macro(buildmaster_meta_add _meta)
+	if("${_meta}" STREQUAL "")
+		_bm_log_message(COMPONENT FATAL "buildmaster_meta_add: missing meta id")
+	endif()
+	_bm_id_stamp("${_meta}" meta
+		"${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}")
+	_bm_meta_add_impl("${_meta}" ${ARGN})
+endmacro()

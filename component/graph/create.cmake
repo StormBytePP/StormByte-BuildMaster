@@ -37,7 +37,8 @@
 ## @note The INTERFACE exists as soon as this function returns, so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see `<id>`.
 ##       Deferred finalize only emits stages and the fragment. A second
-##       `_bm_graph_create` for the same id is FATAL in the registry.
+##       `_bm_graph_create` for the same id is FATAL via `_bm_id_clash_fatal`
+##       (first public-macro origin, `file:line`, when known).
 ## @note `_bm_tools_*_stages` is internal; backends call it from materialize
 ##       only.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
@@ -87,15 +88,13 @@ function(_bm_graph_create _component _component_title _srcdir
 	if(_ids)
 		list(FIND _ids "${_component}" _idx)
 		if(NOT _idx EQUAL -1)
-			_bm_log_message(COMPONENT FATAL
-				"_bm_graph_create: duplicate id '${_component}'")
+			_bm_id_clash_fatal("_bm_graph_create" "${_component}")
 		endif()
 	endif()
 
 	_bm_meta_is("${_component}" _is_meta)
 	if(_is_meta)
-		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create: '${_component}' is already a meta id")
+		_bm_id_clash_fatal("_bm_graph_create" "${_component}")
 	endif()
 
 	set(_options_string "")

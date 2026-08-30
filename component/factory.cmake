@@ -224,13 +224,15 @@ endfunction()
 ## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
 ##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES run from
 ##            materialize after the INTERFACE exists.
+## @note Invoked only from the public macro `buildmaster_component`.
+##       Not a project API.
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
 ## @note Both marker files: FATAL.
 ## @note INTERFACE `<id>` exists on return.
-function(buildmaster_component _component _component_title _srcdir
+function(_bm_component_impl _component _component_title _srcdir
 		_options _library_mode _produced)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_impl")
 
 	if(ARGC LESS 6 OR ARGC GREATER 7)
 		_bm_log_message(COMPONENT FATAL
@@ -294,5 +296,25 @@ function(buildmaster_component _component _component_title _srcdir
 	set_property(GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_FACTORY_OPTIONS "${_options}")
 
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_impl")
 endfunction()
+
+## @brief Public factory (macro so id origin is the caller's CMakeLists).
+## @see _bm_component_impl
+macro(buildmaster_component)
+	if(${ARGC} LESS 1)
+		_bm_log_message(COMPONENT FATAL "buildmaster_component: missing id")
+	endif()
+	_bm_id_stamp("${ARGV0}" component
+		"${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}")
+	if(${ARGC} EQUAL 6)
+		_bm_component_impl("${ARGV0}" "${ARGV1}" "${ARGV2}"
+			"${ARGV3}" "${ARGV4}" "${ARGV5}")
+	elseif(${ARGC} EQUAL 7)
+		_bm_component_impl("${ARGV0}" "${ARGV1}" "${ARGV2}"
+			"${ARGV3}" "${ARGV4}" "${ARGV5}" "${ARGV6}")
+	else()
+		_bm_log_message(COMPONENT FATAL
+			"buildmaster_component: expected id title srcdir options mode produced [optstr]")
+	endif()
+endmacro()
