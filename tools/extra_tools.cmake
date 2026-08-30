@@ -58,6 +58,7 @@ endmacro()
 ##       `${tool_name}/propagate_vars.cmake`.
 macro(_bm_tools_configure_extra tool_name)
 	_bm_log_message(TOOLS LOWLEVEL "Entering _bm_tools_configure_extra(${tool_name})")
+	_bm_tools_ensure_extra("${tool_name}")
 	get_property(configured_extra_tools GLOBAL PROPERTY BUILDMASTER_PLUGINS_EXTRA_ENABLED)
 
 	list(FIND configured_extra_tools "${tool_name}" _found_index)
@@ -72,4 +73,13 @@ macro(_bm_tools_configure_extra tool_name)
 		include(${tool_name}/propagate_vars.cmake)
 	endif()
 	_bm_log_message(TOOLS LOWLEVEL "Exiting _bm_tools_configure_extra(${tool_name})")
+endmacro()
+
+## @brief Configure one extra tool requested via
+##        `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`.
+## @param[in] tool_name Extra tool id (e.g. pkgconf).
+## @note Public name kept for `tools/extra/CMakeLists.txt`. Implementation
+##       is `_bm_tools_configure_extra`.
+macro(configure_extra_tool tool_name)
+	_bm_tools_configure_extra("${tool_name}")
 endmacro()

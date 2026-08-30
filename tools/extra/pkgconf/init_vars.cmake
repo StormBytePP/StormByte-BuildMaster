@@ -3,6 +3,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
 if(COMMAND _bm_log_level_init)
 	_bm_log_level_init()
 endif()
+include("${CMAKE_CURRENT_LIST_DIR}/../../../paths.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../meson/helpers.cmake")
 
 set(BUILDMASTER_TOOLS_PKGCONF_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 
@@ -33,7 +35,8 @@ endif()
 # Force build our pkgconf if none found or on Windows because it might have installed a broken pkgconfig (like Strawbery)
 if(NOT PKG_CONFIG_WORKING)
 	set(PKGCONF_SRCDIR "${BUILDMASTER_TOOLS_PKGCONF_SRCDIR}/src")
-	_bm_path_builddir(PKGCONF_BUILD_DIR)
+	_bm_path_component_builddir(PKGCONF_BUILD_DIR pkgconf)
+	file(MAKE_DIRECTORY "${PKGCONF_BUILD_DIR}")
 
 	set(PKGCONF_MESON_OPTIONS "-Ddefault_library=static")
 
@@ -73,8 +76,8 @@ if(NOT PKG_CONFIG_WORKING)
 	# Test pkgconf/pkg-config version
 	execute_process(
 		COMMAND ${ENV_RUNNER} "${PKG_CONFIG}" --version
-		OUTPUT_VARIABLE _pkgconf_version
 		RESULT_VARIABLE _pkgconf_test_result
+		OUTPUT_VARIABLE _pkgconf_version
 		ERROR_VARIABLE _pkgconf_test_err_ignored
 	)
 
