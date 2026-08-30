@@ -6,9 +6,10 @@
 include("${CMAKE_CURRENT_LIST_DIR}/graph/helpers.cmake")
 
 ## @brief Schedule deferred component materialization once per configure.
-## @note Uses cmake_language(DEFER) on CMAKE_SOURCE_DIR so all create_* and
-##       buildmaster_depend/link/repack calls in the tree are seen first.
-##       Requires CMake >= 3.19.
+## @note Uses cmake_language(DEFER) on CMAKE_SOURCE_DIR so every
+##       `buildmaster_component` / `buildmaster_meta` /
+##       `buildmaster_depend` / `buildmaster_link` in the tree is seen
+##       first. Requires CMake >= 3.19.
 function(_bm_graph_defer_arm)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_defer_arm")
 	get_property(_armed GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEFER_ARMED)

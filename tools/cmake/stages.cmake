@@ -28,8 +28,9 @@
 ##            dumps the parent registry and appends this profile's compilers
 ##            and binutils (unified install tree).
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when configure
-##            runs under a dependant custom target (suppress hierarchical
-##            STATUS; the target COMMENT is enough). `"0"` or empty otherwise.
+##            runs under the deferred `<id>_configure` custom target
+##            (suppress hierarchical STATUS; the target COMMENT is enough).
+##            `"0"` or empty otherwise.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"` (variant → canonical rename). Used by
 ##       `install_exec.cmake.in` as `@_BM_RENAME_ENABLED@`.
@@ -48,8 +49,8 @@
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_COMMAND,
 ##       BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND and
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
-##       component library fragments (including dependant targets) use the
-##       same runners as the generated stage scripts.
+##       component library fragments (eager and deferred `<id>_configure`)
+##       use the same runners as the generated stage scripts.
 ## @note Before writing templates, calls
 ##       `_bm_env_apply_install_search_paths()` so nested
 ##       `-DCMAKE_C_FLAGS=` / linker flags include the shared prefix

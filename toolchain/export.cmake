@@ -83,12 +83,13 @@ endfunction()
 ##            `BM_TC_*` already loaded in the caller).
 ## @note Implemented as a **macro** so `BM_TC_*` from
 ##       `_bm_tc_load_profile` are visible.
-## @note The generated file is the active toolchain while that component (and
-##       any nested `create_*` stages generated under it) runs. After the
-##       registry snapshot, appends `CACHE FORCE` lines for the loaded profile
-##       and sets `BUILDMASTER_TOOLCHAIN_FILE` to this file's path so children
-##       without an explicit `TOOLCHAIN` argument keep propagating the same
-##       modified toolchain downward instead of falling back to the parent dump.
+## @note The generated file is the active toolchain while that component
+##       (and any nested `_bm_tools_*_stages` generated under it) runs.
+##       After the registry snapshot, appends `CACHE FORCE` lines for the
+##       loaded profile and sets `BUILDMASTER_TOOLCHAIN_FILE` to this file's
+##       path so children without an explicit `TOOLCHAIN` keep propagating
+##       the same modified toolchain instead of falling back to the parent
+##       dump.
 ## @note If `_bm_tc_get_meson_native_file` exists, also records
 ##       `BUILDMASTER_MESON_NATIVE_FILE` for nested Meson under this component.
 macro(_bm_tc_write_component path toolchain_name)

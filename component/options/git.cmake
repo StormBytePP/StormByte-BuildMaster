@@ -118,9 +118,10 @@ endfunction()
 ## @note No-op when GIT is absent. Empty group is already WARNING in parse.
 ##       PATCH paths: absolute unchanged; relative to
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Missing file is FATAL.
-##       Calls existing `buildmaster_git_*` so flush order stays
-##       FETCH → SWITCH → RESET → PATCH regardless of declaration order
-##       inside the group (RESET/PATCH still flush reset-then-patch).
+##       Calls `_bm_tools_git_fetch` / `_switch` / `_reset` / `_patch` so
+##       flush order stays FETCH → SWITCH → RESET → PATCH regardless of
+##       declaration order inside the group (RESET/PATCH still flush
+##       reset-then-patch).
 function(_bm_comp_apply_git _id _title _srcdir _optstr)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_git")
 	_bm_opt_parse_git("${_optstr}" _present _fetch _switch _reset _patches _gtitle)

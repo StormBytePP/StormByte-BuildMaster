@@ -101,8 +101,9 @@ endfunction()
 ## @param[in] component Component id used to name the generated scripts.
 ## @param[in] toolchain_name Normalized toolchain name (e.g. `msvc`, `clang-cl`).
 ## @note Implemented as a **macro** so `BM_TC_*` and `PATH` from the caller
-##       (`create_*_stages` after `_bm_tc_load_profile`) are
-##       visible without extra PARENT_SCOPE plumbing.
+##       (`_bm_tools_cmake_stages` / `_bm_tools_meson_stages` after
+##       `_bm_tc_load_profile`) are visible without extra PARENT_SCOPE
+##       plumbing.
 ## @note Requires `BM_TC_*` already set in the caller. Writes
 ##       `runner_<safe>` and `runner_silent_<safe>` under
 ##       `BUILDMASTER_SCRIPTS_ENVDIR`. The silent script invokes the matching

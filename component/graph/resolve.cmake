@@ -40,7 +40,7 @@ endfunction()
 ## @param[in]  id      Component identifier.
 ## @param[out] out_var Parent-scope TRUE if `id` appears as a dependency source.
 ## @note Configure-time configure is used when the component has no recorded
-##       incoming edges; otherwise configure runs as a build step (dependant
+##       incoming edges; otherwise configure runs as a build step (deferred
 ##       template) so artifacts from dest can exist first.
 function(_bm_graph_has_deferred_configure id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_has_deferred_configure")
@@ -96,7 +96,7 @@ function(_bm_graph_resolve_dest dest out_tgt out_ok)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_resolve_dest")
 endfunction()
 
-## @brief Space-separated wait targets for the dependant template.
+## @brief Space-separated wait targets for the deferred fragment.
 ## @param[in]  id      Component whose outgoing dependency edges are collected.
 ## @param[out] out_var Parent-scope string of unique target names, space-joined
 ##            (empty if this component has no recorded dests).

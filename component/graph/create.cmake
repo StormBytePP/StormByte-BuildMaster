@@ -36,9 +36,10 @@
 ##       wait on those dests (PRIVATE `-I` injection is not a prefix publish).
 ## @note The INTERFACE exists as soon as this function returns, so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see `<id>`.
-##       Deferred finalize only emits stages and the fragment: includes,
-##       IMPORTED archives, WHOLE, LINK and LINKFLAGS. A second create_*
-##       for the same id is FATAL in the registry.
+##       Deferred finalize only emits stages and the fragment. A second
+##       `_bm_graph_create` for the same id is FATAL in the registry.
+## @note `_bm_tools_*_stages` is internal; backends call it from materialize
+##       only.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
 ##       They are applied `INTERFACE` on `<id>` and propagate through CMake
 ##       `target_link_libraries` to the final artefact that consumes that id.
@@ -58,7 +59,6 @@
 ##       `.pc` already at the canonical path is FATAL at install time (do not
 ##       clobber). Meta + PC is FATAL in buildmaster_meta.
 ## @note GIT + FILES SOURCE is FATAL (two owners of the same tree).
-## @note create_*_stages is internal; backends call it from materialize only.
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_create")

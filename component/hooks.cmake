@@ -118,7 +118,7 @@ function(_bm_hook_run_sorted _list_prop)
 endfunction()
 
 ## @brief Register a hook that runs after one concrete component materializes.
-## @param[in] _component Component id (`create_*_component`).
+## @param[in] _component Component id (`buildmaster_component`).
 ## @param[in] _function  CMake function name. Must exist now (`COMMAND`).
 ## @param[in] _alias     Order key (ASCII ascending within this id). Required.
 ## @param[in] CAPTURE    Optional names snapshotted now into the generated
@@ -131,8 +131,11 @@ endfunction()
 ##       run in a later phase, after every concrete materialize.
 ## @note Script:
 ##       `${BUILDMASTER_SCRIPTS_HOOK_DIR}/<alias>__component_<id>.cmake`.
-## @note The callback must not call `create_*` or graph mutators
+## @note The callback must not call `buildmaster_component` /
+##       `buildmaster_meta` or graph mutators
 ##       (`BUILDMASTER_COMPONENTS_FINALIZED` is already set).
+## @note Attaching this hook does **not** defer nested configure. If setup
+##       must see a hook artifact, record `buildmaster_depend`.
 function(buildmaster_hook_component _component _function _alias)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_hook_component")
 	cmake_parse_arguments(ARG "" "" "CAPTURE" ${ARGN})
@@ -183,10 +186,11 @@ endfunction()
 ## @param[in] CAPTURE   Optional names snapshotted now (copy). Empty CAPTURE
 ##            keyword with no names is FATAL inside `_bm_hook_write`
 ##            only when a blank name is listed.
-## @note Runs after git flush, metas, cmake/meson, repacks, links and
+## @note Runs after git flush, metas, cmake/meson, REPACK metas, links and
 ##       orphan warn. Alias sort only among graph hooks.
 ## @note Script: `${BUILDMASTER_SCRIPTS_HOOK_DIR}/<alias>__graph.cmake`.
-## @note The callback must not call `create_*` or graph mutators.
+## @note The callback must not call `buildmaster_component` /
+##       `buildmaster_meta` or graph mutators.
 function(buildmaster_hook_graph _function _alias)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_hook_graph")
 	cmake_parse_arguments(ARG "" "" "CAPTURE" ${ARGN})

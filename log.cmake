@@ -91,9 +91,9 @@ endfunction()
 ##                  WARNING, STATUS, or FATAL).
 ## @param[in]  _raw Name or integer as provided by cache, env, or caller.
 ## @note Accepts the six names (any case) or the integers 0–5. Anything else
-##       is FATAL and lists the accepted names. Used both for
-##       BUILDMASTER_LOGLEVEL and for the level argument of
-##       buildmaster_message().
+##       is FATAL and lists the accepted names. Used for BUILDMASTER_LOGLEVEL
+##       and for the level argument of `_bm_log_message` /
+##       `buildmaster_message`.
 function(_bm_log_parse_level _out _raw)
 	_bm_log_ensure_registry()
 	set(_v "${_raw}")
@@ -146,8 +146,9 @@ endfunction()
 ## @param[out] _out    Parent-scope string `[BuildMaster/<Mod>]: <text>`
 ## @param[in]  _module Uppercase module key (CMAKE, MESON, USER, …).
 ## @param[in]  _text   Comment body.
-## @note Matches the STATUS layout of buildmaster_message() so configure
-##       lines and ninja progress share one column. Unknown modules FATAL.
+## @note Matches the STATUS layout of `_bm_log_message` /
+##       `buildmaster_message` so configure lines and ninja progress share
+##       one column. Unknown modules FATAL.
 function(_bm_log_comment _out _module _text)
 	_bm_log_ensure_registry()
 	string(TOUPPER "${_module}" _mod)

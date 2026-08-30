@@ -67,8 +67,8 @@ endfunction()
 ## @note `execute_process(-P script)` runs at configure so FILES= can unpack
 ##       in the same finalize pass. The custom target remains for incremental
 ##       rebuilds. The script must be idempotent.
-function(_bm_file_add_prerequisite_target name script comment depends)
-	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_add_prerequisite_target")
+function(_bm_file_add_target name script comment)
+	_bm_log_message(FILE LOWLEVEL "Entering _bm_file_add_target")
 	if(TARGET "${name}")
 		_bm_log_message(FILE FATAL
 			"file helper: target '${name}' already exists")
@@ -102,7 +102,7 @@ function(_bm_file_add_prerequisite_target name script comment depends)
 			"file helper '${name}' failed at configure (exit ${_file_rc})")
 	endif()
 
-	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_add_prerequisite_target")
+	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_add_target")
 endfunction()
 
 ## @brief Always download a file (retries + optional hash); creates a target.
@@ -148,7 +148,7 @@ function(_bm_file_download name url)
 		endif()
 	endif()
 
-	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
 	_bm_log_message(FILE DEBUG "_bm_file_download target ${name}")
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_download")
@@ -225,7 +225,7 @@ function(_bm_file_download_cached name url)
 		set(ARG_COMMENT "Download (cached) ${ARG_TITLE}")
 	endif()
 
-	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
 	_bm_log_message(FILE DEBUG "_bm_file_download_cached target ${name}")
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_download_cached")

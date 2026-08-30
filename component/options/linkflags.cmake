@@ -99,7 +99,8 @@ function(_bm_opt_parse_linkflags_group inner out_items)
 endfunction()
 
 ## @brief Parse `LINKFLAGS=` / `LINKFLAGS={…}` from a component options string.
-## @param[in]  options_string Trailing `"KEY=value;…"` passed to create_*.
+## @param[in]  options_string Trailing `"KEY=value;…"` of
+##            `buildmaster_component` / `buildmaster_meta`.
 ## @param[out] out_items      Parent-scope CMake list of raw linker flags
 ##            selected for the current host (empty if omitted or nothing applies).
 ## @note Items are **external to BuildMaster**. They are forwarded verbatim

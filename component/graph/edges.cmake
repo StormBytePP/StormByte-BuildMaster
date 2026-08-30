@@ -96,7 +96,7 @@ function(buildmaster_depend source dest)
 endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
-## @param[in] source Registered component id (INTERFACE from create_*).
+## @param[in] source Registered component id (INTERFACE from `_bm_graph_create`).
 ## @param[in] dest   Registered component or meta, existing CMake target,
 ##            an on-disk archive path, or a library spec
 ##            (`<name>` or `<subdir>/<name>`) under the BM prefix.
@@ -110,9 +110,9 @@ endfunction()
 ## @note buildmaster_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).
 ## @note Always records an order-only edge via `_bm_graph_record_dep`
-##       so `buildmaster_link(A B)` before `create_*(B)` still defers A.
-##       A second explicit `buildmaster_link` with the same pair is WARNING
-##       and a no-op. The auto-dependency does not WARN.
+##       so `buildmaster_link(A B)` before `buildmaster_component(B)` still
+##       defers A. A second explicit `buildmaster_link` with the same pair
+##       is WARNING and a no-op. The auto-dependency does not WARN.
 function(buildmaster_link source dest)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_link")
 	if(ARGC GREATER 2)

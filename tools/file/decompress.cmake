@@ -69,7 +69,7 @@ function(_bm_file_decompress name archive out_dir)
 		set(ARG_COMMENT "Decompress ${ARG_TITLE}")
 	endif()
 
-	_bm_file_add_prerequisite_target("${name}" "${_script}" "${ARG_COMMENT}"
+	_bm_file_add_target("${name}" "${_script}" "${ARG_COMMENT}"
 		"${ARG_DEPENDS}")
 	_bm_log_message(FILE DEBUG "_bm_file_decompress target ${name}")
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_decompress")

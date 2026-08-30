@@ -42,13 +42,14 @@ function(_bm_git_flush_all)
 	_bm_log_message(GIT LOWLEVEL "Exiting _bm_git_flush_all")
 endfunction()
 
-## @brief git reset --hard + clean -fd at parent configure; register post-install.
+## @brief git reset --hard + clean -fd at parent configure.
 ## @param[in] _component_id Component identifier.
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @note Generates the script and queues it. Flush runs every reset for the
-##       repo, then every patch. Call order of create_git_* does not matter.
-##       Call as: `_bm_tools_git_reset(<id> <title> <repo>)`.
+##       repo, then every patch. Call order of `_bm_tools_git_*` does not
+##       matter. Call as: `_bm_tools_git_reset(<id> <title> <repo>)`.
+## @note Does **not** write the post-install reset marker. That is PATCH-only.
 function(_bm_tools_git_reset _component_id _title _git_repo_dir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_reset")
 	set(GIT_REPO "${_git_repo_dir}")

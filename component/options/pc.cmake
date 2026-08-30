@@ -3,7 +3,8 @@
 # =============================================================================
 
 ## @brief Parse `PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…}` from an options string.
-## @param[in]  options_string Same trailing string passed to create_*.
+## @param[in]  options_string Same trailing string of
+##            `buildmaster_component` / `buildmaster_meta`.
 ## @param[out] out_present    TRUE if a `PC` key was seen (bare or `PC={…}`).
 ## @param[out] out_enabled    TRUE if a `.pc` should be written.
 ## @param[out] out_name       Inner `NAME` or empty (caller defaults to produced).
@@ -14,7 +15,7 @@
 ##       while keeping the group).
 ## @note Missing VERSION is FATAL only when enabled. `ENABLED=FALSE` does not
 ##       require VERSION and does not write a file.
-## @note `PC={…}` on a meta is FATAL at create_meta_* (unbounded Requires).
+## @note `PC={…}` on a meta is FATAL in `buildmaster_meta` (unbounded Requires).
 ## @note If install already produced a `.pc` at the canonical path, writing
 ##       one is FATAL (do not clobber an upstream file). That check lives in
 ##       install_exec, not here.

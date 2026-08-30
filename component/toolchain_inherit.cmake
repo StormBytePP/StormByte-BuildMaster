@@ -109,7 +109,7 @@ endfunction()
 ## @param[in] dest        Token from membership or a graph edge.
 ## @param[in] tc          Profile name.
 ## @param[in] source_meta Meta applying the profile.
-## @note file_* / custom targets are ignored.
+## @note Custom / host targets that are not a BM component or meta are ignored.
 function(_bm_tc_inherit_dest dest tc source_meta)
 	if("${dest}" STREQUAL "" OR "${tc}" STREQUAL "")
 		return()

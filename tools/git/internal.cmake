@@ -5,6 +5,7 @@
 ## @brief Ensure the aggregate `buildmaster_clean` custom target exists.
 ## @note Created once. Individual `buildmaster_clean_git_<id>` targets are
 ##       attached when BUILDMASTER_CLEAN_RESET_REPOS is on.
+## @note `buildmaster_clean` is a **target**, not a public command.
 function(_bm_git_ensure_clean_target)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_ensure_clean_target")
 	if(NOT TARGET buildmaster_clean)
@@ -145,7 +146,8 @@ endfunction()
 ## @param[out] _out     Parent-scope path, or empty if no marker was written.
 ## @param[in]  _srcdir  Component source directory.
 ## @note Marker exists only when a PATCH was registered for that git root.
-##       Used by create_*_stages so install_exec can reset after install.
+##       Used by `_bm_tools_cmake_stages` / `_bm_tools_meson_stages` so
+##       install_exec can reset after install.
 function(_bm_tools_git_marker _out _srcdir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_marker")
 	_bm_git_toplevel(_git_root "${_srcdir}")

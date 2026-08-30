@@ -2,7 +2,8 @@
 # component/options/parse.cmake — KEY=value walker (indent / toolchain / flags)
 # =============================================================================
 
-## @brief Parse the optional `KEY=VALUE;…` options string used by create_*_component.
+## @brief Parse the optional `KEY=VALUE;…` optstr of `buildmaster_component`
+##        and `buildmaster_meta`.
 ## @param[out] out_indent     Indent level (integer, default 0).
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
 ## @param[out] out_rename     TRUE/FALSE — normalize variant archive names

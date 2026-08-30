@@ -2,12 +2,13 @@
 # tools/git/switch.cmake — _bm_tools_git_switch
 # =============================================================================
 
-## @brief Switch branch at parent configure; register post-install reset.
+## @brief Switch branch at parent configure.
 ## @param[in] _component_id Component identifier.
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @param[in] _git_branch   Branch name.
 ## @note Generates the script and include()s it immediately. No out-variable.
+## @note Does **not** write the post-install reset marker. That is PATCH-only.
 function(_bm_tools_git_switch _component_id _title _git_repo_dir _git_branch)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_switch")
 	set(GIT_REPO "${_git_repo_dir}")

@@ -6,17 +6,18 @@
 
 include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 
-## @brief Deferred materialize: metas, toolchain inherit, components, repacks,
+## @brief Deferred materialize: metas, toolchain inherit, components, REPACK,
 ##        links, orphan warn, hooks.
 ## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
-## @note Concrete and create_meta INTERFACE stubs already exist. This pass
-##       emits stages, fragments, headers-none stamps, repack targets, meta
-##       stage anchors, member wiring and recorded `buildmaster_link` edges.
+## @note Concrete and `buildmaster_meta` INTERFACE stubs already exist. This
+##       pass emits stages, fragments, headers-none stamps, REPACK merge
+##       targets, meta stage anchors, member wiring and recorded
+##       `buildmaster_link` edges.
 ## @note Order: flush queued git reset/patch → FILES download/unpack →
 ##       resolve pending SOURCE backends → inject PRIVATE headers
 ##       `-I` into linker OPTIONS → materialize metas → propagate meta
-##       TOOLCHAIN → per-id cmake / meson / none materialize → repacks →
+##       TOOLCHAIN → per-id cmake / meson / none materialize → REPACK →
 ##       meta wire → apply links → orphan warning → fail if a per-id hook
 ##       was registered for an id that never materialized → graph hooks
 ##       (alias order).

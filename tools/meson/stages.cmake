@@ -27,8 +27,8 @@
 ##            parent job toolchain. When set, compilers, linker, archiver and
 ##            component-local env runners apply only to this component's stages.
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when setup runs
-##            under a dependant custom target (suppress hierarchical STATUS).
-##            `"0"` or empty otherwise.
+##            under the deferred `<id>_configure` custom target (suppress
+##            hierarchical STATUS). `"0"` or empty otherwise.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. Substituted into `install_exec.cmake.in`.
 ## @note Reads `_BM_BUILDONLY` from the caller (`"1"` / `"0"`). If unset,
@@ -42,7 +42,7 @@
 ##       `_BM_PC_ENABLED` is unset, defaults to `"0"`. When `"1"`,
 ##       `install_exec.cmake.in` writes a helper `.pc` after RENAME +
 ##       STRIPRES (FATAL if the output path already exists).
-## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer dependant -P uses
+## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer deferred -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
 ## @note `_MESON_NATIVE_FILE` is the Meson `--native-file` for this component:

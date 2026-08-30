@@ -5,8 +5,8 @@
 ## @brief Emit CMake stages and include the component fragment (internal).
 ## @param[in] _component Registered component identifier.
 ## @note Called only from `_bm_materialize_finalize`. Uses
-##       `_bm_tools_cmake_stages` (not part of the public API) and shared
-##       collect/write helpers from `component/materialize.cmake`.
+##       `_bm_tools_cmake_stages` (not public) and
+##       `_bm_materialize_collect_outputs` / `_bm_materialize_write_fragment`.
 ## @note Eager components print `Configuring …` from the generated
 ##       configure script (parent include). Deferred components
 ##       (`buildmaster_depend` sources) print

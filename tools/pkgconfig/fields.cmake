@@ -79,7 +79,7 @@ function(_bm_pc_options_flags options out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_options_flags")
 endfunction()
 
-## @brief Fill `_BM_PC_*` for `install_exec` / `create_*_stages`.
+## @brief Fill `_BM_PC_*` for `install_exec` / `_bm_tools_*_stages`.
 ## @param[in] id Registered component id.
 ## @note Parent-scope: `_BM_PC_ENABLED` (`1`/`0`), `_BM_PC_NAME`,
 ##       `_BM_PC_VERSION`, `_BM_PC_DESCRIPTION`, `_BM_PC_LIBS`,

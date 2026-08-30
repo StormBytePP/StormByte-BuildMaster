@@ -222,12 +222,11 @@ endfunction()
 ## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
 ##            for headers.
 ## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
-##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES are applied
-##            inside `_bm_graph_create` / materialize after the INTERFACE
-##            exists.
+##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES run from
+##            materialize after the INTERFACE exists.
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
-## @note Both marker files: FATAL. Then use the backend create directly.
+## @note Both marker files: FATAL.
 ## @note INTERFACE `<id>` exists on return.
 function(buildmaster_component _component _component_title _srcdir
 		_options _library_mode _produced)

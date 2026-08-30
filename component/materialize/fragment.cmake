@@ -14,11 +14,9 @@
 ##       `<subdir>/<name>`, not a component, meta, CMake target, or existing
 ##       file) are appended to the produced name/file lists so the fragment
 ##       can create IMPORTED targets. They are *not* added to stage `OUTPUT`:
-##       `create_*_stages` already ran at registration with the declared
-##       produced specs only. `write_fragment` attaches a Ninja file rule
-##       (`OUTPUT <file>` `DEPENDS` `<id>_install`) for each extra. Without
-##       that rule Ninja reports “needed by <host>, missing and no known
-##       rule”; Unix Makefiles often hide it via target-level dependencies.
+##       `_bm_tools_*_stages` uses only the declared produced specs.
+##       `write_fragment` attaches a Ninja file rule
+##       (`OUTPUT <file>` `DEPENDS` `<id>_install`) for each extra.
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
 ## @note `_BM_PC_*` comes from `_bm_pc_fill_vars` (tools/pkgconfig).
@@ -142,13 +140,12 @@ endfunction()
 
 ## @brief configure_file + include the shared component fragment template.
 ## @param[in] _component Registered component id.
-## @param[in] _deferred  TRUE → dependant template (configure at build time).
-## @note Collects outputs, WHOLE, LINK (raw linker names), LINKFLAGS (raw
-##       linker flags) and recorded dependencies, then generates
-##       `component_<id>.cmake` under `BUILDMASTER_SCRIPTS_COMPONENTDIR`
-##       and `include()`s it.
-##       `<id>` is already an INTERFACE from create_*; the fragment only
-##       attaches includes, IMPORTED archives, WHOLE, LINK and LINKFLAGS.
+## @param[in] _deferred  TRUE → deferred template (configure at build time).
+## @note Collects outputs, WHOLE, LINK, LINKFLAGS and recorded dependencies,
+##       then generates `component_<id>.cmake` under
+##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it.
+##       `<id>` is already an INTERFACE from `_bm_graph_create`; the fragment
+##       only attaches includes, IMPORTED archives, WHOLE, LINK and LINKFLAGS.
 ## @note `_BM_LINK_ITEMS` is the CMake list stored on
 ##       `BUILDMASTER_COMPONENT_<id>_LINK` (empty string if unset). The
 ##       template applies it INTERFACE on `<id>` so consumers propagate
@@ -157,9 +154,9 @@ endfunction()
 ##       `BUILDMASTER_COMPONENT_<id>_LINKFLAGS` (empty string if unset).
 ##       The template applies it INTERFACE via `target_link_options`.
 ## @note Library-spec `buildmaster_link` dests are folded into FILES by
-##       `collect_outputs`. Stage `OUTPUT` is frozen at create_* (declared
-##       produced specs only). After `include()`, each extra file that is
-##       not in that declared list gets:
+##       `collect_outputs`. Stage `OUTPUT` is the declared produced specs
+##       from `_bm_tools_*_stages`. After `include()`, each extra file
+##       that is not in that list gets:
 ##         add_custom_command(OUTPUT <file> DEPENDS <id>_install
 ##                            COMMAND ${CMAKE_COMMAND} -E true)
 ##       The command does not write the file. `<id>_install` writes it as

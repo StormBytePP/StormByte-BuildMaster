@@ -3,7 +3,8 @@
 # =============================================================================
 
 ## @brief Parse `LINK=<name>` / `LINK={name;name2}` from a component options string.
-## @param[in]  options_string Trailing `"KEY=value;…"` passed to create_*.
+## @param[in]  options_string Trailing `"KEY=value;…"` of
+##            `buildmaster_component` / `buildmaster_meta`.
 ## @param[out] out_items      Parent-scope CMake list of raw linker names
 ##            (empty if `LINK` was omitted or `LINK={}`).
 ## @note Items are **external to BuildMaster**. They are forwarded verbatim
