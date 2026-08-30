@@ -140,7 +140,15 @@ and the declaration shape changed.
 - **Unified logging.** `_bm_log_message(<module> <level> "<text>"
   [<indent>])` is internal. Public `buildmaster_message(<level>
   "<text>" [<indent>])` always uses module `USER`. `WARNING` and
-  `FATAL` are never filtered.
+  `FATAL` are never filtered. When `BUILDMASTER_LOG_NOCOLOR` is
+  `OFF`, lines are painted: STATUS stays the default CMake color;
+  WARNING yellow (`message(NOTICE)`); INFO green; DEBUG cyan;
+  LOWLEVEL dim; FATAL red. `ON` leaves the text unpainted.
+- **`BUILDMASTER_LOG_NOCOLOR`.** Truthy env or `-D` (`1` / `ON` /
+  `TRUE` / `YES`) stores `ON` and turns ANSI off; anything else is
+  `OFF` (color on). Same pattern as `BUILDMASTER_VERBOSE`. Default
+  `OFF`. Written into `propagate_vars` and the toolchain dump so
+  nested `-P` scripts see the same switch.
 - **Silent env runner** replays nested `[BuildMaster/…]` lines live;
   the full child log is dumped on failure.
 - Prefix search injection so nested compiles see the shared install
@@ -214,7 +222,9 @@ and the declaration shape changed.
   the id that actually builds, or on the final executable yourself.
   Meta `LINKFLAGS` is WARNING + ignored.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
-  `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
+  `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is nested compile
+  `--verbose` / `-v` only. It does not select a log level and it
+  does not change how `WARNING` is printed.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
   `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`, `FILES={…}`).

@@ -602,6 +602,26 @@ select a log level and it does not select a runner.
 decide whether `cmake --build` or `meson compile` print compiler
 command lines. That is the next section.
 
+Everyone has sat through a `DEBUG` dump where a thousand lines share
+one colour, so the eye treats a real failure the same as a skip and
+the same as “that worked”. BuildMaster paints the *level*, not the
+novel:
+
+| Level | Colour (default) |
+|-------|------------------|
+| `STATUS` | Terminal default (CMake’s own `STATUS`) |
+| `INFO` | Green |
+| `DEBUG` | Cyan |
+| `LOWLEVEL` | Dim |
+| `WARNING` | Yellow (`message(NOTICE)`, always). `BUILDMASTER_VERBOSE` does not change this |
+| `FATAL` | Red |
+
+`-DBUILDMASTER_LOG_NOCOLOR=ON` (or env `BUILDMASTER_LOG_NOCOLOR=1` /
+`ON` / `TRUE` / `YES`) stores `ON` and leaves the text unpainted.
+Anything else is `OFF` — colour on. Same truthy pattern as
+`BUILDMASTER_VERBOSE`. Nested `-P` scripts inherit the switch from
+the toolchain dump and from the environment.
+
 ---
 
 ## Verbosity of tool output

@@ -86,6 +86,53 @@ function(_bm_log_pad _out _text _width)
 	set(${_out} "${_t}" PARENT_SCOPE)
 endfunction()
 
+## @brief Whether ANSI color is allowed on this log line.
+## @param[out] _out Parent-scope TRUE / FALSE.
+## @note Driven by BUILDMASTER_LOG_NOCOLOR (ON/OFF). Default OFF = color on.
+##       Set via -DBUILDMASTER_LOG_NOCOLOR=ON or ENV{BUILDMASTER_LOG_NOCOLOR}
+##       (1 / ON / TRUE / YES). A -P script that never ran init_vars reads
+##       the ENV the same way and stores ON/OFF in BUILDMASTER_LOG_NOCOLOR.
+function(_bm_log_color_enabled _out)
+	if(NOT DEFINED BUILDMASTER_LOG_NOCOLOR OR "${BUILDMASTER_LOG_NOCOLOR}" STREQUAL "")
+		set(_raw "")
+		if(DEFINED ENV{BUILDMASTER_LOG_NOCOLOR})
+			set(_raw "$ENV{BUILDMASTER_LOG_NOCOLOR}")
+		endif()
+		string(TOUPPER "${_raw}" _raw)
+		if(_raw STREQUAL "1"
+				OR _raw STREQUAL "ON"
+				OR _raw STREQUAL "TRUE"
+				OR _raw STREQUAL "YES")
+			set(BUILDMASTER_LOG_NOCOLOR ON)
+		else()
+			set(BUILDMASTER_LOG_NOCOLOR OFF)
+		endif()
+	endif()
+	if(BUILDMASTER_LOG_NOCOLOR)
+		set(${_out} FALSE PARENT_SCOPE)
+	else()
+		set(${_out} TRUE PARENT_SCOPE)
+	endif()
+endfunction()
+
+## @brief Wrap `_text` in an ANSI SGR sequence when color is on.
+## @param[out] _out  Parent-scope painted string.
+## @param[in]  _sgr  Codes after CSI (e.g. `36`, `1;31`). Empty → no wrap.
+## @param[in]  _text Plain line.
+function(_bm_log_paint _out _sgr _text)
+	if("${_sgr}" STREQUAL "")
+		set(${_out} "${_text}" PARENT_SCOPE)
+		return()
+	endif()
+	_bm_log_color_enabled(_on)
+	if(NOT _on)
+		set(${_out} "${_text}" PARENT_SCOPE)
+		return()
+	endif()
+	string(ASCII 27 _esc)
+	set(${_out} "${_esc}[${_sgr}m${_text}${_esc}[0m" PARENT_SCOPE)
+endfunction()
+
 ## @brief Resolve a level name or 0-5 integer to a canonical uppercase name.
 ## @param[out] _out Parent-scope canonical level (LOWLEVEL, DEBUG, INFO,
 ##                  WARNING, STATUS, or FATAL).
@@ -148,7 +195,7 @@ endfunction()
 ## @param[in]  _text   Comment body.
 ## @note Matches the STATUS layout of `_bm_log_message` /
 ##       `buildmaster_message` so configure lines and ninja progress share
-##       one column. Unknown modules FATAL.
+##       one column. Unknown modules FATAL. Not colored (Ninja COMMENT).
 function(_bm_log_comment _out _module _text)
 	_bm_log_ensure_registry()
 	string(TOUPPER "${_module}" _mod)
@@ -171,6 +218,11 @@ endfunction()
 ## @param[in] _message Text after the header.
 ## @param[in] _indent Optional tab count after the header (default 0).
 ## @note Not public. Parent projects call `buildmaster_message`.
+## @note Color (when BUILDMASTER_LOG_NOCOLOR is OFF):
+##       STATUS plain; WARNING yellow `1;33`; INFO green `32`; DEBUG
+##       cyan `36`; LOWLEVEL dim `2;37`; FATAL red `1;31`.
+## @note BUILDMASTER_VERBOSE does not change how WARNING is emitted.
+##       It only selects nested compile `--verbose` / `-v`.
 function(_bm_log_message _module _level _message)
 	_bm_log_ensure_registry()
 	if(ARGC LESS 3 OR ARGC GREATER 4)
@@ -228,14 +280,20 @@ function(_bm_log_message _module _level _message)
 	endif()
 
 	if(_lvl STREQUAL "FATAL")
+		_bm_log_paint(_line "1;31" "${_line}")
 		message(FATAL_ERROR "${_line}")
 	elseif(_lvl STREQUAL "WARNING")
-		if(BUILDMASTER_VERBOSE)
-			message(WARNING "${_line}")
-		else()
-			string(ASCII 27 _esc)
-			message(NOTICE "${_esc}[1;33m${_line}${_esc}[0m")
-		endif()
+		_bm_log_paint(_line "1;33" "${_line}")
+		message(NOTICE "${_line}")
+	elseif(_lvl STREQUAL "DEBUG")
+		_bm_log_paint(_line "36" "${_line}")
+		message(STATUS "${_line}")
+	elseif(_lvl STREQUAL "INFO")
+		_bm_log_paint(_line "32" "${_line}")
+		message(STATUS "${_line}")
+	elseif(_lvl STREQUAL "LOWLEVEL")
+		_bm_log_paint(_line "2;37" "${_line}")
+		message(STATUS "${_line}")
 	else()
 		message(STATUS "${_line}")
 	endif()
@@ -246,6 +304,7 @@ endfunction()
 ## @param[in] _message Text after the header.
 ## @param[in] _indent  Optional tab count after the header (default 0).
 ## @note Module is always USER. It cannot be overridden.
+## @note Color follows `_bm_log_message` / BUILDMASTER_LOG_NOCOLOR.
 function(buildmaster_message _level _message)
 	if(ARGC LESS 2 OR ARGC GREATER 3)
 		message(FATAL_ERROR
