@@ -6,6 +6,33 @@
 
 $ErrorActionPreference = 'Continue'
 
+function Enable-BmAnsiConsole {
+	try {
+		$sig = @'
+[DllImport("kernel32.dll")] public static extern IntPtr GetStdHandle(int n);
+[DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out uint m);
+[DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
+'@
+		$k = Add-Type -MemberDefinition $sig -Name BmVt -Namespace BuildMaster -PassThru
+		foreach ($id in @(-11, -12)) {
+			$h = $k::GetStdHandle($id)
+			[uint32]$m = 0
+			if ($k::GetConsoleMode($h, [ref]$m)) {
+				[void]$k::SetConsoleMode($h, ($m -bor 4))
+			}
+		}
+	} catch { }
+	try {
+		[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+		$script:OutputEncoding = [Console]::OutputEncoding
+	} catch { }
+	if (Get-Variable PSStyle -ErrorAction SilentlyContinue) {
+		$PSStyle.OutputRendering = 'Ansi'
+	}
+}
+
+Enable-BmAnsiConsole
+
 function Set-IfNonEmpty([string]$Name, [string]$Value) {
 	if ($null -ne $Value -and $Value -ne '') {
 		Set-Item -Path "Env:$Name" -Value $Value
