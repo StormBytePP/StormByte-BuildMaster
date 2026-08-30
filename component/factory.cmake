@@ -2,12 +2,15 @@
 # component/factory.cmake — backend-agnostic public factory
 # =============================================================================
 
-## @brief Detect cmake vs meson from files in `srcdir`.
+## @brief Detect cmake / meson / none from files in `srcdir` and the mode.
 ## @param[in]  srcdir  Component source directory.
-## @param[out] out_var Parent-scope `cmake` or `meson`.
-## @note Exactly one of `CMakeLists.txt` / `meson.build`. Both or neither
-##       is FATAL. No recursion into subdirectories.
-function(_bm_factory_detect srcdir out_var)
+## @param[in]  mode    `static`, `shared`, or `headers`.
+## @param[out] out_var Parent-scope `cmake`, `meson`, or `none`.
+## @note Exactly one of `CMakeLists.txt` / `meson.build` → that backend.
+##       Both markers → FATAL. No recursion into subdirectories.
+## @note `headers` + neither marker → `none` (private tree, no nested
+##       generate). `static` / `shared` + neither marker → FATAL.
+function(_bm_factory_detect srcdir mode out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_factory_detect")
 	if("${srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
@@ -18,6 +21,7 @@ function(_bm_factory_detect srcdir out_var)
 			"_bm_factory_detect: '${srcdir}' is not a directory")
 	endif()
 
+	string(TOLOWER "${mode}" _mode)
 	set(_cmake FALSE)
 	set(_meson FALSE)
 	if(EXISTS "${srcdir}/CMakeLists.txt")
@@ -38,6 +42,14 @@ function(_bm_factory_detect srcdir out_var)
 	endif()
 	if(_meson)
 		set(${out_var} "meson" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_detect")
+		return()
+	endif()
+
+	if(_mode STREQUAL "headers")
+		set(${out_var} "none" PARENT_SCOPE)
+		_bm_log_message(COMPONENT DEBUG
+			"_bm_factory_detect: headers without backend → none")
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_detect")
 		return()
 	endif()
@@ -76,11 +88,12 @@ function(_bm_factory_resolve_include srcdir raw out_var)
 endfunction()
 
 ## @brief Translate a neutral options list into backend configure args.
-## @param[in]  sys     `cmake` or `meson`.
+## @param[in]  sys     `cmake`, `meson`, or `none`.
 ## @param[in]  srcdir  For resolving relative INCLUDES.
 ## @param[in]  raw     CMake list of KEY=value (CFLAGS, CXXFLAGS, CPPFLAGS,
 ##            LDFLAGS, INCLUDES, DEFINITIONS). Other keys FATAL.
-## @param[out] out_var Backend list: CMake `-D…` or Meson `-D…`.
+## @param[out] out_var Backend list: CMake `-D…` or Meson `-D…`. Empty if
+##            `sys` is `none` (no nested configure).
 ## @note Appends to the parent job flags. Never replaces CMAKE_* / meson
 ##       args the toolchain already set. Not ENV{CFLAGS}. Private to the
 ##       nested compile — not INTERFACE on the BM id.
@@ -91,6 +104,12 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 	set(_ld "")
 	set(_inc "")
 	set(_def "")
+
+	if(sys STREQUAL "none")
+		set(${out_var} "" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_translate_options")
+		return()
+	endif()
 
 	foreach(_item IN LISTS raw)
 		if("${_item}" STREQUAL "")
@@ -123,8 +142,9 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 	endforeach()
 
 	foreach(_p IN LISTS _inc)
-		string(APPEND _c " -I${_p}")
-		string(APPEND _cxx " -I${_p}")
+		_bm_path_compile_include(_tok "${_p}")
+		string(APPEND _c " ${_tok}")
+		string(APPEND _cxx " ${_tok}")
 	endforeach()
 	foreach(_d IN LISTS _def)
 		string(APPEND _c " -D${_d}")
@@ -180,11 +200,13 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_translate_options")
 endfunction()
 
-## @brief Register a component; backend is inferred from `srcdir`.
+## @brief Register a component; backend is inferred from `srcdir` + mode.
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Source directory. Must contain exactly one of
-##            `CMakeLists.txt` or `meson.build`.
+## @param[in] _srcdir Source directory. For `static`/`shared`: exactly one
+##            of `CMakeLists.txt` or `meson.build`. For `headers`: those
+##            markers select cmake/meson; neither marker selects `none`
+##            (private include tree, no nested generate).
 ## @param[in] … Same remaining arity as `_bm_backend_cmake_create` /
 ##            `_bm_backend_meson_create`:
 ##            2.1: `options mode produced [optstr]`
@@ -196,13 +218,12 @@ endfunction()
 ##            `INCLUDES` (directory; relative to `srcdir`),
 ##            `DEFINITIONS` (`FOO` or `FOO=1` → `-D`).
 ##            Any other key is FATAL. Not shell `ENV{CFLAGS}`. Not raw
-##            CMake `-D` / Meson `-D`.
-## @note Both marker files or neither: FATAL. Then use create_cmake_* or
-##       create_meson_*.
+##            CMake `-D` / Meson `-D`. Ignored when the backend is `none`.
+## @note Both marker files: FATAL. Then use the backend create directly.
 ## @note `mode` is still the caller’s (`static` / `shared` / `headers`).
 ## @note optstr (`LINK=`, `PC=`, `WHOLE`, `GIT={…}`, …) is last. GIT is
 ##       applied inside `_bm_comp_create` after the INTERFACE exists.
-## @note INTERFACE `<id>` exists on return (delegates to create_*).
+## @note INTERFACE `<id>` exists on return (delegates to create_* / `_bm_comp_create`).
 function(buildmaster_component _component _component_title _srcdir)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
 
@@ -250,10 +271,27 @@ function(buildmaster_component _component _component_title _srcdir)
 		endif()
 	endif()
 
-	_bm_factory_detect("${_srcdir}" _sys)
+	_bm_factory_detect("${_srcdir}" "${_library_mode}" _sys)
 	_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
 	_bm_log_message(COMPONENT DEBUG
 		"buildmaster_component('${_component}'): ${_sys}")
+
+	if(_sys STREQUAL "none")
+		if(_legacy)
+			_bm_comp_create(
+				"${_component}" "${_component_title}" "${_srcdir}"
+				"${_builddir}" "${_xopts}" "${_library_mode}"
+				"none" "${_produced}" "${_options_string}")
+		else()
+			_bm_comp_builddir(_auto "${_component}")
+			_bm_comp_create(
+				"${_component}" "${_component_title}" "${_srcdir}"
+				"${_auto}" "${_xopts}" "${_library_mode}"
+				"none" "${_produced}" "${_options_string}")
+		endif()
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
+		return()
+	endif()
 
 	if(_legacy)
 		if(_sys STREQUAL "cmake")

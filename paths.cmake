@@ -37,6 +37,7 @@ endfunction()
 ## @note Strips optional surrounding quotes, then applies file(TO_CMAKE_PATH).
 ##       Use for ENV-derived paths (BUILDMASTER_DOWNLOADSDIR, cache dirs, etc.)
 ##       so they are safe in toolchain.cmake and CMake string expansion.
+##       Does not quote spaces; those belong in `_bm_path_compile_include`.
 function(_bm_path_normalize _out _input)
 	_bm_log_message(CORE LOWLEVEL "Entering _bm_path_normalize")
 	if(NOT ARGC EQUAL 2)
@@ -47,6 +48,28 @@ function(_bm_path_normalize _out _input)
 	file(TO_CMAKE_PATH "${_p}" _p)
 	set(${_out} "${_p}" PARENT_SCOPE)
 	_bm_log_message(CORE LOWLEVEL "Exiting _bm_path_normalize")
+endfunction()
+
+## @brief One compile-flag token `-I<path>` safe for CMake and Meson.
+## @param[out] _out Parent-scope token (single list element).
+## @param[in]  _input Directory to include.
+## @note Normalizes with `_bm_path_normalize` first (`/` so `\Users` is not
+##       eaten as `\U`). The path is not wrapped in quotes. Spaces stay
+##       inside this one list item. Empty input is FATAL.
+function(_bm_path_compile_include _out _input)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_path_compile_include")
+	if(NOT ARGC EQUAL 2)
+		_bm_log_message(CORE FATAL
+			"_bm_path_compile_include requires output variable and path")
+	endif()
+	if("${_input}" STREQUAL "")
+		_bm_log_message(CORE FATAL
+			"_bm_path_compile_include: empty path")
+	endif()
+	_bm_path_normalize(_p "${_input}")
+	set(${_out} "-I${_p}" PARENT_SCOPE)
+	_bm_log_message(CORE DEBUG "_bm_path_compile_include → -I${_p}")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_path_compile_include")
 endfunction()
 
 ## @brief Produce a filesystem-safe string from an arbitrary input.

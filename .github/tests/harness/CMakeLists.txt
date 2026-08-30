@@ -41,6 +41,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_hooks.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -125,6 +126,9 @@ add_custom_target(run_buildmaster_smoke
 		omit-lib_install
 		dup-a_install dup-b_install
 		raw-lib_install
+		# PRIVATE headers consumer (compile fails if -I missing)
+		priv-h_install
+		priv-consumer_install
 	VERBATIM
 )
 

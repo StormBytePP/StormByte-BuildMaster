@@ -32,7 +32,9 @@ endfunction()
 ## @param[in] _builddir Component build directory (created here if missing).
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _build_system `cmake` or `meson`.
+## @param[in] _build_system `cmake`, `meson`, or `none`.
+##            `none` is valid only with `headers` (private tree, no nested
+##            generate).
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
@@ -47,6 +49,9 @@ endfunction()
 ##            WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
+## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
+##       `BUILDONLY` is set on a headers id. A non-BUILDONLY source may
+##       wait on those dests (PRIVATE `-I` injection is not a prefix publish).
 ## @note The INTERFACE exists as soon as this function returns, so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see `<id>`.
 ##       Deferred finalize only emits stages and the fragment: includes,
@@ -72,9 +77,9 @@ endfunction()
 ##       mode is not static (shared/headers have nothing to strip).
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
 ##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
-##       FATAL (no shared prefix). An upstream `.pc` already at the canonical
-##       path is FATAL at install time (do not clobber). Meta + PC is FATAL
-##       in buildmaster_meta.
+##       FATAL (no shared prefix). `none` + PC enabled is FATAL. An upstream
+##       `.pc` already at the canonical path is FATAL at install time (do not
+##       clobber). Meta + PC is FATAL in buildmaster_meta.
 ## @note Does not return a fragment path and does not include() anything.
 ##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
@@ -145,9 +150,16 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 			"_bm_comp_create: unknown library mode '${_library_mode}' (expected static, shared, or headers)")
 	endif()
 
-	if(NOT _build_system STREQUAL "cmake" AND NOT _build_system STREQUAL "meson")
+	if(NOT _build_system STREQUAL "cmake"
+			AND NOT _build_system STREQUAL "meson"
+			AND NOT _build_system STREQUAL "none")
 		_bm_log_message(COMPONENT FATAL
-			"_bm_comp_create: unknown build system '${_build_system}' (expected cmake or meson)")
+			"_bm_comp_create: unknown build system '${_build_system}' (expected cmake, meson, or none)")
+	endif()
+
+	if(_build_system STREQUAL "none" AND NOT _library_mode STREQUAL "headers")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_comp_create('${_component}'): backend 'none' is only valid for headers")
 	endif()
 
 	if(NOT _library_mode STREQUAL "headers")
@@ -181,9 +193,9 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 		set(_reg_linkflags "")
 	endif()
 
-	if(_pc_enabled AND _reg_buildonly)
+	if(_pc_enabled AND (_reg_buildonly OR _build_system STREQUAL "none"))
 		_bm_log_message(COMPONENT FATAL
-			"_bm_comp_create('${_component}'): PC={…} cannot be used with BUILDONLY (helper .pc files are for internal consumers of the shared BM prefix)")
+			"_bm_comp_create('${_component}'): PC={…} cannot be used with BUILDONLY or a headers tree that does not install (helper .pc files are for internal consumers of the shared BM prefix)")
 	endif()
 
 	if(_pc_name STREQUAL "")
@@ -202,6 +214,13 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 	endif()
 	if(_pc_description STREQUAL "")
 		set(_pc_description "${_component_title}")
+	endif()
+
+	if("${_options_string}" MATCHES "[Ww][Hh][Oo][Ll][Ee]"
+			AND (_library_mode STREQUAL "headers" OR _build_system STREQUAL "none"))
+		_bm_log_message(COMPONENT INFO
+			"_bm_comp_create('${_component}'): WHOLE ignored (headers / no backend)")
+		set(_reg_whole FALSE)
 	endif()
 
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_IDS "${_component}")
@@ -229,6 +248,11 @@ function(_bm_comp_create _component _component_title _srcdir _builddir
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY FALSE)
+	endif()
+	if(_build_system STREQUAL "none" OR (_reg_buildonly AND _library_mode STREQUAL "headers"))
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRIVATE_HEADERS TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRIVATE_HEADERS FALSE)
 	endif()
 	if(_reg_whole)
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_WHOLE TRUE)
@@ -318,7 +342,8 @@ endfunction()
 ## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
 ##            or `<id>_install` / `<id>_configure` / `<id>_build`.
 ## @note A non-BUILDONLY component must not depend on a BUILDONLY component
-##       (checked at materialize). BUILDONLY may depend on BUILDONLY or normal.
+##       unless the dest is `PRIVATE_HEADERS` (checked at materialize).
+##       BUILDONLY may depend on BUILDONLY or normal.
 ## @note May be called before either endpoint exists; edges are recorded and
 ##       resolved in `_bm_graph_finalize`.
 ## @note A second explicit call with the same `(source, dest)` is WARNING and
@@ -364,7 +389,8 @@ endfunction()
 ##       on the producer, not here.
 ## @note A spec dest is resolved with the source component’s mode against
 ##       `BUILDMASTER_INSTALL_LIBDIR`. The archive need not exist yet.
-## @note Linking to a BUILDONLY component is FATAL at materialize.
+## @note Linking to a BUILDONLY component is FATAL at materialize unless
+##       that dest is `PRIVATE_HEADERS`.
 ## @note buildmaster_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).
 ## @note Always records an order-only edge via `_bm_graph_record_dep`
@@ -575,7 +601,8 @@ endfunction()
 ##            (empty if this component has no recorded dests).
 ## @note FATAL if dest cannot be resolved, unless the same pair is also a
 ##       `buildmaster_link` (spec or on-disk archive: link-only, no wait target).
-##       FATAL if a non-BUILDONLY `id` depends on a BUILDONLY dest.
+##       FATAL if a non-BUILDONLY `id` depends on a BUILDONLY dest that is
+##       not `PRIVATE_HEADERS`.
 function(_bm_graph_dep_targets id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_dep_targets")
 	set(_dep_targets "")
@@ -594,7 +621,9 @@ function(_bm_graph_dep_targets id out_var)
 		_bm_comp_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
 			_bm_comp_is_buildonly("${_dst}" _dst_bo)
-			if(_dst_bo AND NOT _src_bo)
+			get_property(_dst_priv GLOBAL PROPERTY
+				BUILDMASTER_COMPONENT_${_dst}_PRIVATE_HEADERS)
+			if(_dst_bo AND NOT _src_bo AND NOT _dst_priv)
 				_bm_log_message(COMPONENT FATAL
 					"buildmaster_depend('${id}', '${_dst}'): a non-BUILDONLY component cannot depend on BUILDONLY '${_dst}' (publish it with a REPACK meta, or make '${id}' BUILDONLY too)")
 			endif()

@@ -96,3 +96,8 @@ add_subdirectory(omit-builddir)
 add_subdirectory(dup-link)
 add_subdirectory(link-raw)
 add_subdirectory(git-reset-patch)
+
+# ---------------------------------------------------------------------------
+# PRIVATE headers (no backend) + configure -I
+# ---------------------------------------------------------------------------
+add_subdirectory(private-headers)

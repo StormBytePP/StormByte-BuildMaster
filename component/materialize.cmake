@@ -315,6 +315,179 @@ function(_bm_comp_write_fragment _component _deferred)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_write_fragment")
 endfunction()
 
+## @brief Append one `-I<path>` token to backend configure OPTIONS.
+## @param[in]     _sys      `cmake` or `meson`.
+## @param[in,out] _opts_var Name of the CMake list of configure args.
+## @param[in]     _tok      Token from `_bm_path_compile_include`.
+## @note CMake: extends `-DCMAKE_C_FLAGS=` and `-DCMAKE_CXX_FLAGS=`
+##       (creates them from cache/parent flags if missing). Meson:
+##       extends `-Dc_args=` and `-Dcpp_args=`. Never writes ENV or a
+##       native file. Several calls accumulate several `-I` in the same
+##       `-D` value. Duplicate token in that value is a no-op.
+function(_bm_comp_options_add_include _sys _opts_var _tok)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_options_add_include")
+	if("${_tok}" STREQUAL "")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_comp_options_add_include: empty token")
+	endif()
+	if(NOT _sys STREQUAL "cmake" AND NOT _sys STREQUAL "meson")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_comp_options_add_include: sys '${_sys}' is not cmake/meson")
+	endif()
+
+	set(_opts "${${_opts_var}}")
+	if(_sys STREQUAL "cmake")
+		set(_keys "CMAKE_C_FLAGS;CMAKE_CXX_FLAGS")
+	else()
+		set(_keys "c_args;cpp_args")
+	endif()
+
+	foreach(_key IN LISTS _keys)
+		set(_prefix "-D${_key}=")
+		string(LENGTH "${_prefix}" _plen)
+		set(_idx -1)
+		set(_i 0)
+		foreach(_item IN LISTS _opts)
+			string(FIND "${_item}" "${_prefix}" _at)
+			if(_at EQUAL 0)
+				set(_idx ${_i})
+				break()
+			endif()
+			math(EXPR _i "${_i} + 1")
+		endforeach()
+
+		if(_idx EQUAL -1)
+			if(_sys STREQUAL "cmake")
+				if(_key STREQUAL "CMAKE_C_FLAGS")
+					set(_base "$CACHE{CMAKE_C_FLAGS}")
+					if(_base STREQUAL "")
+						set(_base "${CMAKE_C_FLAGS}")
+					endif()
+				else()
+					set(_base "$CACHE{CMAKE_CXX_FLAGS}")
+					if(_base STREQUAL "")
+						set(_base "${CMAKE_CXX_FLAGS}")
+					endif()
+				endif()
+				string(STRIP "${_base} ${_tok}" _val)
+			else()
+				set(_val "${_tok}")
+			endif()
+			list(APPEND _opts "${_prefix}${_val}")
+		else()
+			list(GET _opts ${_idx} _item)
+			string(SUBSTRING "${_item}" ${_plen} -1 _val)
+			string(FIND " ${_val} " " ${_tok} " _hit)
+			if(_hit EQUAL -1)
+				string(STRIP "${_val} ${_tok}" _val)
+				list(REMOVE_AT _opts ${_idx})
+				list(INSERT _opts ${_idx} "${_prefix}${_val}")
+			endif()
+		endif()
+	endforeach()
+
+	set(${_opts_var} "${_opts}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_options_add_include")
+endfunction()
+
+## @brief Append PRIVATE headers `-I` onto each direct linker's OPTIONS.
+## @note Walks recorded `buildmaster_link` edges. Dest must be a registered
+##       component with `PRIVATE_HEADERS` (backend `none`, or `BUILDONLY`
+##       headers). Each such dest adds one `-I<srcdir>` token to the
+##       source component OPTIONS (`CMAKE_*_FLAGS` / Meson `c_args`),
+##       accumulated — several private headers ⇒ several `-I`.
+## @note Does not write ENV, native file, runners, or INTERFACE. Skips a
+##       source whose SYSTEM is `none` (no nested configure). Skips a dest
+##       reached only through a meta (PRIVATE does not cross a meta).
+## @note Must run before nested configure (start of `_bm_graph_finalize`).
+function(_bm_comp_inject_private_headers)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_inject_private_headers")
+	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
+	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
+	if(NOT _srcs)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_inject_private_headers")
+		return()
+	endif()
+
+	set(_i 0)
+	foreach(_src IN LISTS _srcs)
+		list(GET _dsts ${_i} _dst)
+		math(EXPR _i "${_i} + 1")
+
+		_bm_comp_is_registered("${_dst}" _dst_ok)
+		if(NOT _dst_ok)
+			continue()
+		endif()
+		get_property(_priv GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_PRIVATE_HEADERS)
+		if(NOT _priv)
+			continue()
+		endif()
+
+		_bm_comp_is_registered("${_src}" _src_ok)
+		if(NOT _src_ok)
+			continue()
+		endif()
+		get_property(_src_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_SYSTEM)
+		if(_src_sys STREQUAL "" OR _src_sys STREQUAL "none")
+			continue()
+		endif()
+
+		get_property(_srcdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_SRCDIR)
+		_bm_path_compile_include(_tok "${_srcdir}")
+		get_property(_opts GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_OPTIONS)
+		_bm_comp_options_add_include("${_src_sys}" _opts "${_tok}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_OPTIONS "${_opts}")
+		_bm_log_message(COMPONENT DEBUG
+			"PRIVATE headers '${_dst}' → '${_src}' configure ${_tok}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_inject_private_headers")
+endfunction()
+
+## @brief Materialize a headers tree with no nested generate.
+## @param[in] _component Registered id (`SYSTEM` is `none`).
+## @note No cmake/meson stages. Creates empty `_configure` / `_build` /
+##       `_install` so wait edges resolve. Stamp under BUILDDIR.
+##       Does not INTERFACE-include the srcdir (PRIVATE headers: only
+##       the direct linker's nested configure receives `-I`).
+function(_bm_comp_none_materialize _component)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_none_materialize")
+	get_property(_title GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_TITLE)
+	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
+	get_property(_srcdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_SRCDIR)
+
+	if(NOT IS_DIRECTORY "${_srcdir}")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_comp_none_materialize('${_component}'): srcdir '${_srcdir}' is not a directory")
+	endif()
+
+	set(_stamp "${_builddir}/.bm_${_component}_headers.stamp")
+	file(MAKE_DIRECTORY "${_builddir}")
+
+	if(NOT TARGET "${_component}_configure")
+		add_custom_target(${_component}_configure)
+	endif()
+	if(NOT TARGET "${_component}_build")
+		add_custom_target(${_component}_build)
+		add_dependencies(${_component}_build ${_component}_configure)
+	endif()
+	if(NOT TARGET "${_component}_install")
+		add_custom_command(
+			OUTPUT "${_stamp}"
+			COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
+			DEPENDS ${_component}_build
+			COMMENT "[BuildMaster/Core     ]: Stamp headers ${_title}"
+			VERBATIM)
+		add_custom_target(${_component}_install DEPENDS "${_stamp}")
+	endif()
+	add_dependencies(${_component} ${_component}_install)
+
+	_bm_hook_run_component("${_component}")
+
+	_bm_log_message(COMPONENT DEBUG
+		"Materialized headers-none ${_component} stamp=${_stamp}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_none_materialize")
+endfunction()
+
 ## @brief Apply recorded buildmaster_link edges after all fragments are included.
 ## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
 ## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
@@ -325,7 +498,9 @@ endfunction()
 ## @note Dest that is none of the above is FATAL. Raw system linker names
 ##       (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}` on the producer,
 ##       not here.
-## @note FATAL if source is not a target or dest is BUILDONLY.
+## @note FATAL if source is not a target. FATAL if dest is BUILDONLY and
+##       not `PRIVATE_HEADERS`. A `PRIVATE_HEADERS` dest is wait-only here
+##       (no INTERFACE link line; `-I` was injected into the source OPTIONS).
 function(_bm_comp_apply_links)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_links")
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
@@ -354,6 +529,13 @@ function(_bm_comp_apply_links)
 
 		_bm_comp_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
+			get_property(_dst_priv GLOBAL PROPERTY
+				BUILDMASTER_COMPONENT_${_dst}_PRIVATE_HEADERS)
+			if(_dst_priv)
+				_bm_log_message(COMPONENT DEBUG
+					"buildmaster_link '${_src}' → PRIVATE headers '${_dst}' (no INTERFACE line)")
+				continue()
+			endif()
 			_bm_comp_is_buildonly("${_dst}" _dst_bo)
 			if(_dst_bo)
 				_bm_log_message(COMPONENT FATAL
@@ -424,15 +606,18 @@ endfunction()
 ## @note Idempotent. Scheduled by `_bm_graph_defer_arm`; not public.
 ##       Harness may call this before configure-time contract checks.
 ## @note Concrete and create_meta INTERFACE stubs already exist. This pass
-##       emits stages, fragments, repack targets, meta stage anchors, member
-##       wiring and recorded `buildmaster_link` edges.
-## @note Order: flush queued git reset/patch → materialize metas →
-##       propagate meta TOOLCHAIN → per-id cmake/meson materialize
-##       (each id’s hooks after its fragment) → repacks → meta wire →
-##       apply links → orphan warning → fail if a per-id hook was
-##       registered for an id that never materialized → graph hooks
+##       emits stages, fragments, headers-none stamps, repack targets, meta
+##       stage anchors, member wiring and recorded `buildmaster_link` edges.
+## @note Order: flush queued git reset/patch → inject PRIVATE headers
+##       `-I` into linker OPTIONS → materialize metas → propagate meta
+##       TOOLCHAIN → per-id cmake / meson / none materialize → repacks →
+##       meta wire → apply links → orphan warning → fail if a per-id hook
+##       was registered for an id that never materialized → graph hooks
 ##       (alias order).
 ## @note Git flush is first so eager nested configure sees patched sources.
+## @note PRIVATE `-I` injection is before any nested configure so several
+##       `buildmaster_link` edges to headers trees each add their own token.
+## @note `SYSTEM=none` is headers without a backend (`_bm_comp_none_materialize`).
 function(_bm_graph_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -446,6 +631,8 @@ function(_bm_graph_finalize)
 		_bm_git_flush_all()
 	endif()
 
+	_bm_comp_inject_private_headers()
+
 	_bm_meta_materialize()
 	_bm_tc_propagate_metas()
 
@@ -457,6 +644,8 @@ function(_bm_graph_finalize)
 				_bm_backend_cmake_materialize("${_id}")
 			elseif(_sys STREQUAL "meson")
 				_bm_backend_meson_materialize("${_id}")
+			elseif(_sys STREQUAL "none")
+				_bm_comp_none_materialize("${_id}")
 			else()
 				_bm_log_message(COMPONENT FATAL
 					"finalize: unknown system '${_sys}' for '${_id}'")
