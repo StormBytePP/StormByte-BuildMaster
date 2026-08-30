@@ -1,4 +1,3 @@
-# =============================================================================
 # tools/file/download.cmake — _bm_file_download / _bm_file_download_cached
 # =============================================================================
 # Internal. Public surface is FILES={…} on buildmaster_component.
@@ -99,7 +98,7 @@ function(_bm_file_add_target name script comment)
 	)
 	if(NOT _file_rc EQUAL 0)
 		_bm_log_message(FILE FATAL
-			"file helper '${name}' failed at configure (exit ${_file_rc})")
+			"FILES helper '${name}' stopped (exit ${_file_rc}). Read the [BuildMaster/File] FATAL above (hash mismatch, corrupt payload, or network). This line only names the helper that ran at configure.")
 	endif()
 
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_add_target")

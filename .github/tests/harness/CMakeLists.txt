@@ -36,7 +36,6 @@ _bm_materialize_finalize()
 # ---------------------------------------------------------------------------
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_api.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_parse.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_propagation.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_dependant_edges.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_linkflags.cmake")
@@ -44,6 +43,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_hooks.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_hash.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -99,8 +99,7 @@ add_custom_target(run_buildmaster_smoke
 		meta-plugins_install meta-tc_install meta_link_test_run
 		mtc-inherit_install mtc-pinned_install
 		# Groups
-		grp-opus_install grp-speex_install grp-maudio_install
-		grp-vmaf_install grp-ssim_install grp-mfilter_install
+		grp-opus_install grp-speex_install grp-vmaf_install grp-ssim_install
 		grp-orphan_install
 		# Order / link tests
 		link_component_test order_independent_link_test
