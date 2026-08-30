@@ -105,7 +105,7 @@ buildmaster_component(
 	mylib
 	"My Library"
 	"${CMAKE_SOURCE_DIR}/thirdparty/mylib/src"
-	"-DENABLE_FOO=ON"
+	"ENABLE_FOO=ON;WITH_TESTS=OFF"
 	shared
 	mylib
 )
@@ -119,6 +119,28 @@ Stage targets and the `INTERFACE` stub named `mylib` exist when
 registration returns; produced paths are filled in at the end of
 `CMAKE_SOURCE_DIR`.
 
+The fourth argument is a **CMake list** of `KEY=value` (a single string
+is a one-element list). It is backend-agnostic on purpose: write names
+a human can read, not generator flags.
+
+Six keys are idioms and are rewritten for the backend:
+
+| Key | What happens |
+|-----|----------------|
+| `CFLAGS` / `CXXFLAGS` / `CPPFLAGS` / `LDFLAGS` | Appended to the parent job flags. They do **not** replace `CMAKE_*` or Meson `*_args`. |
+| `INCLUDES` | Directory (relative to `srcdir` unless absolute) → compile `-I`. |
+| `DEFINITIONS` | `FOO` or `FOO=1` → compiler `-D`. |
+
+Everything else is forwarded as `-DKEY=value` to the nested **CMake**
+configure **and** to the nested **Meson** setup (Meson also uses `-D`,
+not `-d`). A leading `-D`, `-d` or `/D` on the key is stripped, so
+`-DENABLE_FOO=ON` and `ENABLE_FOO=ON` are the same pair. Prefer the
+form without the prefix.
+
+These options are private to that nested configure / compile. They are
+not `INTERFACE` on `<id>` and they are not `ENV{CFLAGS}`. A `headers`
+component with no backend (`none`) ignores the list.
+
 Optional policy string (one trailing argument):
 
 ```cmake
@@ -126,10 +148,10 @@ buildmaster_component(
 	mylib
 	"My Library"
 	"${CMAKE_SOURCE_DIR}/thirdparty/mylib/src"
-	"-DENABLE_FOO=ON"
+	"ENABLE_FOO=ON"
 	static
 	mylib
-	"INDENT=2;TOOLCHAIN=clang-cl;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib}"
+	"TOOLCHAIN=clang-cl;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib}"
 )
 ```
 

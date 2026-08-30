@@ -90,13 +90,21 @@ endfunction()
 ## @brief Translate a neutral options list into backend configure args.
 ## @param[in]  sys     `cmake`, `meson`, or `none`.
 ## @param[in]  srcdir  For resolving relative INCLUDES.
-## @param[in]  raw     CMake list of KEY=value (CFLAGS, CXXFLAGS, CPPFLAGS,
-##            LDFLAGS, INCLUDES, DEFINITIONS). Other keys FATAL.
-## @param[out] out_var Backend list: CMake `-D…` or Meson `-D…`. Empty if
-##            `sys` is `none` (no nested configure).
-## @note Appends to the parent job flags. Never replaces CMAKE_* / meson
-##       args the toolchain already set. Not ENV{CFLAGS}. Private to the
-##       nested compile — not INTERFACE on the BM id.
+## @param[in]  raw     CMake list of `KEY=value`, or a single string
+##            that is one pair. Backend-agnostic: no `-D` required.
+##            Idioms, rewritten for the backend:
+##            `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS` (append to
+##            the parent job / toolchain; do not replace),
+##            `INCLUDES` (directory; relative to `srcdir`),
+##            `DEFINITIONS` (`FOO` or `FOO=1` → compiler `-D`).
+##            Every other pair is forwarded as `-DKEY=value` to the
+##            nested CMake *or* Meson configure (Meson also uses `-D`,
+##            not `-d`). A leading `-D` / `-d` / `/D` on the key is
+##            stripped so `WITH_FOO=ON` and `-DWITH_FOO=ON` are the
+##            same.
+## @param[out] out_var Backend list of `-D…`. Empty if `sys` is `none`.
+## @note Not `ENV{CFLAGS}`. Private to the nested configure / compile —
+##       not INTERFACE on the BM id. `none` ignores the list.
 function(_bm_factory_translate_options sys srcdir raw out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_factory_translate_options")
 	set(_c "")
@@ -104,6 +112,7 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 	set(_ld "")
 	set(_inc "")
 	set(_def "")
+	set(_fwd "")
 
 	if(sys STREQUAL "none")
 		set(${out_var} "" PARENT_SCOPE)
@@ -115,29 +124,38 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 		if("${_item}" STREQUAL "")
 			continue()
 		endif()
-		_bm_factory_split_pair("${_item}" _k _v)
-		string(TOUPPER "${_k}" _k)
-		if(_k STREQUAL "CFLAGS")
+		_bm_factory_split_pair("${_item}" _k_raw _v)
+		set(_k "${_k_raw}")
+		if(_k MATCHES "^[/-][Dd](.+)$")
+			set(_k "${CMAKE_MATCH_1}")
+		endif()
+		string(TOUPPER "${_k}" _k_up)
+		if(_k_up STREQUAL "CFLAGS")
 			string(APPEND _c " ${_v}")
-		elseif(_k STREQUAL "CXXFLAGS")
+		elseif(_k_up STREQUAL "CXXFLAGS")
 			string(APPEND _cxx " ${_v}")
-		elseif(_k STREQUAL "CPPFLAGS")
+		elseif(_k_up STREQUAL "CPPFLAGS")
 			string(APPEND _c " ${_v}")
 			string(APPEND _cxx " ${_v}")
-		elseif(_k STREQUAL "LDFLAGS")
+		elseif(_k_up STREQUAL "LDFLAGS")
 			string(APPEND _ld " ${_v}")
-		elseif(_k STREQUAL "INCLUDES")
+		elseif(_k_up STREQUAL "INCLUDES")
 			_bm_factory_resolve_include("${srcdir}" "${_v}" _p)
 			list(APPEND _inc "${_p}")
-		elseif(_k STREQUAL "DEFINITIONS")
+		elseif(_k_up STREQUAL "DEFINITIONS")
 			if("${_v}" STREQUAL "")
 				_bm_log_message(COMPONENT FATAL
 					"buildmaster_component: DEFINITIONS= is empty")
 			endif()
 			list(APPEND _def "${_v}")
 		else()
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_component: unknown option '${_k}=' (allowed: CFLAGS CXXFLAGS CPPFLAGS LDFLAGS INCLUDES DEFINITIONS)")
+			if("${_k}" STREQUAL "")
+				_bm_log_message(COMPONENT FATAL
+					"buildmaster_component: option key is empty in '${_item}'")
+			endif()
+			list(APPEND _fwd "-D${_k}=${_v}")
+			_bm_log_message(COMPONENT DEBUG
+				"option '${_k}=${_v}' forwarded to ${sys}")
 		endif()
 	endforeach()
 
@@ -195,6 +213,7 @@ function(_bm_factory_translate_options sys srcdir raw out_var)
 			list(APPEND _out "-Dc_link_args=${_ld}" "-Dcpp_link_args=${_ld}")
 		endif()
 	endif()
+	list(APPEND _out ${_fwd})
 
 	set(${out_var} "${_out}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_translate_options")
@@ -210,29 +229,32 @@ endfunction()
 ##            **By design ignored when `FILES` contains `SOURCE`:** the
 ##            unpacked tree is the only srcdir. A dummy or empty path is
 ##            accepted in that case (WARNING).
-## @param[in] options CMake list of `KEY=value`. Allowed keys (all
-##            private to the nested compile, never INTERFACE on `<id>`):
-##            `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS` (append to the
-##            parent job / toolchain; do not replace),
-##            `INCLUDES` (directory; relative to `srcdir`),
-##            `DEFINITIONS` (`FOO` or `FOO=1` → `-D`).
-##            Any other key is FATAL. Not shell `ENV{CFLAGS}`. Not raw
-##            CMake `-D` / Meson `-D`. Ignored when the backend is `none`.
+## @param[in] options CMake list of `KEY=value` (one string is a
+##            one-element list). Human-readable, backend-agnostic:
+##            do not write CMake `-D` or Meson `-D` unless you want
+##            to; a leading `-D` / `-d` / `/D` on the key is stripped.
+##            Idioms (append to the parent job / toolchain; never
+##            replace it): `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
+##            `LDFLAGS`, `INCLUDES` (dir; relative to `srcdir`),
+##            `DEFINITIONS` (`FOO` or `FOO=1` → compiler `-D`).
+##            Any other key is forwarded as `-DKEY=value` to the
+##            nested CMake configure or the nested Meson setup
+##            (Meson also uses `-D`, not `-d`).
+##            Private to that nested step, never INTERFACE on `<id>`.
+##            Ignored when the backend is `none`. Not `ENV{CFLAGS}`.
 ## @param[in] mode `static`, `shared`, or `headers`.
 ## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
 ##            for headers.
 ## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
 ##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES run from
 ##            materialize after the INTERFACE exists.
-## @note Invoked only from the public macro `buildmaster_component`.
-##       Not a project API.
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
 ## @note Both marker files: FATAL.
 ## @note INTERFACE `<id>` exists on return.
-function(_bm_component_impl _component _component_title _srcdir
+function(buildmaster_component _component _component_title _srcdir
 		_options _library_mode _produced)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_impl")
+	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
 
 	if(ARGC LESS 6 OR ARGC GREATER 7)
 		_bm_log_message(COMPONENT FATAL
@@ -296,25 +318,5 @@ function(_bm_component_impl _component _component_title _srcdir
 	set_property(GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_FACTORY_OPTIONS "${_options}")
 
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_impl")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
 endfunction()
-
-## @brief Public factory (macro so id origin is the caller's CMakeLists).
-## @see _bm_component_impl
-macro(buildmaster_component)
-	if(${ARGC} LESS 1)
-		_bm_log_message(COMPONENT FATAL "buildmaster_component: missing id")
-	endif()
-	_bm_id_stamp("${ARGV0}" component
-		"${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}")
-	if(${ARGC} EQUAL 6)
-		_bm_component_impl("${ARGV0}" "${ARGV1}" "${ARGV2}"
-			"${ARGV3}" "${ARGV4}" "${ARGV5}")
-	elseif(${ARGC} EQUAL 7)
-		_bm_component_impl("${ARGV0}" "${ARGV1}" "${ARGV2}"
-			"${ARGV3}" "${ARGV4}" "${ARGV5}" "${ARGV6}")
-	else()
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: expected id title srcdir options mode produced [optstr]")
-	endif()
-endmacro()

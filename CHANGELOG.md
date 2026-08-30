@@ -50,10 +50,15 @@ and the declaration shape changed.
 - **`buildmaster_component`.** Backend is inferred from `srcdir`
   (`CMakeLists.txt` vs `meson.build`; both markers FATAL; neither +
   `headers` → `none`). Arity is
-  `id title srcdir options mode produced [optstr]`. Neutral `options`
-  list: `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
-  `DEFINITIONS` — private to the nested compile, appended to the parent
-  job / toolchain. Other keys FATAL.
+  `id title srcdir options mode produced [optstr]`.
+  `options` is a backend-agnostic CMake list of `KEY=value` (a single
+  string is one pair). Idioms `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
+  `LDFLAGS`, `INCLUDES`, `DEFINITIONS` are rewritten for the nested
+  compile and **append** to the parent job / toolchain. Every other
+  key is forwarded as `-DKEY=value` to the nested CMake configure or
+  Meson setup (Meson also uses `-D`). A leading `-D` / `-d` / `/D` on
+  the key is stripped. Private to that nested step, not INTERFACE.
+  `none` ignores the list.
 - **Assigned build directory.** There is no public builddir argument.
   The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and
   `file(MAKE_DIRECTORY)`. The path is an internal property, not part
