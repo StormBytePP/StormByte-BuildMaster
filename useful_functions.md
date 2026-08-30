@@ -2,125 +2,147 @@
 
 @section uf_overview Overview
 
-Short reference for BuildMaster helper modules. Full signatures live in the
-linked sources. Every `helpers.cmake` is an **include stub**; the
-implementation sits in one file per oficio next to it.
+Map of the **source tree** for people who maintain BuildMaster.
+It is **not** the public contract (`README.md`) and **not** a
+migration guide (`MIGRATE.md`).
 
-Logging is `buildmaster_message(<MODULE> <LEVEL> …)`. Configure
-`BUILDMASTER_LOGLEVEL` (`FATAL`, `WARNING`, `STATUS`, `INFO`, `DEBUG`,
-`LOWLEVEL`). `BUILDMASTER_DEBUG` is ignored. Prefer this API over
-`message()` in projects that use BuildMaster.
+Public surface is eight commands
+(`.github/tests/expected/public_functions.txt`):
+
+| Command | Role |
+|---------|------|
+| `buildmaster_component(id title srcdir options mode produced [optstr])` | Factory. Backend from `srcdir`. No builddir |
+| `buildmaster_depend(source dest)` | Order-only edge |
+| `buildmaster_link(source dest)` | `INTERFACE` link + depend when `dest` is a graph node |
+| `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` merges static members |
+| `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
+| `buildmaster_hook_component(id fn alias [CAPTURE …])` | After that id materializes |
+| `buildmaster_hook_graph(fn alias [CAPTURE …])` | After the whole graph materializes |
+| `buildmaster_message(level text [, indent])` | Log. Module is always `USER` |
+
+Everything else is `_bm_<oficio>_…` (or a `helpers.cmake` stub).
+Those names are **not** a supported API. They move when the tree
+is split. Do not call them from a consumer.
+
+Logging for **callers**: `buildmaster_message(<LEVEL> "<text>" [<indent>])`.
+There is no module argument on the public command. Configure
+`BUILDMASTER_LOGLEVEL` (`LOWLEVEL`, `DEBUG`, `INFO`, `STATUS`,
+`WARNING`, `FATAL`). `BUILDMASTER_DEBUG` is ignored. `WARNING`
+and `FATAL` are never filtered.
+
+Internal logging is `_bm_log_message(<MODULE> <LEVEL> "<text>" [<indent>])`.
 
 @section uf_layout Layout
 
-| Stub | Oficio files |
+Every `helpers.cmake` is an **include stub**. It includes its
+siblings, then the next level down. Do not `include()` a leaf
+from the repo root except through that chain.
+
+| Stub | What it pulls |
 |------|----------------|
-| `helpers.cmake` | `paths.cmake`, `library_hints.cmake`, `lists.cmake` — then includes toolchain / env / tools / component trees |
-| `component/helpers.cmake` | `options.cmake`, `graph.cmake`, `materialize.cmake` (+ `meta.cmake`, `repack.cmake`; backends `component/{cmake,meson}/`) |
+| `helpers.cmake` | `log.cmake`, `paths.cmake`, `lists.cmake`, `library_hints.cmake`, then `toolchain/`, `env/`, `tools/`, `component/` |
+| `component/helpers.cmake` | `options/`, `graph/`, `hooks.cmake`, `factory.cmake`, `materialize/`, `meta/`, `repack.cmake`, `backend/` |
+| `component/backend/helpers.cmake` | `cmake/`, `meson/` |
 | `env/helpers.cmake` | `runner.cmake`, `command.cmake` |
 | `toolchain/helpers.cmake` | `validate.cmake`, `profile.cmake`, `flags.cmake`, `msvc.cmake`, `export.cmake` |
-| `tools/helpers.cmake` | `_bm_tools_add.cmake`, `extra_tools.cmake` |
-| `tools/cmake/helpers.cmake` | `stages.cmake` |
-| `tools/meson/helpers.cmake` | `stages.cmake` |
-| `tools/file/helpers.cmake` | `checksum.cmake`, `download.cmake`, `decompress.cmake` |
-| `tools/git/helpers.cmake` | `git_internal.cmake`, `reset.cmake`, `patch.cmake`, `fetch.cmake`, `switch.cmake` |
-| `tools/archive/helpers.cmake` | `find_archiver.cmake` |
+| `tools/helpers.cmake` | `add_tool.cmake`, `extra_tools.cmake`, then cmake / meson / file / git / archive |
+| `tools/cmake/helpers.cmake` | `stages.cmake` + `templates/` |
+| `tools/meson/helpers.cmake` | `stages.cmake` + `templates/` |
+| `tools/file/helpers.cmake` | `checksum.cmake`, `download.cmake`, `decompress.cmake` + `templates/` |
+| `tools/git/helpers.cmake` | `internal.cmake`, `reset.cmake`, `patch.cmake`, `fetch.cmake`, `switch.cmake` + `templates/` |
+| `tools/archive/helpers.cmake` | archiver lookup |
+
+`.cmake.in` templates live under the matching `templates/`
+directory, not next to the generator.
+
+There is **no** public `ensure_build_dir`. The graph assigns
+`${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it.
 
 @section uf_modules Modules
 
 @subsection uf_component component/
 
-Declarative component API (order of declaration does not matter; materialize
-is deferred to the end of `CMAKE_SOURCE_DIR`):
+Registration stores metadata. Materialize runs at the end of
+`CMAKE_SOURCE_DIR` via `cmake_language(DEFER)`. An `INTERFACE`
+stub named `<id>` exists at registration.
 
-- `_bm_graph_create()` — core factory
-- `create_cmake_component()` / `create_meson_component()`
-- `create_cmake_headers_component()` / `create_meson_headers_component()`
-- `component_dependency()`, `component_link()`, `component_prerequisite()`
-- `component_repack()` — merge static archives after inputs' `_build`
-- `meta_component()` / `meta_component_add()` — INTERFACE collections
+Caller-facing work is the eight commands above plus the trailing
+optstr (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`,
+`STRIPRES`, `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`,
+`FILES={…}`). Unknown keys WARNING. Extra positionals FATAL.
 
-Trailing options string (`KEY=value;FLAG`): `INDENT`, `TOOLCHAIN`, `RENAME`,
-`BUILDONLY`, `WHOLE`. Unknown keys warn. Extra positional arguments are fatal.
+Git, downloads, unpack, helper `.pc`, and static merge are
+**optstr**, not public helpers.
 
-Generated fragments live under `${BUILDMASTER_SCRIPTS_COMPONENTDIR}`. Stage
-targets are `<id>_configure` / `<id>_build` / `<id>_install` plus IMPORTED
-or INTERFACE libraries.
+Stage targets still exist (`<id>_configure` / `_build` /
+`_install`). They are implementation, not something a consumer
+should `add_dependencies()` by hand — use `buildmaster_depend`
+/ `buildmaster_link`.
 
 @subsection uf_tools_cmake tools/cmake/
 
-`_bm_backend_cmake_stages()` — writes configure / build / install scripts into
-`${BUILDMASTER_SCRIPTS_CMAKEDIR}` from `tools/cmake/*.cmake.in`.
+Writes nested configure / build / install scripts from
+`tools/cmake/templates/*.cmake.in` into
+`${BUILDMASTER_SCRIPTS_CMAKEDIR}`.
 
 @subsection uf_tools_meson tools/meson/
 
-`_bm_backend_meson_stages()` — same pattern (`setup` / `compile` / `install`).
-Always pass a Meson native file when a toolchain profile is active so
-compiler caches stay valid.
+Same pattern (`setup` / `compile` / `install`). A Meson native
+file is written when a toolchain profile is active so compiler
+caches stay valid.
 
 @subsection uf_tools_file tools/file/
 
-- `file_download()` / `file_download_cached()` — hash-verified download;
-  cache under `BUILDMASTER_DOWNLOADSDIR` (override with env / `-D`)
-- `file_decompress()` — `file(ARCHIVE_EXTRACT …)`
+Internal download / cache / decompress used by `FILES={…}`.
+Cache root: `BUILDMASTER_DOWNLOADSDIR`. There is no public
+`file_download` / `buildmaster_download`.
 
 @subsection uf_tools_git tools/git/
 
-Bootstrap Git fragments:
-
-- `create_git_fetch()`
-- `create_git_reset_file()`
-- `create_git_patch_file()`
-- `create_git_switch_branch()`
-
-Post-install reset is registered automatically when a component id is bound
-to a git root.
+Internal FETCH / SWITCH / RESET / PATCH used by `GIT={…}`.
+Flush order is fixed. Post-install reset runs only when a PATCH
+was queued. There is no public `create_git_*`.
 
 @subsection uf_tools_archive tools/archive/
 
-`buildmaster_find_archiver(out_path out_style [hint])` — `CMAKE_AR`,
-`ENV{AR}`, then platform fallbacks. Style is `msvc_lib` or `gnu_ar`.
+Finds `CMAKE_AR` / `ENV{AR}` / platform fallback. Style is
+`msvc_lib` or `gnu_ar`. Used by `RENAME`, `STRIPRES`, `REPACK`.
 
 @subsection uf_env env/
 
-- `_bm_env_update_runner()` — regenerate the parent platform runner
-- `_bm_env_create_runners()` — per-component runners
-  after a toolchain profile load
-- `_bm_env_prepare_command()` — tokenize for `execute_process(COMMAND …)`
-- `_bm_env_quote_cmd_list()` — quote tokens for generated `-P` scripts
+Parent and per-component env runners. Silent runner replays
+nested `[BuildMaster/…]` lines live and dumps the full child
+log on failure.
 
 @subsection uf_toolchain toolchain/
 
-- `buildmaster_validate_toolchain()` / `buildmaster_load_toolchain_profile()`
-- `_bm_tc_clean_cflags()` / `_bm_tc_clean_ldflags()`
-- `_bm_tc_fuse_ld_flag()`
-- `_bm_tc_resolve_msvc_tool()`
-- `_bm_tc_reset()` / `export()` / `export_raw()` / `write()` /
-  `write_component()`
-
-Profiles: `gcc`, `clang`, `clang-cl`, `msvc` under `toolchain/profiles/`.
-
-@subsection uf_tools_core tools/
-
-Tool registration: `_bm_tools_add`, `_bm_tools_configure_extra`,
-`_bm_tools_ensure_extra`, extra-plugin propagation (e.g. pkgconf).
+Profiles: `gcc`, `clang`, `clang-cl`, `msvc` under
+`toolchain/profiles/`. Load / validate / export are internal.
+The public knob is `TOOLCHAIN=` on the component or meta.
 
 @subsection uf_global helpers.cmake
 
-Shared utilities (loaded first):
-
-- `_bm_path_windows()`, `_bm_path_normalize()`, `sanitize_for_filename()`,
-  `ensure_build_dir()`
-- `library_import_hint()`, `library_import_static_hint()`
-- `_bm_list_toggle_bool()`, `_bm_list_join()`
-- Then includes toolchain, env, cmake/file/git/meson/archive, component
+Path and list helpers used by the rest of the tree
+(`_bm_path_*`, `_bm_list_*`). Import hints for IMPORTED
+archives are internal. Do not treat them as DSL.
 
 @section uf_log Logging
 
-`buildmaster_message(<MODULE> <LEVEL> <text> [<indent>])`
+Public:
 
-Modules include `CORE`, `CMAKE`, `MESON`, `ENV`, `TOOLCHAIN`, `TOOLS`,
-`FILE`, `GIT`, `ARCHIVE`, `RENAME`, `COMPONENT`, `USER`.
+```cmake
+buildmaster_message(STATUS "Setting up Foo" 1)
+```
 
-`FATAL` is never filtered. `WARNING` is shown at `WARNING` and above.
-Default level is `STATUS`.
+Internal:
+
+```cmake
+_bm_log_message(COMPONENT DEBUG "edge foo -> bar")
+```
+
+Modules on the **internal** call include `CORE`, `CMAKE`,
+`MESON`, `ENV`, `TOOLCHAIN`, `TOOLS`, `FILE`, `GIT`, `ARCHIVE`,
+`RENAME`, `COMPONENT`, `USER`. Callers cannot choose a module;
+`buildmaster_message` is always `USER`.
+
+Default level is `STATUS`. `FATAL` is never filtered.
