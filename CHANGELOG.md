@@ -16,21 +16,21 @@ fragment to `include()`, no public dependant factories, no public
 
 - **Declarative component graph.**
   `buildmaster_depend(source dest)` is order-only (id, stage name, or
-  existing CMake target). `buildmaster_link(source dest)` waits and
-  links. `dest` may be a component (all produced libs), a library spec
-  (`name` / `subdir/name`), a target, or an archive path. Spec dests are
-  listed on the source install `OUTPUT` so Ninja has a production rule.
-- **`buildmaster_link` always records `buildmaster_depend`.**
-  `buildmaster_link(A B)` before `buildmaster_component(B)` still defers
-  A. A spec or on-disk archive stays link-only. Duplicate *explicit*
-  edges are WARNING + no-op; internal auto-deps do not warn.
-  Unresolvable dest at finalize is FATAL.
+  existing CMake target). `buildmaster_link(source dest)` waits **and**
+  records the same depend edge, so `buildmaster_link(A B)` before
+  `buildmaster_component(B)` still defers A. `dest` may be a component
+  (all produced libs), a library spec (`name` / `subdir/name`), a
+  target, or an archive path. Spec dests are listed on the source
+  install `OUTPUT` so Ninja has a production rule. A spec or on-disk
+  archive stays link-only. Duplicate *explicit* edges are WARNING +
+  no-op; internal auto-deps do not warn. Unresolvable dest at finalize
+  is FATAL.
 - **Deferred materialization.** Registration only stores metadata.
   Fragments and stage targets exist at the end of parent configure
   (`cmake_language(DEFER)` on `CMAKE_SOURCE_DIR`). Declaration order
   does not matter. Components without edges still configure during
-  parent configure; components with edges configure at build time under
-  `<id>_configure`.
+  parent configure; components with edges configure at build time
+  under `<id>_configure`.
 - **Eager INTERFACE stub.** `add_library(<id> INTERFACE)` at
   registration so a sibling `ALIAS` / `target_link_libraries` before
   DEFER does not see a missing target.
@@ -40,12 +40,30 @@ fragment to `include()`, no public dependant factories, no public
   `id title srcdir options mode produced [optstr]`. Neutral `options`
   list: `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
   `DEFINITIONS` — private to the nested compile, appended to the parent
-  job / toolchain. Other keys FATAL. optstr (`LINK=`, `PC=`, `GIT=`, …)
-  unchanged.
+  job / toolchain. Other keys FATAL.
 - **Assigned build directory.** There is no public builddir argument.
-  `_bm_graph_create` uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
-  (`_bm_path_component_builddir`) and `file(MAKE_DIRECTORY)`. The path
-  is an internal property, not part of the DSL.
+  The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and
+  `file(MAKE_DIRECTORY)`. The path is an internal property, not part
+  of the DSL.
+- **Headers island (mode `headers`, with or without a backend).**
+  No backend, or `BUILDONLY` headers: private. Direct consumers get
+  a quoted `-I` on *that* id’s nested configure only (CMake
+  `CMAKE_{C,CXX}_FLAGS` and Meson `c_args` / `cpp_args`). It does not
+  recurse through further BM components, runners, or INTERFACE.
+  Publishing headers (backend + not `BUILDONLY`) install into the
+  shared prefix; the prefix `-I` already covers them. Several private
+  islands on one consumer accumulate several `-I`.
+- **`FILES={URL=…;NAME=…;UNPACK;SOURCE[=rel];FORCE;MD5=|SHA256=|EXPECTED_HASH=…}`.**
+  Declarative download on `buildmaster_component` (meta + any FILES
+  group is FATAL). Always cached under `BUILDMASTER_DOWNLOADSDIR`
+  (`FORCE` refetches). Unpack is
+  `${BUILDMASTER_BINDIR}/files/<NAME>/`, **before** nested configure
+  (eager components included). `SOURCE` (at most one group, requires
+  `UNPACK`) *is* the srcdir — the positional path is ignored by design
+  (WARNING). Other unpacked groups inject a private `-I` on that id
+  only (same rule as the headers island). `GIT={…}` + `SOURCE` is
+  FATAL. Replaces the 1.x `file_download*` + dependant-component
+  pattern.
 - **`LINK=` / `LINK={…}`.** Raw system linker names on the component or
   meta INTERFACE. They propagate to whoever links that id. Not BM
   nodes. Revives 1.x `LINK_EXTRA` under a shorter name.
@@ -83,7 +101,8 @@ fragment to `include()`, no public dependant factories, no public
 - **Hooks.** `buildmaster_hook_component(id fn alias [CAPTURE …])` /
   `buildmaster_hook_graph(fn alias [CAPTURE …])`. `fn` must exist at
   registration. Alias is the only order key (ASCII ascending).
-  `CAPTURE` snapshots by copy.
+  `CAPTURE` snapshots by copy. A hook is not an edge and does not
+  flip the component to deferred.
 - **Unified logging.** `_bm_log_message(<module> <level> "<text>"
   [<indent>])` is internal. Public `buildmaster_message(<level>
   "<text>" [<indent>])` always uses module `USER`. `WARNING` and
@@ -95,26 +114,32 @@ fragment to `include()`, no public dependant factories, no public
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`,
   meta-toolchain, LINKFLAGS, hooks, late link, raw `LINK=`, duplicate
   edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install
-  FATAL), `REPACK` meta.
+  FATAL), `REPACK` meta, private-headers `-I`, `FILES=` unpack /
+  SOURCE, FILES-on-meta FATAL.
 
 ### Changed
 
-- **Breaking — public API is `buildmaster_*` only.** Twelve commands
-  (see `public_functions.txt`). Internals are `_bm_<craft>_*` and are
-  not a supported API. In particular:
+- **Breaking — public API is `buildmaster_*` only.** Eight commands
+  (see `public_functions.txt`):
+  `buildmaster_component`, `buildmaster_depend`, `buildmaster_link`,
+  `buildmaster_meta`, `buildmaster_meta_add`,
+  `buildmaster_hook_component`, `buildmaster_hook_graph`,
+  `buildmaster_message`. Internals are `_bm_<craft>_*` and are not a
+  supported API. In particular:
   - `create_cmake_component` / `create_meson_component` /
     `create_*_headers_component` / `create_component` are gone.
     Use `buildmaster_component`.
   - `component_link` → `buildmaster_link`.
   - `component_dependency` → `buildmaster_depend`.
-  - `component_prerequisite` → `buildmaster_prerequisite`.
-  - `component_repack` / `buildmaster_repack` are gone. Use
-    `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
   - `create_meta_component` → `buildmaster_meta`.
   - `meta_component_add` → `buildmaster_meta_add`.
   - `create_git_*` / `buildmaster_git_*` → `GIT={…}` on the component.
   - `file_download` / `file_download_cached` / `file_decompress` →
-    `buildmaster_download{,_cached}` / `buildmaster_decompress`.
+    `FILES={…}` on the component. There is no public
+    `buildmaster_download*` / `buildmaster_decompress` /
+    `buildmaster_prerequisite`.
+  - `component_repack` / `buildmaster_repack` are gone. Use
+    `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
   - `buildmaster_on_component_materialize` →
     `buildmaster_hook_component`.
   - `buildmaster_on_graph_finalized` → `buildmaster_hook_graph`.
@@ -138,53 +163,21 @@ fragment to `include()`, no public dependant factories, no public
 - **Breaking — dependant factories are gone.** Use
   `buildmaster_component` + `buildmaster_depend` (or
   `buildmaster_link`, which waits).
-- **Breaking — `LINK_EXTRA` is gone.** Graph nodes:
-  `buildmaster_link`. Raw system libs: `LINK=`.
+- **Breaking — `LINK_EXTRA` is gone.** Graph nodes: `buildmaster_link`.
+  Raw system libs: `LINK=`.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.** Use
   `BUILDMASTER_LOGLEVEL`. `BUILDMASTER_VERBOSE` is unchanged.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`INDENT`, `TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
-  `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`). `;` inside
-  `{…}` is not a pair break. Unknown keys warn; extra positionals are
-  fatal.
+  `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`, `FILES={…}`).
+  `;` inside `{…}` is not a pair break. Unknown keys warn; extra
+  positionals are fatal.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
   use `[BuildMaster/Ninja]`.
 - Root `CMakeLists.txt` includes helpers before `init_vars`, so
   `add_subdirectory(buildmaster)` alone bootstraps a consumer.
 - Root configure includes `GNUInstallDirs`.
 - Post-install git reset + clean runs only after a PATCH.
-
-### Fixed
-
-- Git patch lost the race with eager configure: flush runs at
-  registration and again *before* materialize (reset then patch once
-  per root).
-- `GIT={PATCH=…;RESET}` (or the old `buildmaster_git_patch` then
-  `reset`) used to apply and immediately `reset --hard`. Ops flush as
-  reset + clean, then apply.
-- Cached download under `cmake -P` did not see the log helper; templates
-  now include log + checksum.
-- Dead second `function(component_dependency)` (now
-  `buildmaster_depend`) in `graph.cmake`.
-- `RENAME` ignored Unix-style `.a` on Windows when the contract asked
-  for `.lib`.
-- `TOOLCHAIN=` rejected valid names when the dump was not a CMake list.
-- Meson `--native-file` followed the outer job instead of the component
-  profile.
-- Log modules empty during DEFER.
-- Produced paths `${prefix}//libfoo.a` when the host skipped
-  `GNUInstallDirs`.
-- Component id equal to produced name (`add_library` twice).
-- Import-hint arity at nested finalize.
-- ALIAS before DEFER.
-- Windows DLL lookup under `lib/` / wrong stem case.
-- Missing prefix `-I`/`-L` on nested compile.
-- Interrupted CMake configure left cache without `build.ninja`.
-- Empty Meson `-Dbuildtype=`.
-- Empty `@NPROC@` at DEFER.
-- File helpers only created a target; the `-P` script now also runs at
-  the call so the artifact exists before `buildmaster_component`.
-- Initialization now uses logging.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 

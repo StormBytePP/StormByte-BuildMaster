@@ -5,9 +5,10 @@
 # Implementation lives in component/options/*.cmake.
 
 include("${CMAKE_CURRENT_LIST_DIR}/options/core.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/options/pc.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/options/files.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/options/git.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/link.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/linkflags.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/options/git.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/parse.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/options/pc.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/spec.cmake")

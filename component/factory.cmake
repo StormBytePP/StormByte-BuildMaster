@@ -207,6 +207,9 @@ endfunction()
 ##            of `CMakeLists.txt` or `meson.build`. For `headers`: those
 ##            markers select cmake/meson; neither marker selects `none`
 ##            (private include tree, no nested generate).
+##            **By design ignored when `FILES` contains `SOURCE`:** the
+##            unpacked tree is the only srcdir. A dummy or empty path is
+##            accepted in that case (WARNING).
 ## @param[in] options CMake list of `KEY=value`. Allowed keys (all
 ##            private to the nested compile, never INTERFACE on `<id>`):
 ##            `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS` (append to the
@@ -219,8 +222,9 @@ endfunction()
 ## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
 ##            for headers.
 ## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
-##            `WHOLE`, `GIT={…}`, …). GIT is applied inside
-##            `_bm_graph_create` after the INTERFACE exists.
+##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES are applied
+##            inside `_bm_graph_create` / materialize after the INTERFACE
+##            exists.
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
 ## @note Both marker files: FATAL. Then use the backend create directly.
@@ -233,31 +237,50 @@ function(buildmaster_component _component _component_title _srcdir
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: expected id title srcdir options mode produced [optstr]")
 	endif()
-	if("${_srcdir}" STREQUAL "")
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component('${_component}'): empty source directory")
-	endif()
 
 	set(_options_string "")
 	if(ARGC EQUAL 7)
 		set(_options_string "${ARGV6}")
 	endif()
 
-	_bm_factory_detect("${_srcdir}" "${_library_mode}" _sys)
-	_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
+	_bm_opt_parse_files(
+		"${_options_string}" _files_present
+		_files_urls _files_names _files_hashes _files_algos
+		_files_unpacks _files_forces _files_sources _files_titles)
+	set(_files_has_source FALSE)
+	foreach(_so IN LISTS _files_sources)
+		if(NOT "${_so}" STREQUAL "")
+			set(_files_has_source TRUE)
+			break()
+		endif()
+	endforeach()
+
+	if(_files_has_source)
+		_bm_log_message(COMPONENT WARNING
+			"buildmaster_component('${_component}'): srcdir ignored because FILES SOURCE supplies the tree")
+		set(_sys "pending")
+		set(_xopts "")
+		if("${_srcdir}" STREQUAL "")
+			set(_srcdir "${CMAKE_CURRENT_SOURCE_DIR}")
+		endif()
+	else()
+		if("${_srcdir}" STREQUAL "")
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_component('${_component}'): empty source directory")
+		endif()
+		_bm_factory_detect("${_srcdir}" "${_library_mode}" _sys)
+		_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
+	endif()
+
 	_bm_log_message(COMPONENT DEBUG
 		"buildmaster_component('${_component}'): ${_sys}")
 
-	if(_sys STREQUAL "none")
+	if(_sys STREQUAL "none" OR _sys STREQUAL "pending")
 		_bm_graph_create(
 			"${_component}" "${_component_title}" "${_srcdir}"
 			"${_xopts}" "${_library_mode}"
-			"none" "${_produced}" "${_options_string}")
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
-		return()
-	endif()
-
-	if(_sys STREQUAL "cmake")
+			"${_sys}" "${_produced}" "${_options_string}")
+	elseif(_sys STREQUAL "cmake")
 		_bm_backend_cmake_create(
 			"${_component}" "${_component_title}" "${_srcdir}"
 			"${_xopts}" "${_library_mode}"
@@ -268,6 +291,9 @@ function(buildmaster_component _component _component_title _srcdir
 			"${_xopts}" "${_library_mode}"
 			"${_produced}" "${_options_string}")
 	endif()
+
+	set_property(GLOBAL PROPERTY
+		BUILDMASTER_COMPONENT_${_component}_FACTORY_OPTIONS "${_options}")
 
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
 endfunction()

@@ -90,7 +90,7 @@ add_custom_target(run_buildmaster_smoke
 		run_buildmaster_consumer
 		# Core / flat
 		base_install dep_install first_install link-a_install link-b_install
-		payload-lib_install prereq-lib_install sdk-headers_install
+		payload-lib_install sdk-headers_install
 		sdkloader_install second_install
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install

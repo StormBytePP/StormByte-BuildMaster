@@ -3,14 +3,16 @@
 # =============================================================================
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, BUILDONLY, WHOLE, STRIPRES, PC, GIT and REPACK accept `KEY`,
-##       `KEY=` and `KEY=ON|OFF`. Other keys require `KEY=value`. Keep this
-##       list in sync with `_bm_opt_parse()`.
+## @note RENAME, BUILDONLY, WHOLE, STRIPRES, PC, GIT, REPACK and FILES accept
+##       `KEY`, `KEY=` and `KEY=ON|OFF`. Other keys require `KEY=value`.
+##       Keep this list in sync with `_bm_opt_parse()`.
 ## @note `PC` as a bare flag is accepted by the splitter so it is not treated
 ##       as an unknown token, but a `.pc` is only generated from `PC={…}`.
 ##       A bare `PC` / `PC=ON` without a brace group is FATAL.
 ## @note `GIT` as a bare flag / `GIT=` / `GIT={}` is WARNING and ignored.
 ##       Work lives in `GIT={FETCH;SWITCH=…;RESET;PATCH=…}`.
+## @note `FILES` as a bare flag / `FILES=` / `FILES={}` is WARNING and ignored.
+##       Work lives in `FILES={URL=…;NAME=…;…}` or `FILES={{…};{…}}`.
 ## @note `REPACK` is a meta-only flag. On `buildmaster_component` it is FATAL.
 ##       On `buildmaster_meta` it merges every produced static archive of
 ##       the meta's member leaves into one prefix archive named after the
@@ -21,7 +23,9 @@
 ##       not choose and collide with upstream `.pc` files. create_meta_*
 ##       must FATAL if PC is present.
 ## @note Non-empty `GIT={…}` is forbidden on meta components (no srcdir).
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK")
+## @note Any `FILES` key is forbidden on meta components (no srcdir, no
+##       nested configure).
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES")
 
 # CMake lists use ';' as the element separator. Tokens that contain ';'
 # (PC={VERSION=1;NAME=x}) are stored with this stand-in so foreach(IN LISTS)

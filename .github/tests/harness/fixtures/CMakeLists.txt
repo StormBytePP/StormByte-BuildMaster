@@ -14,7 +14,7 @@ endif()
 add_subdirectory(buildonly)
 
 # ---------------------------------------------------------------------------
-# File helpers
+# File helpers (FILES unpack on a real component)
 # ---------------------------------------------------------------------------
 add_subdirectory(file-decompress)
 add_subdirectory(file-to-component)
@@ -43,7 +43,6 @@ add_subdirectory(meta-toolchain)
 # ---------------------------------------------------------------------------
 add_subdirectory(link-component)
 add_subdirectory(order-independent)
-add_subdirectory(prerequisite)
 
 # ---------------------------------------------------------------------------
 # LINKFLAGS platform groups

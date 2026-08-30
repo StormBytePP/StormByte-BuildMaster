@@ -7,7 +7,7 @@ if(CMAKE_GENERATOR)
 	list(APPEND _gen_args -G "${CMAKE_GENERATOR}")
 endif()
 
-set(_cfg_cases missing-hook bad-linkflags)
+set(_cfg_cases missing-hook bad-linkflags files-on-meta)
 set(_ins_cases pc-clobber)
 set(_failed 0)
 

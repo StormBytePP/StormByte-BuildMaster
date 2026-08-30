@@ -96,7 +96,7 @@ function(_bm_graph_resolve_dest dest out_tgt out_ok)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_resolve_dest")
 endfunction()
 
-## @brief Space-separated prerequisite targets for the dependant template.
+## @brief Space-separated wait targets for the dependant template.
 ## @param[in]  id      Component whose outgoing dependency edges are collected.
 ## @param[out] out_var Parent-scope string of unique target names, space-joined
 ##            (empty if this component has no recorded dests).
@@ -142,7 +142,7 @@ function(_bm_graph_dep_targets id out_var)
 				continue()
 			endif()
 			_bm_log_message(COMPONENT FATAL
-				"buildmaster_depend('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install; meta id → <id>_install; <id>_install / _configure / _build; existing CMake target (e.g. buildmaster_prerequisite / file_* target).")
+				"buildmaster_depend('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install; meta id → <id>_install; <id>_install / _configure / _build; existing CMake target.")
 		endif()
 		list(APPEND _dep_targets "${_tgt}")
 	endforeach()

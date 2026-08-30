@@ -1,5 +1,5 @@
 # =============================================================================
-# component/graph/edges.cmake — depend / link / prerequisite
+# component/graph/edges.cmake — depend / link
 # =============================================================================
 
 ## @brief Whether `(source, dest)` is already stored in two parallel GLOBAL lists.
@@ -148,71 +148,4 @@ function(buildmaster_link source dest)
 	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG "buildmaster_link ${source} → ${dest}")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_link")
-endfunction()
-
-## @brief Declare a custom prerequisite target (download, unpack, codegen, …).
-## @param[in] name Target name (must not already exist as a CMake target).
-## @param[in] COMMAND  One or more command argv tokens.
-## @param[in] COMMENT  Optional progress text (wrapped with the Component header).
-## @param[in] WORKING_DIRECTORY Optional working directory.
-## @param[in] SCRIPT   Optional path to a CMake -P script.
-## @param[in] DEPENDS  Optional list of CMake targets this prerequisite waits on.
-## @note Creates an `add_custom_target`. Other components wait on it via
-##       `buildmaster_depend(<id> <name>)`.
-## @note If SCRIPT is set and COMMAND is not, COMMAND becomes
-##       `${CMAKE_COMMAND} -P <SCRIPT>`.
-function(buildmaster_prerequisite name)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_prerequisite")
-	if("${name}" STREQUAL "")
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_prerequisite: empty name")
-	endif()
-	if(TARGET "${name}")
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_prerequisite: target '${name}' already exists")
-	endif()
-
-	cmake_parse_arguments(ARG
-		""
-		"COMMENT;WORKING_DIRECTORY;SCRIPT"
-		"COMMAND;DEPENDS"
-		${ARGN}
-	)
-
-	if(ARG_SCRIPT AND NOT ARG_COMMAND)
-		set(ARG_COMMAND "${CMAKE_COMMAND}" -P "${ARG_SCRIPT}")
-	endif()
-	if(NOT ARG_COMMAND)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_prerequisite('${name}'): need COMMAND and/or SCRIPT")
-	endif()
-	if(NOT ARG_COMMENT)
-		set(ARG_COMMENT "prerequisite: ${name}")
-	endif()
-	if(COMMAND _bm_log_comment)
-		_bm_log_comment(_bm_cmt COMPONENT "${ARG_COMMENT}")
-	else()
-		set(_bm_cmt "[BuildMaster/Component]: ${ARG_COMMENT}")
-	endif()
-
-	set(_wd_args "")
-	if(ARG_WORKING_DIRECTORY)
-		set(_wd_args WORKING_DIRECTORY "${ARG_WORKING_DIRECTORY}")
-	endif()
-
-	add_custom_target(${name}
-		COMMAND ${ARG_COMMAND}
-		COMMENT "${_bm_cmt}"
-		${_wd_args}
-		USES_TERMINAL
-		VERBATIM
-	)
-
-	if(ARG_DEPENDS)
-		add_dependencies(${name} ${ARG_DEPENDS})
-	endif()
-
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_PREREQUISITE_IDS "${name}")
-	_bm_log_message(COMPONENT DEBUG "prerequisite target ${name}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_prerequisite")
 endfunction()

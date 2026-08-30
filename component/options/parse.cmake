@@ -19,20 +19,22 @@
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
-##            `PC={…}`, `LINK={…}`, `LINKFLAGS={…}` and `GIT={…}` groups are
-##            allowed; `;` inside braces is not a pair break. A trailing
-##            orphan `;` is allowed (dropped).
+##            `PC={…}`, `LINK={…}`, `LINKFLAGS={…}`, `GIT={…}` and `FILES={…}`
+##            groups are allowed; `;` inside braces is not a pair break. A
+##            trailing orphan `;` is allowed (dropped).
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
-## @note `PC`, `LINK`, `LINKFLAGS`, `GIT` and `REPACK` are recognized so they
-##       are not “unknown keys”. Details: `_bm_opt_parse_pc()`,
+## @note `PC`, `LINK`, `LINKFLAGS`, `GIT`, `FILES` and `REPACK` are recognized
+##       so they are not “unknown keys”. Details: `_bm_opt_parse_pc()`,
 ##       `_bm_opt_parse_link()`, `_bm_opt_parse_linkflags()`,
-##       `_bm_opt_parse_git()`, `_bm_opt_parse_repack()`.
+##       `_bm_opt_parse_git()`, `_bm_opt_parse_files()`,
+##       `_bm_opt_parse_repack()`.
 ##       Meta + PC is FATAL in `buildmaster_meta`.
 ##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
+##       Meta + FILES is FATAL in `buildmaster_meta`.
 ##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
 ##       meta at materialize.
 ##       `REPACK` on a component is FATAL in `_bm_graph_create`.
@@ -76,6 +78,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_linkflags()
 			elseif(_key STREQUAL "GIT")
 				# parsed by _bm_opt_parse_git()
+			elseif(_key STREQUAL "FILES")
+				# parsed by _bm_opt_parse_files()
 			elseif(_key STREQUAL "REPACK")
 				# parsed by _bm_opt_parse_repack()
 			elseif(_key STREQUAL "LINK_EXTRA")

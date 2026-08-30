@@ -5,12 +5,15 @@
 ## @brief Register a component. Creates an empty INTERFACE `<id>` before return.
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory.
+## @param[in] _srcdir Component source directory. Ignored when FILES SOURCE
+##            supplies the tree (by design); the positional value is stored
+##            only until apply rewrites SRCDIR.
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
-## @param[in] _build_system `cmake`, `meson`, or `none`.
-##            `none` is valid only with `headers` (private tree, no nested
-##            generate).
+## @param[in] _build_system `cmake`, `meson`, `none`, or `pending`.
+##            `pending` means FILES SOURCE will unpack the tree and
+##            autodetect runs after apply. `none` is valid only with
+##            `headers`.
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
@@ -24,7 +27,8 @@
 ##            component INTERFACE via target_link_options; platform groups
 ##            WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
-##            `.pc` under the BM prefix for *internal* BM consumers).
+##            `.pc` under the BM prefix for *internal* BM consumers),
+##            GIT={…}, FILES={…}.
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
@@ -53,6 +57,7 @@
 ##       FATAL (no shared prefix). `none` + PC enabled is FATAL. An upstream
 ##       `.pc` already at the canonical path is FATAL at install time (do not
 ##       clobber). Meta + PC is FATAL in buildmaster_meta.
+## @note GIT + FILES SOURCE is FATAL (two owners of the same tree).
 ## @note create_*_stages is internal; backends call it from materialize only.
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
@@ -104,9 +109,29 @@ function(_bm_graph_create _component _component_title _srcdir
 	_bm_opt_parse_link("${_options_string}" _reg_link)
 	_bm_opt_parse_linkflags("${_options_string}" _reg_linkflags)
 	_bm_opt_parse_repack("${_options_string}" _reg_repack)
+	_bm_opt_parse_git(
+		"${_options_string}" _git_present _git_fetch _git_switch _git_reset
+		_git_patches _git_title)
+	_bm_opt_parse_files(
+		"${_options_string}" _files_present
+		_files_urls _files_names _files_hashes _files_algos
+		_files_unpacks _files_forces _files_sources _files_titles)
 	if(_reg_repack)
 		_bm_log_message(COMPONENT FATAL
 			"REPACK is only valid on buildmaster_meta(). A component publishes its own artifacts; to merge several components into one archive, put REPACK on the meta and buildmaster_meta_add those ids.")
+	endif()
+
+	set(_files_has_source FALSE)
+	foreach(_so IN LISTS _files_sources)
+		if(NOT "${_so}" STREQUAL "")
+			set(_files_has_source TRUE)
+			break()
+		endif()
+	endforeach()
+	if(_files_has_source AND _git_present AND
+			(_git_fetch OR NOT "${_git_switch}" STREQUAL "" OR _git_reset OR _git_patches))
+		_bm_log_message(COMPONENT FATAL
+			"_bm_graph_create('${_component}'): GIT={…} cannot be combined with FILES SOURCE (two owners of the source tree)")
 	endif()
 
 	string(TOLOWER "${_library_mode}" _library_mode)
@@ -121,9 +146,10 @@ function(_bm_graph_create _component _component_title _srcdir
 
 	if(NOT _build_system STREQUAL "cmake"
 			AND NOT _build_system STREQUAL "meson"
-			AND NOT _build_system STREQUAL "none")
+			AND NOT _build_system STREQUAL "none"
+			AND NOT _build_system STREQUAL "pending")
 		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create: unknown build system '${_build_system}' (expected cmake, meson, or none)")
+			"_bm_graph_create: unknown build system '${_build_system}' (expected cmake, meson, none, or pending)")
 	endif()
 
 	if(_build_system STREQUAL "none" AND NOT _library_mode STREQUAL "headers")
@@ -213,6 +239,22 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_reg_link}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINKFLAGS
 		"${_reg_linkflags}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_URLS
+		"${_files_urls}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_NAMES
+		"${_files_names}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_HASHES
+		"${_files_hashes}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_ALGOS
+		"${_files_algos}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_UNPACKS
+		"${_files_unpacks}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_FORCES
+		"${_files_forces}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_SOURCES
+		"${_files_sources}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_TITLES
+		"${_files_titles}")
 	if(_reg_buildonly)
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
 	else()

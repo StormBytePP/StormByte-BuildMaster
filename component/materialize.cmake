@@ -13,13 +13,15 @@ include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 ## @note Concrete and create_meta INTERFACE stubs already exist. This pass
 ##       emits stages, fragments, headers-none stamps, repack targets, meta
 ##       stage anchors, member wiring and recorded `buildmaster_link` edges.
-## @note Order: flush queued git reset/patch → inject PRIVATE headers
+## @note Order: flush queued git reset/patch → FILES download/unpack →
+##       resolve pending SOURCE backends → inject PRIVATE headers
 ##       `-I` into linker OPTIONS → materialize metas → propagate meta
 ##       TOOLCHAIN → per-id cmake / meson / none materialize → repacks →
 ##       meta wire → apply links → orphan warning → fail if a per-id hook
 ##       was registered for an id that never materialized → graph hooks
 ##       (alias order).
 ## @note Git flush is first so eager nested configure sees patched sources.
+## @note FILES runs next so SOURCE trees exist before autodetect / configure.
 ## @note PRIVATE `-I` injection is before any nested configure so several
 ##       `buildmaster_link` edges to headers trees each add their own token.
 ## @note `SYSTEM=none` is headers without a backend (`_bm_materialize_none`).
@@ -36,12 +38,19 @@ function(_bm_materialize_finalize)
 		_bm_git_flush_all()
 	endif()
 
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	if(_ids)
+		foreach(_id IN LISTS _ids)
+			_bm_comp_apply_files("${_id}")
+			_bm_comp_resolve_pending_files("${_id}")
+		endforeach()
+	endif()
+
 	_bm_materialize_inject_private_headers()
 
 	_bm_meta_materialize()
 	_bm_tc_propagate_metas()
 
-	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
 	if(_ids)
 		foreach(_id IN LISTS _ids)
 			get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)

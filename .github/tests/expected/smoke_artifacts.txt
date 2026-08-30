@@ -32,7 +32,6 @@
 <lib>/libpayloadlib.a|unix
 <lib>/libpcdeplib.a|unix
 <lib>/libpclib.a|unix
-<lib>/libprereqlib.a|unix
 <lib>/libsecondlib.a|unix
 <lib>/libslowlib.a|unix
 <lib>/libwlib.a|unix
@@ -46,7 +45,6 @@
 <lib>/payloadlib.lib|windows
 <lib>/pcdeplib.lib|windows
 <lib>/pclib.lib|windows
-<lib>/prereqlib.lib|windows
 <lib>/secondlib.lib|windows
 <lib>/slowlib.lib|windows
 <lib>/wlib.lib|windows
@@ -68,7 +66,6 @@
 <include>/payload.h|all
 <include>/pc_dep.h|all
 <include>/pc_lib.h|all
-<include>/prereq.h|all
 <include>/sdk.h|all
 <include>/second.h|all
 <include>/slow.h|all

@@ -58,13 +58,12 @@ function(_bm_meta_is id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_is")
 endfunction()
 
-## @brief Register a meta collection (no sources; membership + INTERFACE).
-## @param[in] _id              Identifier (INTERFACE target name after this call).
-## @param[in] _title           Human-readable title (STATUS only).
-## @param[in] options_string   Optional "KEY=value;…". Keys: INDENT / INDENT_LEVEL,
-##            WHOLE (flag), REPACK (flag), TOOLCHAIN (inherited by members
-##            without their own), LINK= / LINK={…}, LINKFLAGS= / LINKFLAGS={…}.
-## @note `REPACK`: merge every produced *static* archive of the member leaves
+## @brief Declare a meta component (INTERFACE collection, optional REPACK).
+## @param[in] _id     Meta identifier (also the REPACK archive stem).
+## @param[in] _title  Human-readable title.
+## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `LINK=`,
+##                    `LINKFLAGS=`, `TOOLCHAIN=`, `INDENT=`).
+## @note `REPACK` merges every produced *static* archive of the member leaves
 ##       into one prefix archive named after `_id`. Shared/DLL members are
 ##       not merged (WARNING); they stay INTERFACE links on the meta.
 ##       Wait edge per leaf: `_install` if the leaf publishes; `_build` if
@@ -77,6 +76,9 @@ endfunction()
 ## @note `PC` / `PC={…}` is FATAL on a meta.
 ## @note `GIT={…}` with FETCH / SWITCH / RESET / PATCH is FATAL on a meta
 ##       (no srcdir). Empty `GIT` / `GIT={}` is the parser WARNING only.
+## @note `FILES={…}` is FATAL on a meta (no srcdir, no configure). Empty
+##       `FILES` / `FILES={}` is still FATAL here: a leftover on a meta is
+##       not a download.
 ## @note A second `buildmaster_meta()` for the same id is FATAL.
 function(buildmaster_meta _id _title)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_meta")
@@ -124,6 +126,10 @@ function(buildmaster_meta _id _title)
 	_bm_opt_parse_git(
 		"${_optstr}" _git_present _git_fetch _git_switch _git_reset
 		_git_patches _git_title)
+	_bm_opt_parse_files(
+		"${_optstr}" _files_present
+		_files_urls _files_names _files_hashes _files_algos
+		_files_unpacks _files_forces _files_sources _files_titles)
 	_bm_opt_parse_repack("${_optstr}" _repack)
 	if(_pc_present)
 		_bm_log_message(COMPONENT FATAL
@@ -132,6 +138,10 @@ function(buildmaster_meta _id _title)
 	if(_git_present AND (_git_fetch OR NOT "${_git_switch}" STREQUAL "" OR _git_reset OR _git_patches))
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta('${_id}'): cannot run git commands on a sourceless meta component")
+	endif()
+	if(_files_present)
+		_bm_log_message(COMPONENT FATAL
+			"buildmaster_meta('${_id}'): FILES={…} is not allowed on a meta (no srcdir, no configure)")
 	endif()
 	if(_buildonly)
 		_bm_log_message(COMPONENT INFO

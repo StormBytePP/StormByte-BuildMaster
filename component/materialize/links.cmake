@@ -43,15 +43,54 @@ function(_bm_materialize_options_add_include _sys _opts_var _tok)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_options_add_include")
 endfunction()
 
-## @brief For each recorded `buildmaster_link` dest with PRIVATE_HEADERS, fold
-##        `-I<srcdir>` into the source component OPTIONS.
-## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS`.
-##       Meta dests are skipped (membership is not a compile include).
-##       `SYSTEM=none` or missing backend on the dest is accepted.
-##       Source `SYSTEM=none` cannot receive flags: NOTICE and skip.
-## @note Must run before any nested configure (eager or deferred fragment).
+## @brief Fold every path in a list onto `_id` OPTIONS via `_bm_path_compile_include`.
+## @param[in] _id   Component that receives the flags.
+## @param[in] _sys  `cmake` or `meson`.
+## @param[in] _dirs Absolute directories.
+function(_bm_materialize_add_include_dirs _id _sys _dirs)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_add_include_dirs")
+	if(_sys STREQUAL "none" OR _sys STREQUAL "" OR _sys STREQUAL "pending")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_add_include_dirs")
+		return()
+	endif()
+	get_property(_opts GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_OPTIONS)
+	foreach(_dir IN LISTS _dirs)
+		if("${_dir}" STREQUAL "")
+			continue()
+		endif()
+		if(NOT IS_DIRECTORY "${_dir}")
+			_bm_log_message(COMPONENT FATAL
+				"'${_id}': include dir '${_dir}' is not a directory")
+		endif()
+		_bm_path_compile_include(_tok "${_dir}")
+		_bm_materialize_options_add_include("${_sys}" _opts "${_tok}")
+		_bm_log_message(COMPONENT DEBUG "${_id}: FILES/PRIVATE -I ${_tok}")
+	endforeach()
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_OPTIONS "${_opts}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_add_include_dirs")
+endfunction()
+
+## @brief Inject FILES unpack `-I` onto the owner, then PRIVATE headers
+##        `-I<srcdir>` (+ that dest's FILES includes) onto each linker source.
+## @note Owner FILES includes are payload of that id (Opus DNN). They do not
+##       walk the graph.
+## @note PRIVATE headers dest: source gets dest SRCDIR and dest FILES_INCLUDES.
+##       Meta dests are skipped. Source `SYSTEM=none` cannot receive flags.
+## @note Must run after FILES apply and pending resolve, before nested configure.
 function(_bm_materialize_inject_private_headers)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_inject_private_headers")
+
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	if(_ids)
+		foreach(_id IN LISTS _ids)
+			get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_SYSTEM)
+			get_property(_finc GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_FILES_INCLUDES)
+			if(_finc)
+				_bm_materialize_add_include_dirs("${_id}" "${_sys}" "${_finc}")
+			endif()
+		endforeach()
+	endif()
+
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 	if(NOT _srcs)
@@ -77,16 +116,12 @@ function(_bm_materialize_inject_private_headers)
 			continue()
 		endif()
 		get_property(_srcdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_SRCDIR)
-		if(NOT IS_DIRECTORY "${_srcdir}")
-			_bm_log_message(COMPONENT FATAL
-				"buildmaster_link('${_src}', '${_dst}'): PRIVATE headers srcdir '${_srcdir}' is not a directory")
+		set(_dirs "${_srcdir}")
+		get_property(_finc GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_FILES_INCLUDES)
+		if(_finc)
+			list(APPEND _dirs ${_finc})
 		endif()
-		_bm_path_compile_include(_tok "${_srcdir}")
-		get_property(_opts GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_OPTIONS)
-		_bm_materialize_options_add_include("${_ssys}" _opts "${_tok}")
-		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_src}_OPTIONS "${_opts}")
-		_bm_log_message(COMPONENT DEBUG
-			"${_src}: PRIVATE headers ${_dst} → ${_tok}")
+		_bm_materialize_add_include_dirs("${_src}" "${_ssys}" "${_dirs}")
 	endforeach()
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_inject_private_headers")
 endfunction()

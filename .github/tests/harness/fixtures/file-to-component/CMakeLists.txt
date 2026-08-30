@@ -1,8 +1,7 @@
-# buildmaster_decompress then buildmaster_depend on the unpack target.
+# FILES unpack before configure: payload header is not in srcdir.
 
 set(_pack_src "${CMAKE_CURRENT_BINARY_DIR}/pack_src")
 set(_archive "${CMAKE_CURRENT_BINARY_DIR}/payload.tar.gz")
-set(_extract "${CMAKE_CURRENT_BINARY_DIR}/payload")
 
 file(MAKE_DIRECTORY "${_pack_src}")
 file(WRITE "${_pack_src}/payload_mark.h"
@@ -17,18 +16,13 @@ if(NOT _tar_rc EQUAL 0)
 	_bm_log_message(CORE FATAL "file-to-component: tar failed")
 endif()
 
-buildmaster_decompress(payload_unpack
-	"${_archive}"
-	"${_extract}"
-	TITLE "Harness payload"
-)
-
-_bm_backend_cmake_create(
+file(TO_CMAKE_PATH "${_archive}" _archive_cmake)
+buildmaster_component(
 	payload-lib
 	"Harness file-to-component library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
-	"-DPAYLOAD_INCLUDE_DIR=${_extract}"
+	""
 	static
 	"payloadlib"
+	"FILES={URL=file://${_archive_cmake};NAME=payload;UNPACK}"
 )
-buildmaster_depend(payload-lib payload_unpack)

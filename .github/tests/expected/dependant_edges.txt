@@ -1,12 +1,11 @@
-# dependent -> prerequisite  (sections and edges alphabetical)
+# dependent -> wait-target  (sections and edges alphabetical)
 
 # dep
 dep -> dep_install
 dep_configure -> base_install
 
-# file-to-component
+# file-to-component (FILES applied at finalize; no unpack target)
 payload-lib -> payload-lib_install
-payload-lib_configure -> payload_unpack
 
 # link-component
 link-b -> link-b_install
@@ -31,10 +30,6 @@ second_configure -> first_install
 # pc
 pc-lib -> pc-lib_install
 pc-lib_configure -> pc-dep_install
-
-# prerequisite
-prereq-lib -> prereq-lib_install
-prereq-lib_configure -> prereq_touch
 
 # sdkloader
 sdkloader -> sdkloader_install

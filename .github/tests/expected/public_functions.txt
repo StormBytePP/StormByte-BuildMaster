@@ -8,12 +8,6 @@ buildmaster_hook_graph
 buildmaster_link
 buildmaster_meta
 buildmaster_meta_add
-buildmaster_prerequisite
-
-# File helpers
-buildmaster_decompress
-buildmaster_download
-buildmaster_download_cached
 
 # Logging
 buildmaster_message
