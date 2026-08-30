@@ -6,16 +6,12 @@
 #          Windows must drop the group. The unix exe is UNIX-only.
 
 set(_os_src "${CMAKE_CURRENT_SOURCE_DIR}/os")
-set(_os_build "${CMAKE_CURRENT_BINARY_DIR}/os_build")
 set(_unix_src "${CMAKE_CURRENT_SOURCE_DIR}/unix")
-set(_unix_build "${CMAKE_CURRENT_BINARY_DIR}/unix_build")
-file(MAKE_DIRECTORY "${_os_build}" "${_unix_build}")
 
 _bm_backend_cmake_create(
 	lf-os
 	"Harness LINKFLAGS OS library"
 	"${_os_src}"
-	"${_os_build}"
 	""
 	static
 	"lfos"
@@ -26,7 +22,6 @@ _bm_backend_cmake_create(
 	lf-unix
 	"Harness LINKFLAGS UNIX library"
 	"${_unix_src}"
-	"${_unix_build}"
 	""
 	static
 	"lfunix"

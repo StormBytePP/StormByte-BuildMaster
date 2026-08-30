@@ -1,11 +1,9 @@
 # Meson installs zs.* ; produced is z.* → post-install RENAME must fix it.
 
-_bm_path_builddir(RENAME_VARIANT_BUILD_DIR "rename-variant")
 _bm_backend_meson_create(
 	rename-variant
 	"Harness rename variant library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
-	"${RENAME_VARIANT_BUILD_DIR}"
 	""
 	static
 	"z"

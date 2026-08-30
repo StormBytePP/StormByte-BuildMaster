@@ -35,16 +35,17 @@ fragment to `include()`, no public dependant factories, no public
   registration so a sibling `ALIAS` / `target_link_libraries` before
   DEFER does not see a missing target.
 - **`buildmaster_component`.** Backend is inferred from `srcdir`
-  (`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
-  Same arity as the old `create_*` wrappers. Neutral `options` list:
-  `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
+  (`CMakeLists.txt` vs `meson.build`; both markers FATAL; neither +
+  `headers` → `none`). Arity is
+  `id title srcdir options mode produced [optstr]`. Neutral `options`
+  list: `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS`, `INCLUDES`,
   `DEFINITIONS` — private to the nested compile, appended to the parent
   job / toolchain. Other keys FATAL. optstr (`LINK=`, `PC=`, `GIT=`, …)
   unchanged.
-- **Optional build directory slot.** BuildMaster assigns
-  `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` when omitted.
-  `file(MAKE_DIRECTORY)` is idempotent. The caller is responsible if
-  that directory already has leftover files.
+- **Assigned build directory.** There is no public builddir argument.
+  `_bm_graph_create` uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
+  (`_bm_path_component_builddir`) and `file(MAKE_DIRECTORY)`. The path
+  is an internal property, not part of the DSL.
 - **`LINK=` / `LINK={…}`.** Raw system linker names on the component or
   meta INTERFACE. They propagate to whoever links that id. Not BM
   nodes. Revives 1.x `LINK_EXTRA` under a shorter name.
@@ -122,6 +123,12 @@ fragment to `include()`, no public dependant factories, no public
   - `ensure_build_dir`, `sanitize_for_filename`, import hints,
     toolchain profile/validate, archiver lookup, checksum and git
     marker are internal.
+- **Breaking — no public build directory.**
+  `buildmaster_component` / `_bm_backend_*_create` do not take a
+  builddir. The 2.0/2.1 arity heuristic is gone. Extra arguments are
+  FATAL. `_bm_path_builddir` is gone. Callers that still pass a path
+  get the arity FATAL (or CMake unknown-command if they called the
+  deleted helper).
 - **Breaking — no `buildmaster_repack`.** There is no public merge
   command, no `OUTPUT=` / `INPUTS=` parse arguments, no path tokens.
   Members of a `REPACK` meta *are* the inputs. The published stem is
@@ -178,6 +185,8 @@ fragment to `include()`, no public dependant factories, no public
 - File helpers only created a target; the `-P` script now also runs at
   the call so the artifact exists before `buildmaster_component`.
 - Initialization now uses logging.
+
+[Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/1.0.1...HEAD
 
 ## [1.0.1] - 2026-08-26
 

@@ -1,17 +1,16 @@
 # Raw names only. Do not invent a BM dest called "m".
 if(WIN32)
-    set(_RAW "LINK={kernel32}")
+	set(_RAW "LINK={kernel32}")
 else()
-    set(_RAW "LINK={m}")
+	set(_RAW "LINK={m}")
 endif()
 
 _bm_backend_cmake_create(
-    raw-lib
-    "Harness raw LINK"
-    "${CMAKE_CURRENT_SOURCE_DIR}/lib"
-    "${CMAKE_CURRENT_BINARY_DIR}/raw-lib"
-    ""
-    static
-    "rawlib"
-    "${_RAW}"
+	raw-lib
+	"Harness raw LINK"
+	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
+	""
+	static
+	"rawlib"
+	"${_RAW}"
 )

@@ -8,7 +8,6 @@ _bm_backend_cmake_create(
 	pc-clash
 	"Harness PC clobber"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
-	"${CMAKE_CURRENT_BINARY_DIR}/pc-clash"
 	""
 	static
 	"pcclashlib"

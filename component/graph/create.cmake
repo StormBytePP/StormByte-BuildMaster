@@ -6,7 +6,6 @@
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Component build directory (created here if missing).
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake`, `meson`, or `none`.
@@ -26,6 +25,8 @@
 ##            WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers).
+## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
+##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
 ##       `BUILDONLY` is set on a headers id. A non-BUILDONLY source may
 ##       wait on those dests (PRIVATE `-I` injection is not a prefix publish).
@@ -34,11 +35,6 @@
 ##       Deferred finalize only emits stages and the fragment: includes,
 ##       IMPORTED archives, WHOLE, LINK and LINKFLAGS. A second create_*
 ##       for the same id is FATAL in the registry.
-## @note `_builddir` is created with `file(MAKE_DIRECTORY)` (mkdir -p).
-##       If the directory already exists that is fine. If it already has
-##       contents, the caller owns mixed trees and the odd failures that
-##       follow. Public `create_*` wrappers may pass a legacy caller path
-##       or the canonical `_bm_comp_builddir` path.
 ## @note `LINK` items are external to BuildMaster (system / SDK libraries).
 ##       They are applied `INTERFACE` on `<id>` and propagate through CMake
 ##       `target_link_libraries` to the final artefact that consumes that id.
@@ -57,13 +53,11 @@
 ##       FATAL (no shared prefix). `none` + PC enabled is FATAL. An upstream
 ##       `.pc` already at the canonical path is FATAL at install time (do not
 ##       clobber). Meta + PC is FATAL in buildmaster_meta.
-## @note Does not return a fragment path and does not include() anything.
-##       Prefer create_cmake_* / create_meson_* wrappers.
 ## @note create_*_stages is internal; backends call it from materialize only.
-function(_bm_graph_create _component _component_title _srcdir _builddir
+function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_create")
-	if(ARGC GREATER 9)
+	if(ARGC GREATER 8)
 		_bm_log_message(COMPONENT FATAL
 			"_bm_graph_create: too many arguments (expected at most one options string).")
 	endif()
@@ -77,10 +71,8 @@ function(_bm_graph_create _component _component_title _srcdir _builddir
 	if("${_component}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL "_bm_graph_create: empty component id")
 	endif()
-	if("${_builddir}" STREQUAL "")
-		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create('${_component}'): empty build directory")
-	endif()
+
+	_bm_path_component_builddir(_builddir "${_component}")
 	file(MAKE_DIRECTORY "${_builddir}")
 
 	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
@@ -99,8 +91,8 @@ function(_bm_graph_create _component _component_title _srcdir _builddir
 	endif()
 
 	set(_options_string "")
-	if(ARGC GREATER 8)
-		set(_options_string "${ARGV8}")
+	if(ARGC GREATER 7)
+		set(_options_string "${ARGV7}")
 	endif()
 
 	_bm_opt_parse(

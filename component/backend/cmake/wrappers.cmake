@@ -1,5 +1,5 @@
 # =============================================================================
-# component/backend/cmake/wrappers.cmake — public CMake component factories
+# component/backend/cmake/wrappers.cmake — CMake component factories
 # =============================================================================
 
 ## @brief Whether `val` is a library mode token.
@@ -18,71 +18,27 @@ endfunction()
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Optional. Omit for 2.1-style:
-##            `id title srcdir options mode produced [optstr]`.
-##            With path: `id title srcdir builddir options mode produced [optstr]`.
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
 ##            See _bm_graph_create for supported keys.
-## @note Mode token (`static`/`shared`/`headers`) selects the arity:
-##       6/7 without a path in the builddir slot uses
-##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. 7/8 with a path before
-##       options uses that path. Ambiguous 7-arg where both slots look
-##       like mode is treated as the path form.
-## @note Delegates to _bm_graph_create. Stages and the fragment run at
-##       deferred finalize. No fragment path. No include() is required.
-function(_bm_backend_cmake_create _component _component_title _srcdir)
+## @note No build-directory argument. `_bm_graph_create` assigns
+##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`.
+function(_bm_backend_cmake_create _component _component_title _srcdir
+		_options _library_mode _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_cmake_create")
-
-	set(_builddir "")
-	set(_options "")
-	set(_library_mode "")
-	set(_produced "")
-	set(_options_string "")
-	set(_legacy FALSE)
-
-	if(ARGC LESS 6 OR ARGC GREATER 8)
+	if(ARGC LESS 6 OR ARGC GREATER 7)
 		_bm_log_message(COMPONENT FATAL
-			"_bm_backend_cmake_create: expected 6–8 arguments (2.1: id title srcdir options mode produced [optstr]; legacy: id title srcdir builddir options mode produced [optstr])")
+			"_bm_backend_cmake_create: expected id title srcdir options mode produced [optstr]")
 	endif()
-
-	if(ARGC EQUAL 6)
-		set(_options "${ARGV3}")
-		set(_library_mode "${ARGV4}")
-		set(_produced "${ARGV5}")
-	elseif(ARGC EQUAL 8)
-		set(_legacy TRUE)
-		set(_builddir "${ARGV3}")
-		set(_options "${ARGV4}")
-		set(_library_mode "${ARGV5}")
-		set(_produced "${ARGV6}")
-		set(_options_string "${ARGV7}")
-	else()
-		_bm_comp_is_library_mode("${ARGV4}" _m21)
-		_bm_comp_is_library_mode("${ARGV5}" _m20)
-		if(_m21 AND NOT _m20)
-			set(_options "${ARGV3}")
-			set(_library_mode "${ARGV4}")
-			set(_produced "${ARGV5}")
-			set(_options_string "${ARGV6}")
-		else()
-			set(_legacy TRUE)
-			set(_builddir "${ARGV3}")
-			set(_options "${ARGV4}")
-			set(_library_mode "${ARGV5}")
-			set(_produced "${ARGV6}")
-		endif()
+	set(_options_string "")
+	if(ARGC EQUAL 7)
+		set(_options_string "${ARGV6}")
 	endif()
-
-	if(NOT _legacy)
-		_bm_comp_builddir(_builddir "${_component}")
-	endif()
-
 	_bm_graph_create(
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "${_library_mode}" "cmake" "${_produced}"
 		"${_options_string}"
 	)
@@ -93,42 +49,21 @@ endfunction()
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
 ## @param[in] _srcdir Component source directory.
-## @param[in] _builddir Optional. 2.1-style: `id title srcdir options [optstr]`
-##            (4 or 5 args). With path: `id title srcdir builddir options [optstr]`
-##            (5 or 6 args).
-## @note 5 arguments are always the path form (existing callers).
-function(_bm_backend_cmake_create_headers _component _component_title _srcdir)
+## @param[in] _options Options forwarded to internal stage generators.
+## @param[in] options_string Optional trailing optstr.
+function(_bm_backend_cmake_create_headers _component _component_title _srcdir
+		_options)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_cmake_create_headers")
-
-	set(_builddir "")
-	set(_options "")
-	set(_options_string "")
-	set(_legacy FALSE)
-
-	if(ARGC LESS 4 OR ARGC GREATER 6)
+	if(ARGC LESS 4 OR ARGC GREATER 5)
 		_bm_log_message(COMPONENT FATAL
-			"_bm_backend_cmake_create_headers: expected 4–6 arguments (2.1: id title srcdir options [optstr]; legacy: id title srcdir builddir options [optstr])")
+			"_bm_backend_cmake_create_headers: expected id title srcdir options [optstr]")
 	endif()
-
-	if(ARGC EQUAL 4)
-		set(_options "${ARGV3}")
-	elseif(ARGC EQUAL 6)
-		set(_legacy TRUE)
-		set(_builddir "${ARGV3}")
-		set(_options "${ARGV4}")
-		set(_options_string "${ARGV5}")
-	else()
-		set(_legacy TRUE)
-		set(_builddir "${ARGV3}")
-		set(_options "${ARGV4}")
+	set(_options_string "")
+	if(ARGC EQUAL 5)
+		set(_options_string "${ARGV4}")
 	endif()
-
-	if(NOT _legacy)
-		_bm_comp_builddir(_builddir "${_component}")
-	endif()
-
 	_bm_graph_create(
-		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
+		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "headers" "cmake" ""
 		"${_options_string}"
 	)

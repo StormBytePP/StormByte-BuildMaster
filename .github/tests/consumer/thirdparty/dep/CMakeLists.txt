@@ -1,5 +1,3 @@
-_bm_path_builddir(CONSUMERDEP_BUILDDIR)
-
 set(CONSUMERDEP_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 set(CONSUMERDEP_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/0001-fix-typo.patch")
 
@@ -34,7 +32,6 @@ _bm_backend_cmake_create(
 	consumer-dep
 	"Consumer-style dependant library"
 	"${CONSUMERDEP_SRCDIR}"
-	"${CONSUMERDEP_BUILDDIR}"
 	""
 	"static"
 	"consumerdep"

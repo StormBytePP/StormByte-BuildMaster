@@ -1,23 +1,19 @@
 # Helper .pc for internal BM consumers (Requires follows buildmaster_link).
 
-_bm_path_builddir(PC_DEP_BUILD "pc-dep")
 _bm_backend_cmake_create(
 	pc-dep
 	"Harness PC dependency"
 	"${CMAKE_CURRENT_SOURCE_DIR}/dep"
-	"${PC_DEP_BUILD}"
 	""
 	static
 	"pcdeplib"
 	"PC={VERSION=1.0.0;NAME=pcdep}"
 )
 
-_bm_path_builddir(PC_LIB_BUILD "pc-lib")
 _bm_backend_cmake_create(
 	pc-lib
 	"Harness PC library"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
-	"${PC_LIB_BUILD}"
 	""
 	static
 	"pclib"

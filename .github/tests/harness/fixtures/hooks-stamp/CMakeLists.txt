@@ -26,7 +26,6 @@ _bm_backend_cmake_create(
 	hooks-stamp
 	"Harness hook stamp"
 	"${CMAKE_CURRENT_SOURCE_DIR}/upstream"
-	"${CMAKE_CURRENT_BINARY_DIR}/hooks-stamp"
 	"-DHOOK_STAMP_INCLUDE=${HOOK_STAMP_INCLUDE}"
 	static
 	"hooks-stamp"

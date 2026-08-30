@@ -19,24 +19,20 @@ add_subdirectory(
 )
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
-_bm_path_builddir(_mid_cmake_build "mid-cmake")
 _bm_backend_cmake_create(
 	mid-cmake
 	"Harness TOOLCHAIN mid-cmake"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-cmake"
-	"${_mid_cmake_build}"
 	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT};-DHARNESS_EXPECT_FAMILY=${HARNESS_EXPECT_FAMILY}"
 	static
 	"toolchain/tcmidcmake"
 	"TOOLCHAIN=${HARNESS_TOOLCHAIN}"
 )
 
-_bm_path_builddir(_mid_meson_build "mid-meson")
 _bm_backend_meson_create(
 	mid-meson
 	"Harness TOOLCHAIN mid-meson"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid-meson"
-	"${_mid_meson_build}"
 	"-Dexpect_family=${HARNESS_EXPECT_FAMILY}"
 	static
 	"toolchain/tcmidmeson;toolchain/tcleafmeson"

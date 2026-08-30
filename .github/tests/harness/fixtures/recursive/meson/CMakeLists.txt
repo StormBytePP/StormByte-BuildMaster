@@ -5,12 +5,10 @@ if(NOT BM_TEST_REPO_ROOT)
 	)
 endif()
 
-_bm_path_builddir(NEST_MESON_BUILD_DIR "nest-meson")
 _bm_backend_cmake_create(
 	nest-meson
 	"Recursive meson nest"
 	"${CMAKE_CURRENT_SOURCE_DIR}/nest"
-	"${NEST_MESON_BUILD_DIR}"
 	"-DBUILDMASTER_ROOT=${BM_TEST_REPO_ROOT}"
 	static
 	"recursive/meson/nestlib"

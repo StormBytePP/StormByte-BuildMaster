@@ -47,9 +47,6 @@ _bm_log_message(CORE STATUS
 
 set(_inh_src "${CMAKE_CURRENT_SOURCE_DIR}/inherit")
 set(_pin_src "${CMAKE_CURRENT_SOURCE_DIR}/pinned")
-set(_inh_build "${CMAKE_CURRENT_BINARY_DIR}/inherit_build")
-set(_pin_build "${CMAKE_CURRENT_BINARY_DIR}/pinned_build")
-file(MAKE_DIRECTORY "${_inh_build}" "${_pin_build}")
 
 buildmaster_meta_add(meta-tc mtc-inherit)
 buildmaster_meta_add(meta-tc mtc-pinned)
@@ -58,7 +55,6 @@ _bm_backend_cmake_create(
 	mtc-inherit
 	"Harness meta-toolchain inherit leaf"
 	"${_inh_src}"
-	"${_inh_build}"
 	"-DHARNESS_EXPECT_FAMILY=${_bm_tc_other}"
 	static
 	"meta-toolchain/mtcinherit"
@@ -68,7 +64,6 @@ _bm_backend_cmake_create(
 	mtc-pinned
 	"Harness meta-toolchain pinned leaf"
 	"${_pin_src}"
-	"${_pin_build}"
 	"-DHARNESS_EXPECT_FAMILY=${_bm_tc_host}"
 	static
 	"meta-toolchain/mtcpinned"

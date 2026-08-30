@@ -5,11 +5,7 @@
 
 set(_a_src "${CMAKE_CURRENT_SOURCE_DIR}/leaf_a")
 set(_b_src "${CMAKE_CURRENT_SOURCE_DIR}/leaf_b")
-set(_a_build "${CMAKE_CURRENT_BINARY_DIR}/leaf_a_build")
-set(_b_build "${CMAKE_CURRENT_BINARY_DIR}/leaf_b_build")
 set(_out_src "${CMAKE_CURRENT_SOURCE_DIR}/out")
-set(_out_build "${CMAKE_CURRENT_BINARY_DIR}/out_build")
-file(MAKE_DIRECTORY "${_a_build}" "${_b_build}" "${_out_build}")
 
 buildmaster_meta_add(meta-inner leaf-a)
 buildmaster_meta_add(meta-inner leaf-b)
@@ -19,7 +15,6 @@ _bm_backend_cmake_create(
 	leaf-a
 	"Harness meta leaf A"
 	"${_a_src}"
-	"${_a_build}"
 	""
 	static
 	"metaleafa"
@@ -29,7 +24,6 @@ _bm_backend_cmake_create(
 	leaf-b
 	"Harness meta leaf B"
 	"${_b_src}"
-	"${_b_build}"
 	""
 	static
 	"metaleafb"
@@ -39,7 +33,6 @@ _bm_backend_cmake_create(
 	meta-out
 	"Harness meta outside library"
 	"${_out_src}"
-	"${_out_build}"
 	""
 	static
 	"metaout"

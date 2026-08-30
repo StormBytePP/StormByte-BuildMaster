@@ -4,17 +4,12 @@
 # Host links BM INTERFACE targets only.
 
 set(_w_src "${CMAKE_CURRENT_SOURCE_DIR}/lib")
-set(_w_build "${CMAKE_CURRENT_BINARY_DIR}/lib_build")
-set(_p_build "${CMAKE_CURRENT_BINARY_DIR}/plain_build")
 set(_o_src "${CMAKE_CURRENT_SOURCE_DIR}/out")
-set(_o_build "${CMAKE_CURRENT_BINARY_DIR}/out_build")
-file(MAKE_DIRECTORY "${_w_build}" "${_p_build}" "${_o_build}")
 
 _bm_backend_cmake_create(
 	whole-lib
 	"Harness WHOLE static library"
 	"${_w_src}"
-	"${_w_build}"
 	"-DHARNESS_WLIB_OUTPUT_NAME=wlib"
 	static
 	"wlib"
@@ -25,7 +20,6 @@ _bm_backend_cmake_create(
 	plain-lib
 	"Harness plain static library (no WHOLE)"
 	"${_w_src}"
-	"${_p_build}"
 	"-DHARNESS_WLIB_OUTPUT_NAME=wlibplain"
 	static
 	"wlibplain"
@@ -35,13 +29,11 @@ _bm_backend_cmake_create(
 	out-lib
 	"Harness WHOLE outside library"
 	"${_o_src}"
-	"${_o_build}"
 	""
 	static
 	"outlib"
 )
 
-# Positive: WHOLE wlib + normal outlib
 add_executable(whole_link_test whole_link_test.c)
 target_include_directories(whole_link_test PRIVATE
 	"${BUILDMASTER_INSTALL_INCLUDEDIR}"
@@ -55,7 +47,6 @@ add_custom_target(whole_link_test_run
 	COMMENT "Run whole_link_test (WHOLE + outlib; expect exit 0)"
 )
 
-# Negative: BM plain-lib (no WHOLE) + BM out-lib
 add_executable(whole_link_test_nowhole whole_link_test.c)
 target_include_directories(whole_link_test_nowhole PRIVATE
 	"${BUILDMASTER_INSTALL_INCLUDEDIR}"

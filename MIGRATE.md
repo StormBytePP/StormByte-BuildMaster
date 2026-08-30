@@ -49,7 +49,9 @@ Fully declarative graph. Declaration order no longer matters.
 Generated fragments are no longer part of the public API.
 The caller does **not** choose CMake vs Meson:
 `buildmaster_component` infers the backend from `srcdir`
-(`CMakeLists.txt` vs `meson.build`; both or neither is FATAL).
+(`CMakeLists.txt` vs `meson.build`; both markers FATAL; neither +
+`headers` → `none`).
+The caller does **not** pass a build directory.
 
 A 1.x `CMakeLists.txt` will not configure. That is the point.
 
@@ -70,7 +72,7 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 | Positional `[indent_level] [toolchain]` | Trailing options string `INDENT=…;TOOLCHAIN=…` |
 | Options key `LINK_EXTRA` | `buildmaster_link` (graph node) or `LINK=` (raw system lib) |
 | Cache/env `BUILDMASTER_DEBUG` | Ignored. Use `BUILDMASTER_LOGLEVEL` |
-| `ensure_build_dir` | Internal. Omit the builddir slot |
+| `ensure_build_dir` / `_bm_path_builddir` | Gone. No builddir argument |
 | `library_import_hint` / `library_import_static_hint` | Internal |
 | `file_checksum_correct` | Internal |
 | `file_download` / `file_download_cached` / `file_decompress` | `buildmaster_download{,_cached}` / `buildmaster_decompress` |
@@ -81,7 +83,7 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 
 | Command | Role |
 |---------|------|
-| `buildmaster_component(id title srcdir …)` | Factory. Backend from `srcdir` |
+| `buildmaster_component(id title srcdir options mode produced [optstr])` | Factory. Backend from `srcdir`. No builddir |
 | `buildmaster_depend(source dest)` | Order-only edge |
 | `buildmaster_link(source dest)` | Link on the component `INTERFACE` + wait if `dest` is a graph node |
 | `buildmaster_prerequisite(id target)` | Wait on a host / download / custom target before `<id>_configure` |
@@ -137,11 +139,10 @@ buildmaster_depend(foo bar)   # bar may be declared later
 buildmaster_link(foo bar)     # if foo must actually link bar
 ```
 
-Build directory is optional. If omitted, BuildMaster assigns
-`${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it
-(`file(MAKE_DIRECTORY)`, idempotent). Passing an explicit path is
-still accepted; leftover files in that directory are the caller's
-problem.
+There is **no** build-directory argument. BuildMaster assigns
+`${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it. Passing a path
+in that slot is FATAL (wrong arity / wrong mode).
+`ensure_build_dir` and `_bm_path_builddir` do not exist.
 
 Headers: same factory, mode `headers`. Drop `<produced>` the same way
 the old headers wrappers did.
@@ -212,6 +213,7 @@ INTERFACE (WARNING: they are not folded into the pack).
 | `file(WRITE) …pc` + copy into `libdir/pkgconfig` | `PC={VERSION=…;NAME=…}` on the **leaf** that owns the archive |
 | `LINK_EXTRA=shlwapi` | `LINK=shlwapi` or `LINK={shlwapi;ws2_32}` |
 | Hand-written `target_link_options` for `/FORCE:MULTIPLE` | `LINKFLAGS=/FORCE:MULTIPLE` or `LINKFLAGS={WINDOWS={/FORCE:MULTIPLE};UNIX={-Wl,-Bsymbolic}}` |
+| `ensure_build_dir(FOO_BUILD)` + 4th create argument | Delete both. BM assigns `bm/<id>` |
 
 **1.0.1 / early 2.x draft**
 
@@ -224,8 +226,8 @@ buildmaster_repack(merged OUTPUT mergedlib INPUTS enc-8;enc-10)
 **master**
 
 ```cmake
-buildmaster_component(enc-8  "enc 8"  "${ENC_SRC}" "${ENC8}"  static enc "BUILDONLY")
-buildmaster_component(enc-10 "enc 10" "${ENC_SRC}" "${ENC10}" static enc "BUILDONLY")
+buildmaster_component(enc-8  "enc 8"  "${ENC8_SRC}"  "" static enc "BUILDONLY")
+buildmaster_component(enc-10 "enc 10" "${ENC10_SRC}" "" static enc "BUILDONLY")
 buildmaster_meta(enc "encoder" "REPACK")
 buildmaster_meta_add(enc enc-8 enc-10)
 buildmaster_link(engine enc)
@@ -281,6 +283,8 @@ adds it) is enough. Do not `include(…/helpers.cmake)` after that.
       argument on `create_*` / `file_*` / `create_git_*`.
 - [ ] Replace `create_cmake_component` / `create_meson_component` /
       headers wrappers with one `buildmaster_component`.
+- [ ] Delete the builddir argument and every `ensure_build_dir` /
+      `_bm_path_builddir` call.
 - [ ] Replace `create_*_dependant_*` with `buildmaster_depend` or
       `buildmaster_link`.
 - [ ] Replace `LINK_EXTRA` with `buildmaster_link` or `LINK=`.
@@ -289,8 +293,6 @@ adds it) is enough. Do not `include(…/helpers.cmake)` after that.
       `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
 - [ ] Replace `create_git_*` / `file_*` with `GIT={…}` /
       `buildmaster_download*` / `buildmaster_decompress`.
-- [ ] Drop `ensure_build_dir` unless you still need the path variable
-      for something advanced; the factory creates the directory.
 - [ ] Replace `message(STATUS …)` in the consumer with
       `buildmaster_message(STATUS …)` (no module argument).
 - [ ] Replace `-DBUILDMASTER_DEBUG=1` with

@@ -207,10 +207,6 @@ endfunction()
 ##            of `CMakeLists.txt` or `meson.build`. For `headers`: those
 ##            markers select cmake/meson; neither marker selects `none`
 ##            (private include tree, no nested generate).
-## @param[in] … Same remaining arity as `_bm_backend_cmake_create` /
-##            `_bm_backend_meson_create`:
-##            2.1: `options mode produced [optstr]`
-##            with path: `builddir options mode produced [optstr]`.
 ## @param[in] options CMake list of `KEY=value`. Allowed keys (all
 ##            private to the nested compile, never INTERFACE on `<id>`):
 ##            `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`, `LDFLAGS` (append to the
@@ -219,56 +215,32 @@ endfunction()
 ##            `DEFINITIONS` (`FOO` or `FOO=1` → `-D`).
 ##            Any other key is FATAL. Not shell `ENV{CFLAGS}`. Not raw
 ##            CMake `-D` / Meson `-D`. Ignored when the backend is `none`.
+## @param[in] mode `static`, `shared`, or `headers`.
+## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
+##            for headers.
+## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
+##            `WHOLE`, `GIT={…}`, …). GIT is applied inside
+##            `_bm_graph_create` after the INTERFACE exists.
+## @note No build-directory argument. BuildMaster assigns
+##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
 ## @note Both marker files: FATAL. Then use the backend create directly.
-## @note `mode` is still the caller’s (`static` / `shared` / `headers`).
-## @note optstr (`LINK=`, `PC=`, `WHOLE`, `GIT={…}`, …) is last. GIT is
-##       applied inside `_bm_graph_create` after the INTERFACE exists.
-## @note INTERFACE `<id>` exists on return (delegates to create_* / `_bm_graph_create`).
-function(buildmaster_component _component _component_title _srcdir)
+## @note INTERFACE `<id>` exists on return.
+function(buildmaster_component _component _component_title _srcdir
+		_options _library_mode _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
 
-	if(ARGC LESS 6 OR ARGC GREATER 8)
+	if(ARGC LESS 6 OR ARGC GREATER 7)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: expected 6–8 arguments (same arity as _bm_backend_cmake_create)")
+			"buildmaster_component: expected id title srcdir options mode produced [optstr]")
 	endif()
 	if("${_srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component('${_component}'): empty source directory")
 	endif()
 
-	set(_builddir "")
-	set(_options "")
-	set(_library_mode "")
-	set(_produced "")
 	set(_options_string "")
-	set(_legacy FALSE)
-
-	if(ARGC EQUAL 6)
-		set(_options "${ARGV3}")
-		set(_library_mode "${ARGV4}")
-		set(_produced "${ARGV5}")
-	elseif(ARGC EQUAL 8)
-		set(_legacy TRUE)
-		set(_builddir "${ARGV3}")
-		set(_options "${ARGV4}")
-		set(_library_mode "${ARGV5}")
-		set(_produced "${ARGV6}")
-		set(_options_string "${ARGV7}")
-	else()
-		_bm_comp_is_library_mode("${ARGV4}" _m21)
-		_bm_comp_is_library_mode("${ARGV5}" _m20)
-		if(_m21 AND NOT _m20)
-			set(_options "${ARGV3}")
-			set(_library_mode "${ARGV4}")
-			set(_produced "${ARGV5}")
-			set(_options_string "${ARGV6}")
-		else()
-			set(_legacy TRUE)
-			set(_builddir "${ARGV3}")
-			set(_options "${ARGV4}")
-			set(_library_mode "${ARGV5}")
-			set(_produced "${ARGV6}")
-		endif()
+	if(ARGC EQUAL 7)
+		set(_options_string "${ARGV6}")
 	endif()
 
 	_bm_factory_detect("${_srcdir}" "${_library_mode}" _sys)
@@ -277,46 +249,24 @@ function(buildmaster_component _component _component_title _srcdir)
 		"buildmaster_component('${_component}'): ${_sys}")
 
 	if(_sys STREQUAL "none")
-		if(_legacy)
-			_bm_graph_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_builddir}" "${_xopts}" "${_library_mode}"
-				"none" "${_produced}" "${_options_string}")
-		else()
-			_bm_comp_builddir(_auto "${_component}")
-			_bm_graph_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_auto}" "${_xopts}" "${_library_mode}"
-				"none" "${_produced}" "${_options_string}")
-		endif()
+		_bm_graph_create(
+			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_xopts}" "${_library_mode}"
+			"none" "${_produced}" "${_options_string}")
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
 		return()
 	endif()
 
-	if(_legacy)
-		if(_sys STREQUAL "cmake")
-			_bm_backend_cmake_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_builddir}" "${_xopts}" "${_library_mode}"
-				"${_produced}" "${_options_string}")
-		else()
-			_bm_backend_meson_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_builddir}" "${_xopts}" "${_library_mode}"
-				"${_produced}" "${_options_string}")
-		endif()
+	if(_sys STREQUAL "cmake")
+		_bm_backend_cmake_create(
+			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_xopts}" "${_library_mode}"
+			"${_produced}" "${_options_string}")
 	else()
-		if(_sys STREQUAL "cmake")
-			_bm_backend_cmake_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_xopts}" "${_library_mode}"
-				"${_produced}" "${_options_string}")
-		else()
-			_bm_backend_meson_create(
-				"${_component}" "${_component_title}" "${_srcdir}"
-				"${_xopts}" "${_library_mode}"
-				"${_produced}" "${_options_string}")
-		endif()
+		_bm_backend_meson_create(
+			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_xopts}" "${_library_mode}"
+			"${_produced}" "${_options_string}")
 	endif()
 
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")

@@ -13,12 +13,10 @@ add_subdirectory(
 )
 include("${BUILDMASTER_ROOT}/helpers.cmake")
 
-_bm_path_builddir(_mid_build "mid")
 _bm_backend_cmake_create(
 	mid
 	"Recursive cmake mid"
 	"${CMAKE_CURRENT_SOURCE_DIR}/../mid"
-	"${_mid_build}"
 	"-DBUILDMASTER_ROOT=${BUILDMASTER_ROOT}"
 	static
 	"recursive/cmake/midlib"

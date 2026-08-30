@@ -93,58 +93,23 @@ function(_bm_path_sanitize _out _input)
 	_bm_log_message(CORE LOWLEVEL "Exiting _bm_path_sanitize")
 endfunction()
 
-## @brief Canonical per-component build directory (2.1.x layout).
+## @brief Canonical per-component build directory.
 ## @param[out] _out Parent-scope path:
 ##            `${CMAKE_CURRENT_BINARY_DIR}/bm/<sanitized-id>`.
 ## @param[in]  _component Component id.
 ## @note Does not create the directory. `_bm_graph_create` runs
-##       `file(MAKE_DIRECTORY)` on the path it receives.
-function(_bm_comp_builddir _out _component)
-	_bm_log_message(CORE LOWLEVEL "Entering _bm_comp_builddir")
+##       `file(MAKE_DIRECTORY)` on this path.
+function(_bm_path_component_builddir _out _component)
+	_bm_log_message(CORE LOWLEVEL "Entering _bm_path_component_builddir")
 	if(NOT ARGC EQUAL 2)
 		_bm_log_message(CORE FATAL
-			"_bm_comp_builddir requires output variable and component id")
+			"_bm_path_component_builddir requires output variable and component id")
 	endif()
 	if("${_component}" STREQUAL "")
 		_bm_log_message(CORE FATAL
-			"_bm_comp_builddir: empty component id")
+			"_bm_path_component_builddir: empty component id")
 	endif()
 	_bm_path_sanitize(_safe "${_component}")
 	set(${_out} "${CMAKE_CURRENT_BINARY_DIR}/bm/${_safe}" PARENT_SCOPE)
-	_bm_log_message(CORE LOWLEVEL "Exiting _bm_comp_builddir")
-endfunction()
-
-## @brief Fill a caller variable with a conventional build path.
-## @param[out] _out Parent-scope variable name.
-## @param[in] _component Optional id. With it:
-##            `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`.
-##            Without it: `${CMAKE_CURRENT_BINARY_DIR}/build`.
-## @note Does not create the directory. `_bm_graph_create` does
-##       `file(MAKE_DIRECTORY)` on the path it actually uses.
-##       Callers that omit the builddir slot get
-##       `_bm_comp_builddir` instead (`…/bm/<id>`).
-function(_bm_path_builddir _out)
-	_bm_log_message(CORE LOWLEVEL "Entering _bm_path_builddir")
-	if(ARGC LESS 1)
-		_bm_log_message(CORE FATAL "_bm_path_builddir requires an output variable name and optional component name")
-	endif()
-
-	set(_out_var "${_out}")
-
-	if(ARGC EQUAL 2)
-		set(_component "${ARGV1}")
-	else()
-		set(_component "")
-	endif()
-
-	if("${_component}" STREQUAL "")
-		set(_sanitized "build")
-	else()
-		_bm_path_sanitize(_sanitized "${_component}")
-		set(_sanitized "build/${_sanitized}")
-	endif()
-
-	set(_builddir "${CMAKE_CURRENT_BINARY_DIR}/${_sanitized}")
-	set(${_out_var} "${_builddir}" PARENT_SCOPE)
-	_bm_log_message(CORE LOWLEVEL "Exiting _bm_path_builddir")
+	_bm_log_message(CORE LOWLEVEL "Exiting _bm_path_component_builddir")
 endfunction()

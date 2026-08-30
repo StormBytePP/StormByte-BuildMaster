@@ -6,12 +6,10 @@ buildmaster_prerequisite(prereq_touch
 	COMMENT "Harness prerequisite touch"
 )
 
-_bm_path_builddir(PREREQ_LIB_BUILD_DIR "prereq-lib")
 _bm_backend_cmake_create(
 	prereq-lib
 	"Harness prerequisite consumer"
 	"${CMAKE_CURRENT_SOURCE_DIR}/lib"
-	"${PREREQ_LIB_BUILD_DIR}"
 	""
 	static
 	"prereqlib"
