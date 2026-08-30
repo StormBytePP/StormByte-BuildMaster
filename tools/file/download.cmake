@@ -1,9 +1,16 @@
+# =============================================================================
 # tools/file/download.cmake — _bm_file_download / _bm_file_download_cached
 # =============================================================================
 # Internal. Public surface is FILES={…} on buildmaster_component.
 # Each helper creates a CMake custom target of the same name. The generated
 # -P script also runs during the caller's configure so the file is on disk
 # before nested configure.
+#
+# User-visible progress in the generated -P scripts goes through
+# `_bm_log_message(FILE STATUS …)` (module File). There is no raw
+# `cmake -E echo` / `echo_append` for those lines: `-P` already includes
+# log.cmake. Indent is a tab *count* (`_FILE_INDENT_LEVEL`) passed as
+# `_bm_log_message` ARGV3.
 
 ## @brief Generate the force-download script and return its path (internal).
 ## @param[out] out_script Parent-scope path of the generated -P script.
@@ -46,6 +53,7 @@ function(_bm_file_generate_download_script out_script url title expected_hash
 	set(_FILE_MAX_RETRIES   "${max_retries}")
 	set(_FILE_CURRENT_TRY   "${current_try}")
 	set(_FILE_INDENT        "${_FILE_INDENT}")
+	set(_FILE_INDENT_LEVEL  "${indent_level}")
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/templates/file_download.cmake.in"
@@ -98,7 +106,7 @@ function(_bm_file_add_target name script comment)
 	)
 	if(NOT _file_rc EQUAL 0)
 		_bm_log_message(FILE FATAL
-			"FILES helper '${name}' stopped (exit ${_file_rc}). Read the [BuildMaster/File] FATAL above (hash mismatch, corrupt payload, or network). This line only names the helper that ran at configure.")
+			"file helper '${name}' failed at configure (exit ${_file_rc})")
 	endif()
 
 	_bm_log_message(FILE LOWLEVEL "Exiting _bm_file_add_target")
@@ -213,6 +221,7 @@ function(_bm_file_download_cached name url)
 	set(_FILE_MAX_RETRIES   "${ARG_MAX_RETRIES}")
 	set(_FILE_FORCE_SCRIPT  "${_force_script}")
 	set(_FILE_INDENT        "${_FILE_INDENT}")
+	set(_FILE_INDENT_LEVEL  "${ARG_INDENT}")
 
 	configure_file(
 		"${BUILDMASTER_TOOLS_FILE_SRCDIR}/templates/file_download_cached.cmake.in"
