@@ -33,7 +33,7 @@ Logging is `buildmaster_message(<MODULE> <LEVEL> …)`. Configure
 Declarative component API (order of declaration does not matter; materialize
 is deferred to the end of `CMAKE_SOURCE_DIR`):
 
-- `_bm_comp_create()` — core factory
+- `_bm_graph_create()` — core factory
 - `create_cmake_component()` / `create_meson_component()`
 - `create_cmake_headers_component()` / `create_meson_headers_component()`
 - `component_dependency()`, `component_link()`, `component_prerequisite()`
@@ -84,7 +84,7 @@ to a git root.
 @subsection uf_env env/
 
 - `_bm_env_update_runner()` — regenerate the parent platform runner
-- `_bm_env__bm_comp_create_runners()` — per-component runners
+- `_bm_env_create_runners()` — per-component runners
   after a toolchain profile load
 - `_bm_env_prepare_command()` — tokenize for `execute_process(COMMAND …)`
 - `_bm_env_quote_cmd_list()` — quote tokens for generated `-P` scripts

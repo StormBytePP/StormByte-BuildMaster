@@ -97,7 +97,7 @@ endfunction()
 ## @param[out] _out Parent-scope path:
 ##            `${CMAKE_CURRENT_BINARY_DIR}/bm/<sanitized-id>`.
 ## @param[in]  _component Component id.
-## @note Does not create the directory. `_bm_comp_create` runs
+## @note Does not create the directory. `_bm_graph_create` runs
 ##       `file(MAKE_DIRECTORY)` on the path it receives.
 function(_bm_comp_builddir _out _component)
 	_bm_log_message(CORE LOWLEVEL "Entering _bm_comp_builddir")
@@ -119,7 +119,7 @@ endfunction()
 ## @param[in] _component Optional id. With it:
 ##            `${CMAKE_CURRENT_BINARY_DIR}/build/<sanitized>/`.
 ##            Without it: `${CMAKE_CURRENT_BINARY_DIR}/build`.
-## @note Does not create the directory. `_bm_comp_create` does
+## @note Does not create the directory. `_bm_graph_create` does
 ##       `file(MAKE_DIRECTORY)` on the path it actually uses.
 ##       Callers that omit the builddir slot get
 ##       `_bm_comp_builddir` instead (`…/bm/<id>`).

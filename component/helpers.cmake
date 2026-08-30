@@ -9,7 +9,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 # Parse KEY=value options, library specs, whole-archive item lists.
 include("${CMAKE_CURRENT_LIST_DIR}/options.cmake")
 
-# Registry, _bm_comp_create, buildmaster_depend / link / prerequisite.
+# Registry, _bm_graph_create, buildmaster_depend / link / prerequisite.
 include("${CMAKE_CURRENT_LIST_DIR}/graph.cmake")
 
 # Inspectable hooks (on_component_materialize / on_graph_finalized).

@@ -4,7 +4,7 @@
 
 ## @brief Emit Meson stages and include the component fragment (internal).
 ## @param[in] _component Registered component identifier.
-## @note Called only from `_bm_graph_finalize`. Uses
+## @note Called only from `_bm_materialize_finalize`. Uses
 ##       `_bm_tools_meson_stages` (not part of the public API) and shared
 ##       collect/write helpers from `component/materialize.cmake`.
 ## @note Eager components print `Configuring …` from the generated
@@ -27,8 +27,8 @@ function(_bm_backend_meson_materialize _component)
 	get_property(_library_mode GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${_component}_MODE)
 
-	_bm_comp_collect_outputs("${_component}")
-	_bm_comp_has_deferred_configure("${_component}" _deferred)
+	_bm_materialize_collect_outputs("${_component}")
+	_bm_graph_has_deferred_configure("${_component}" _deferred)
 	if(_deferred)
 		set(_via_target "1")
 		set(_tc_suffix "")
@@ -58,7 +58,7 @@ function(_bm_backend_meson_materialize _component)
 		"${_via_target}"
 	)
 
-	_bm_comp_write_fragment("${_component}" "${_deferred}")
+	_bm_materialize_write_fragment("${_component}" "${_deferred}")
 	_bm_hook_run_component("${_component}")
 	_bm_log_message(COMPONENT DEBUG "Materialized meson component ${_component} deferred=${_deferred}")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_backend_meson_materialize")

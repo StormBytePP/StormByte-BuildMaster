@@ -66,7 +66,7 @@ endfunction()
 ## @param[in] comment Progress COMMENT (wrapped with the File log header).
 ## @param[in] depends Optional list of target dependencies (build-graph only).
 ## @note `execute_process(-P script)` runs at configure so callers can
-##       _bm_comp_create against the artifact in the same directory.
+##       _bm_graph_create against the artifact in the same directory.
 ##       The custom target remains for incremental rebuilds / graph edges.
 ##       The script must be idempotent (cached download, extract-if-missing).
 function(_bm_file_add_prerequisite_target name script comment depends)

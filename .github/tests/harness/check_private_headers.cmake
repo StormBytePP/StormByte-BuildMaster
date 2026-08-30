@@ -1,4 +1,4 @@
-# After _bm_graph_finalize. Contract:
+# After _bm_materialize_finalize. Contract:
 #   - priv-h is PRIVATE: no INTERFACE includes, srcdir not in parent flags
 #   - priv-consumer OPTIONS contain -I<priv-h srcdir>
 #   - a registered sibling without that link must not have that -I

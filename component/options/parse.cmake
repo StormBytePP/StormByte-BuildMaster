@@ -35,7 +35,7 @@
 ##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
 ##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
 ##       meta at materialize.
-##       `REPACK` on a component is FATAL in `_bm_comp_create`.
+##       `REPACK` on a component is FATAL in `_bm_graph_create`.
 ##       `REPACK` on a meta merges member archives (see `buildmaster_meta`).
 function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_buildonly out_whole out_stripres

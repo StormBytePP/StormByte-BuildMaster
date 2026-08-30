@@ -26,13 +26,13 @@ endfunction()
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See _bm_comp_create for supported keys.
+##            See _bm_graph_create for supported keys.
 ## @note Mode token (`static`/`shared`/`headers`) selects the arity:
 ##       6/7 without a path in the builddir slot uses
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`. 7/8 with a path before
 ##       options uses that path. Ambiguous 7-arg where both slots look
 ##       like mode is treated as the path form.
-## @note Delegates to _bm_comp_create. Stages and the fragment run at
+## @note Delegates to _bm_graph_create. Stages and the fragment run at
 ##       deferred finalize. No fragment path. No include() is required.
 function(_bm_backend_cmake_create _component _component_title _srcdir)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_cmake_create")
@@ -81,7 +81,7 @@ function(_bm_backend_cmake_create _component _component_title _srcdir)
 		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	_bm_comp_create(
+	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "${_library_mode}" "cmake" "${_produced}"
 		"${_options_string}"
@@ -127,7 +127,7 @@ function(_bm_backend_cmake_create_headers _component _component_title _srcdir)
 		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	_bm_comp_create(
+	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "headers" "cmake" ""
 		"${_options_string}"

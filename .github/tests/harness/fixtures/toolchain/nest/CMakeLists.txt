@@ -42,7 +42,7 @@ _bm_backend_meson_create(
 	"toolchain/tcmidmeson;toolchain/tcleafmeson"
 	"TOOLCHAIN=${HARNESS_TOOLCHAIN}"
 )
-_bm_graph_finalize()
+_bm_materialize_finalize()
 
 add_library(tclib STATIC tc_nest.c)
 target_include_directories(tclib PUBLIC

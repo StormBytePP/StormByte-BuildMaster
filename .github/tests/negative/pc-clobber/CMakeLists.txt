@@ -15,4 +15,4 @@ _bm_backend_cmake_create(
 	"PC={VERSION=1.0.0;NAME=pcclash}"
 )
 
-_bm_graph_finalize()
+_bm_materialize_finalize()

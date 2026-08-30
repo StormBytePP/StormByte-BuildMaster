@@ -23,7 +23,7 @@ _bm_backend_meson_create(
 	static
 	"recursive/meson/leaflib"
 )
-_bm_graph_finalize()
+_bm_materialize_finalize()
 
 add_library(midlib STATIC mid.c)
 target_include_directories(midlib PUBLIC

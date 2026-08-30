@@ -28,7 +28,7 @@ function(_bm_git_flush_repo _git_repo_dir)
 endfunction()
 
 ## @brief Flush every git root that queued a reset or patch.
-## @note Called from `_bm_graph_finalize` *before* nested
+## @note Called from `_bm_materialize_finalize` *before* nested
 ##       cmake/meson so eager configure sees the patched tree.
 function(_bm_git_flush_all)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_flush_all")

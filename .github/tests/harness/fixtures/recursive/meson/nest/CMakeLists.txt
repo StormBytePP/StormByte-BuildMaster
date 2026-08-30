@@ -23,7 +23,7 @@ _bm_backend_cmake_create(
 	static
 	"recursive/meson/midlib"
 )
-_bm_graph_finalize()
+_bm_materialize_finalize()
 
 add_library(nestlib STATIC nest.c)
 target_include_directories(nestlib PUBLIC

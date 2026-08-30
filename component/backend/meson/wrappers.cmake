@@ -14,7 +14,7 @@
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Ignored for headers mode.
 ## @param[in] options_string Optional (last argument) "KEY=value;…" string.
-##            See _bm_comp_create for supported keys.
+##            See _bm_graph_create for supported keys.
 ## @note Same arity rules as _bm_backend_cmake_create.
 function(_bm_backend_meson_create _component _component_title _srcdir)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_meson_create")
@@ -63,7 +63,7 @@ function(_bm_backend_meson_create _component _component_title _srcdir)
 		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	_bm_comp_create(
+	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "${_library_mode}" "meson" "${_produced}"
 		"${_options_string}"
@@ -108,7 +108,7 @@ function(_bm_backend_meson_create_headers _component _component_title _srcdir)
 		_bm_comp_builddir(_builddir "${_component}")
 	endif()
 
-	_bm_comp_create(
+	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}" "${_builddir}"
 		"${_options}" "headers" "meson" ""
 		"${_options_string}"

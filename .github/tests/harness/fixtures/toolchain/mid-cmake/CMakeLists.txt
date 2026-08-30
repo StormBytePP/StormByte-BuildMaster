@@ -27,7 +27,7 @@ _bm_backend_cmake_create(
 	static
 	"toolchain/tcleafcmake"
 )
-_bm_graph_finalize()
+_bm_materialize_finalize()
 
 add_library(tcmidcmake STATIC tc_mid_cmake.c)
 target_include_directories(tcmidcmake PUBLIC

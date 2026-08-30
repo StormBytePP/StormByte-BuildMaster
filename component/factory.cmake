@@ -222,8 +222,8 @@ endfunction()
 ## @note Both marker files: FATAL. Then use the backend create directly.
 ## @note `mode` is still the caller’s (`static` / `shared` / `headers`).
 ## @note optstr (`LINK=`, `PC=`, `WHOLE`, `GIT={…}`, …) is last. GIT is
-##       applied inside `_bm_comp_create` after the INTERFACE exists.
-## @note INTERFACE `<id>` exists on return (delegates to create_* / `_bm_comp_create`).
+##       applied inside `_bm_graph_create` after the INTERFACE exists.
+## @note INTERFACE `<id>` exists on return (delegates to create_* / `_bm_graph_create`).
 function(buildmaster_component _component _component_title _srcdir)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
 
@@ -278,13 +278,13 @@ function(buildmaster_component _component _component_title _srcdir)
 
 	if(_sys STREQUAL "none")
 		if(_legacy)
-			_bm_comp_create(
+			_bm_graph_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_builddir}" "${_xopts}" "${_library_mode}"
 				"none" "${_produced}" "${_options_string}")
 		else()
 			_bm_comp_builddir(_auto "${_component}")
-			_bm_comp_create(
+			_bm_graph_create(
 				"${_component}" "${_component_title}" "${_srcdir}"
 				"${_auto}" "${_xopts}" "${_library_mode}"
 				"none" "${_produced}" "${_options_string}")

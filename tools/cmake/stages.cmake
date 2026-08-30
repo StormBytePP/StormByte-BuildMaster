@@ -76,7 +76,7 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# _bm_comp_create / collect_outputs set these; raw callers get defaults
+	# _bm_graph_create / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
 	endif()
@@ -269,7 +269,7 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 			_bm_env_apply_install_search_paths()
 		endif()
 
-		_bm_env__bm_comp_create_runners(
+		_bm_env_create_runners(
 			_bm_tc_runner
 			_bm_tc_runner_silent
 			"${_component}"

@@ -1,4 +1,4 @@
-# Hooks fire during harness finalize (explicit _bm_graph_finalize).
+# Hooks fire during harness finalize (explicit _bm_materialize_finalize).
 # Alias order is the only contract: aa-* before zz-*.
 
 set(HOOK_STAMP "${CMAKE_BINARY_DIR}/harness_hooks.stamp")

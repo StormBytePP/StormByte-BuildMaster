@@ -24,7 +24,7 @@ _bm_backend_cmake_create(
 	"recursive/cmake/leaflib"
 )
 # Nested project needs targets before target_link_libraries below.
-_bm_graph_finalize()
+_bm_materialize_finalize()
 
 add_library(midlib STATIC mid.c)
 target_include_directories(midlib PUBLIC

@@ -15,7 +15,7 @@
 ##       normalizes them with `_bm_path_normalize` so Windows paths are safe
 ##       inside the generated runner and toolchain dump.
 ## @note Does not rewrite per-component runners; those are produced by
-##       `_bm_env__bm_comp_create_runners` after a profile load.
+##       `_bm_env_create_runners` after a profile load.
 function(_bm_env_update_runner)
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
 		set(CMAKE_C_COMPILER_LAUNCHER "")
@@ -112,10 +112,10 @@ endfunction()
 ##       `powershell -ExecutionPolicy Bypass -File` (process-local).
 ## @note On Unix the silent script is bash (`PIPESTATUS` + live BM replay).
 ## @note Empty `component` or `toolchain_name` is fatal.
-macro(_bm_env__bm_comp_create_runners out_runner out_runner_silent component toolchain_name)
+macro(_bm_env_create_runners out_runner out_runner_silent component toolchain_name)
 	if("${component}" STREQUAL "" OR "${toolchain_name}" STREQUAL "")
 		_bm_log_message(TOOLCHAIN FATAL
-			"_bm_env__bm_comp_create_runners: component and toolchain_name must be non-empty"
+			"_bm_env_create_runners: component and toolchain_name must be non-empty"
 		)
 	endif()
 

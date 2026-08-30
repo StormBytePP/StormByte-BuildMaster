@@ -77,7 +77,7 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# _bm_comp_create / collect_outputs set these; raw callers get defaults
+	# _bm_graph_create / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
 	endif()
@@ -267,7 +267,7 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
 
-		_bm_env__bm_comp_create_runners(
+		_bm_env_create_runners(
 			_bm_tc_runner
 			_bm_tc_runner_silent
 			"${_component}"

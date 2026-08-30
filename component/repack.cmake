@@ -55,7 +55,7 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	set(_files "")
 	set(_deps "")
 
-	_bm_comp_is_registered("${token}" _is_comp)
+	_bm_graph_is_registered("${token}" _is_comp)
 	if(NOT _is_comp)
 		_bm_log_message(COMPONENT FATAL
 			"REPACK member '${token}' is not a registered component")
@@ -64,7 +64,7 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_PRODUCED)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_BUILDDIR)
-	_bm_comp_is_buildonly("${token}" _bo)
+	_bm_graph_is_buildonly("${token}" _bo)
 
 	if(_mode STREQUAL "headers")
 		set(${out_files} "" PARENT_SCOPE)
@@ -110,7 +110,7 @@ function(_bm_repack_resolve_input token out_files out_deps)
 endfunction()
 
 ## @brief Create merge commands and attach the archive to each REPACK meta.
-## @note Called from `_bm_graph_finalize` after real components exist.
+## @note Called from `_bm_materialize_finalize` after real components exist.
 ## @note Zero static inputs: WARNING, no merge (shared members already
 ##       INTERFACE-linked by `_bm_meta_wire`).
 ## @note `<id>_install` already exists from `_bm_meta_materialize`. The
