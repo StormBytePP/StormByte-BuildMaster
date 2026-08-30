@@ -27,12 +27,12 @@
 ##       nested configure).
 set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES")
 
-# CMake lists use ';' as the element separator. A variable whose value is
-# exactly ';' is an empty list: string(SUBSTRING) of that character yields
-# length 0, and string(APPEND) of it appends nothing. Tokens that contain
-# ';' inside `{…}` are stored with this stand-in so foreach(IN LISTS) does
+# CMake lists use ';' as the element separator. Tokens that contain ';'
+# inside `{…}` are stored with this stand-in so foreach(IN LISTS) does
 # not re-split them. _bm_opt_split_pair restores ';'.
-set(_BM_OPT_SEMI "__BM_SEMI__")
+# CACHE INTERNAL: add_subdirectory(buildmaster) must not hide this from
+# sibling CMakeLists (a host project never re-includes helpers.cmake).
+set(_BM_OPT_SEMI "__BM_SEMI__" CACHE INTERNAL "BuildMaster optstr stand-in for ';' inside {…}")
 
 ## @brief Re-join a value that `function()` split on `;`.
 ## @param[out] out_var Parent-scope flat string.
