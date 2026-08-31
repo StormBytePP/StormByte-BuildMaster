@@ -1,5 +1,7 @@
 # Non-destructive git ops in a local clone under the build tree (never the job worktree).
 
+_bm_tools_demand_named(git)
+
 set(_sandbox "${CMAKE_CURRENT_BINARY_DIR}/repo")
 set(_src_repo "${BM_TEST_REPO_ROOT}")
 

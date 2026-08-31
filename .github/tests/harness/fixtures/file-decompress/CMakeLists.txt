@@ -1,5 +1,7 @@
 # Build a tiny archive under the binary dir, then _bm_file_decompress into extract/.
 
+_bm_tools_demand_named(file)
+
 set(_pack_src "${CMAKE_CURRENT_BINARY_DIR}/pack_src")
 set(_archive "${CMAKE_CURRENT_BINARY_DIR}/sample.tar.gz")
 set(_extract "${CMAKE_CURRENT_BINARY_DIR}/extract")

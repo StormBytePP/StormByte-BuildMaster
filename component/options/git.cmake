@@ -101,6 +101,8 @@ function(_bm_opt_parse_git options_string
 			"GIT fetch=${_fetch} switch='${_switch}' reset=${_reset} patches=${_patches}")
 	endif()
 
+	_bm_tools_demand_named(git)
+
 	set(${out_present} "${_present}" PARENT_SCOPE)
 	set(${out_fetch} "${_fetch}" PARENT_SCOPE)
 	set(${out_switch} "${_switch}" PARENT_SCOPE)

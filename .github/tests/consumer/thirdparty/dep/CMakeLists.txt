@@ -1,6 +1,10 @@
 set(CONSUMERDEP_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 set(CONSUMERDEP_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/0001-fix-typo.patch")
 
+# Seed a git worktree so GIT={RESET;PATCH} has something to apply.
+# Not part of the public BM API; the consumer still has to have git on PATH.
+_bm_tools_demand_named(git)
+
 if(NOT GIT_EXECUTABLE)
 	message(FATAL_ERROR "consumer-dep: GIT_EXECUTABLE is required")
 endif()
@@ -28,7 +32,7 @@ if(NOT EXISTS "${CONSUMERDEP_SRCDIR}/.git")
 	endif()
 endif()
 
-_bm_backend_cmake_create(
+buildmaster_component(
 	consumer-dep
 	"Consumer-style dependant library"
 	"${CONSUMERDEP_SRCDIR}"

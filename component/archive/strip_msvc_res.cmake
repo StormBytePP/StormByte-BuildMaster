@@ -27,13 +27,13 @@ if(NOT COMMAND buildmaster_message)
 	endif()
 endif()
 
-if(NOT COMMAND _bm_component_archive_find)
-	include("${CMAKE_CURRENT_LIST_DIR}/find_archiver.cmake")
+if(NOT COMMAND _bm_tools_archiver_find)
+	include("${BUILDMASTER_SRCDIR}/tools/bootstrap/archiver/helpers.cmake")
 endif()
 
 ## @brief Strip `*.res` members from one MSVC/clang-cl static archive.
 ## @param[in] lib Absolute path to the `.lib` (canonical name, post-RENAME).
-## @note Resolves the archiver via `_bm_component_archive_find`. If the style
+## @note Resolves the archiver via `_bm_tools_archiver_find`. If the style
 ##       is not `msvc_lib` (Unix `ar` / `llvm-ar`), this is a silent no-op.
 ## @note Lists members with `/LIST`. A member is removed only when its
 ##       basename matches `*.res` / `*.RES` (case-insensitive). Paths such
@@ -58,7 +58,7 @@ function(_bm_component_archive_strip_msvc_res lib)
 	if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
 		set(_hint "${CMAKE_AR}")
 	endif()
-	_bm_component_archive_find(_bm_ar _bm_style "${_hint}")
+	_bm_tools_archiver_find(_bm_ar _bm_style "${_hint}")
 	if(NOT _bm_style STREQUAL "msvc_lib")
 		_bm_log_message(ARCHIVE DEBUG
 			"strip_msvc_res: archiver style '${_bm_style}' is not msvc_lib (skip)")

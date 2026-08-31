@@ -1,6 +1,8 @@
-if(NOT BUILDMASTER_CONFIGURED)
-	set(BUILDMASTER_TOOLS_MESON_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
-	set(BUILDMASTER_SCRIPTS_MESON_DIR "${BUILDMASTER_SCRIPTSDIR}/meson")
+if(NOT BUILDMASTER_TOOLS_MESON_SRCDIR)
+	set(BUILDMASTER_TOOLS_MESON_SRCDIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL
+		"tools/meson source dir")
+	set(BUILDMASTER_SCRIPTS_MESON_DIR "${BUILDMASTER_SCRIPTSDIR}/meson" CACHE INTERNAL
+		"Generated meson-tool scripts")
 	find_program(MESON_EXECUTABLE meson QUIET)
 	if(NOT MESON_EXECUTABLE)
 		_bm_log_message(MESON FATAL "Meson executable not found: please install Meson or ensure it's on PATH.")
@@ -12,6 +14,8 @@ if(NOT BUILDMASTER_CONFIGURED)
 	_bm_env_prepare_command(ENV_MESON_COMMAND "${_env_meson_list}")
 	_bm_env_prepare_command(ENV_MESON_SILENT_COMMAND "${_env_meson_list_silent}")
 	_bm_env_prepare_command(ENV_MESON_COMPILE_COMMAND "${_env_meson_list_compile}")
-
+	set(ENV_MESON_COMMAND "${ENV_MESON_COMMAND}" CACHE INTERNAL "")
+	set(ENV_MESON_SILENT_COMMAND "${ENV_MESON_SILENT_COMMAND}" CACHE INTERNAL "")
+	set(ENV_MESON_COMPILE_COMMAND "${ENV_MESON_COMPILE_COMMAND}" CACHE INTERNAL "")
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

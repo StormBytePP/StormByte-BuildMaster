@@ -37,6 +37,7 @@ function(_bm_backend_cmake_create _component _component_title _srcdir
 	if(ARGC EQUAL 7)
 		set(_options_string "${ARGV6}")
 	endif()
+	_bm_tools_demand_named(cmake)
 	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "${_library_mode}" "cmake" "${_produced}"
@@ -62,6 +63,7 @@ function(_bm_backend_cmake_create_headers _component _component_title _srcdir
 	if(ARGC EQUAL 5)
 		set(_options_string "${ARGV4}")
 	endif()
+	_bm_tools_demand_named(cmake)
 	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "headers" "cmake" ""

@@ -1,15 +1,19 @@
-if(NOT BUILDMASTER_CONFIGURED)
-	set(BUILDMASTER_TOOLS_GIT_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
-	set(BUILDMASTER_SCRIPTS_GIT_DIR "${BUILDMASTER_SCRIPTSDIR}/git")
+if(NOT BUILDMASTER_TOOLS_GIT_SRCDIR)
+	set(BUILDMASTER_TOOLS_GIT_SRCDIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL
+		"tools/git source dir")
+	set(BUILDMASTER_SCRIPTS_GIT_DIR "${BUILDMASTER_SCRIPTSDIR}/git" CACHE INTERNAL
+		"Generated git-tool scripts")
 	find_program(GIT_EXECUTABLE git QUIET)
 	if(NOT GIT_EXECUTABLE)
 		_bm_log_message(GIT FATAL "Git executable not found. Install Git.")
 	endif()
 	get_filename_component(GIT_EXECUTABLE "${GIT_EXECUTABLE}" NAME)
+	set(GIT_EXECUTABLE "${GIT_EXECUTABLE}" CACHE FILEPATH "git" FORCE)
 	set(_env_git_list ${ENV_RUNNER} ${GIT_EXECUTABLE})
 	set(_env_git_silent_list ${ENV_RUNNER_SILENT} ${GIT_EXECUTABLE})
 	_bm_env_prepare_command(ENV_GIT_COMMAND "${_env_git_list}")
 	_bm_env_prepare_command(ENV_GIT_SILENT_COMMAND "${_env_git_silent_list}")
-
+	set(ENV_GIT_COMMAND "${ENV_GIT_COMMAND}" CACHE INTERNAL "")
+	set(ENV_GIT_SILENT_COMMAND "${ENV_GIT_SILENT_COMMAND}" CACHE INTERNAL "")
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

@@ -25,6 +25,7 @@ function(_bm_backend_meson_create _component _component_title _srcdir
 	if(ARGC EQUAL 7)
 		set(_options_string "${ARGV6}")
 	endif()
+	_bm_tools_demand_named(meson)
 	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "${_library_mode}" "meson" "${_produced}"
@@ -50,6 +51,7 @@ function(_bm_backend_meson_create_headers _component _component_title _srcdir
 	if(ARGC EQUAL 5)
 		set(_options_string "${ARGV4}")
 	endif()
+	_bm_tools_demand_named(meson)
 	_bm_graph_create(
 		"${_component}" "${_component_title}" "${_srcdir}"
 		"${_options}" "headers" "meson" ""

@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
-## [2.0.0] - 2026-08-30
+## [2.0.0] - 2026-08-31
 
 2.x versus 1.0.x is a different product: declarative graph, no generated
 fragment to `include()`, no public dependant factories, no public
@@ -166,6 +166,14 @@ and the declaration shape changed.
   and explicit overrides only (`CFLAGS`, `CXXFLAGS`, `FILES`,
   `LINKFLAGS`). Groups are omitted. Row order is readability, not the
   graph walk. Nested bootstraps stay silent.
+- **On-demand tools.** Bootstrap always initializes `ninja` and the
+  archiver (`tools/bootstrap/`). `cmake`, `meson`, `git`, and `file`
+  initialize on first use: backend wrappers (`cmake` / `meson`),
+  `GIT={…}` / `FILES={…}` on the optstr, or a pending `FILES SOURCE`
+  after the tree is unpacked. A second request is a no-op. Extra tools
+  (`pkgconf`, …) are still initialized with the tools tree (unchanged
+  this release). Configure prints `Setting up tools: <name>` only when
+  that tool actually starts.
 
 ### Changed
 
@@ -243,6 +251,9 @@ and the declaration shape changed.
   `add_subdirectory(buildmaster)` alone bootstraps a consumer.
 - Root configure includes `GNUInstallDirs`.
 - Post-install git reset + clean runs only after a PATCH.
+- Tools no longer all initialize at bootstrap. Only `ninja` and the
+  archiver are mandatory. `cmake` / `meson` / `git` / `file` start
+  when a component (or a harness that calls internals) requests them.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
