@@ -31,6 +31,8 @@ add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 # callback later is a no-op.
 _bm_materialize_finalize()
 
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_tc_prefix.cmake")
+
 # ---------------------------------------------------------------------------
 # Contract checks
 # ---------------------------------------------------------------------------
@@ -122,6 +124,7 @@ add_custom_target(run_buildmaster_smoke
 		slow-configure_install
 		# TOOLCHAIN
 		nest-tc_install
+		tc-prefix_install
 		# WHOLE
 		out-lib_install plain-lib_install whole-lib_install
 		whole_link_test_nowhole_run whole_link_test_run

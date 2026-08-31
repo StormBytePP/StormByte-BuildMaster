@@ -85,6 +85,7 @@ add_subdirectory(slow-configure)
 # TOOLCHAIN swap
 # ---------------------------------------------------------------------------
 add_subdirectory(toolchain)
+add_subdirectory(tc-prefix)
 
 # ---------------------------------------------------------------------------
 # WHOLE archive link

@@ -201,6 +201,11 @@
 <lib>/libslowlib.a|unix
 <lib>/slowlib.lib|windows
 
+# tc-prefix
+<include>/tcprefix.h|all
+<lib>/libtcprefix.a|unix
+<lib>/tcprefix.lib|windows
+
 # toolchain
 <include>/toolchain/tc_leaf_meson.h|all
 <include>/toolchain/tc_mid_cmake.h|all

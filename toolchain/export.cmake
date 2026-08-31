@@ -54,9 +54,21 @@ endfunction()
 
 macro(_bm_tc_write_component path toolchain_name)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_component")
-	_bm_tc_write("${path}")
-
 	_bm_path_normalize(_bm_tc_self "${path}")
+	_bm_path_normalize(_bm_tc_parent "${BUILDMASTER_TOOLCHAIN_FILE}")
+
+	if(NOT _bm_tc_parent STREQUAL ""
+			AND EXISTS "${_bm_tc_parent}"
+			AND NOT _bm_tc_self STREQUAL "${_bm_tc_parent}")
+		file(READ "${_bm_tc_parent}" _bm_tc_body)
+		get_filename_component(_bm_tc_dir "${_bm_tc_self}" DIRECTORY)
+		if(NOT _bm_tc_dir STREQUAL "")
+			file(MAKE_DIRECTORY "${_bm_tc_dir}")
+		endif()
+		file(WRITE "${_bm_tc_self}" "${_bm_tc_body}")
+	else()
+		_bm_tc_write("${_bm_tc_self}")
+	endif()
 
 	if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_LINKER}")
 		find_program(_bm_tc_link_abs NAMES "${BM_TC_LINKER}")
@@ -145,7 +157,7 @@ macro(_bm_tc_write_component path toolchain_name)
 		endif()
 	endif()
 
-	file(APPEND "${path}" "${_bm_tc_overlay}")
+	file(APPEND "${_bm_tc_self}" "${_bm_tc_overlay}")
 	unset(_bm_tc_overlay)
 	unset(_bm_tc_self)
 	_bm_log_message(TOOLCHAIN DEBUG "Wrote component toolchain overlay ${path}")

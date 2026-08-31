@@ -337,6 +337,11 @@ and the declaration shape changed.
 - Dependant configure targets (`component_*_dependant.cmake.in`): under the **Ninja** generator, long configures (e.g. FFmpeg `meson setup`) looked hung — the silent env runner swallowed `message(STATUS)` from the configure `-P` script. Makefiles still printed progress. Now each dependant configure target sets `USES_TERMINAL` and a clear `COMMENT "Configuring <component>"` so Ninja shows the step as soon as it starts
 - Dependant configure progress on **Windows + Ninja**: `cmake -E echo "Configuring …"` plus the same `COMMENT` concatenated on one line (`Configuring x265Configuring x265`). Dropped the redundant `echo`; a single `COMMENT` is enough
 - Dependant components: `indent_level` is forced to `0` in `create_component` when a dependency is set. Hierarchical tabs are only meaningful in the parent **configure** log (`message_indented`); dependant stages run at **build** time and must not inherit plugin-level indentation in status lines or nested stage scripts
+- **Component `TOOLCHAIN=` dump is the trunk toolchain plus a compiler overlay.**
+  Nested `add_subdirectory(buildmaster)` keeps `BUILDMASTER_ROOT`,
+  `BUILDMASTER_INSTALL_DIR` and `BUILDMASTER_CONFIGURED`. A component
+  override no longer bootstraps a second install tree under the
+  component build dir. Harness fixture `tc-prefix` locks the dump.
 
 [1.0.1]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/1.0.1
 
