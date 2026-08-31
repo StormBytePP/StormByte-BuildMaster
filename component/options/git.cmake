@@ -2,7 +2,7 @@
 # component/options/git.cmake — GIT={…} parser and apply
 # =============================================================================
 
-## @brief Parse `GIT={FETCH;SWITCH=…;RESET;PATCH=…;TITLE=…}` from an options string.
+## @brief Parse `GIT={FETCH;SWITCH=…;RESET;PATCH=…;TITLE=…;ROOT=…}`.
 ## @param[in]  options_string Trailing `"KEY=value;…"`.
 ## @param[out] out_present    TRUE if a `GIT` key was seen.
 ## @param[out] out_fetch      TRUE if `FETCH` is enabled.
@@ -10,16 +10,20 @@
 ## @param[out] out_reset      TRUE if `RESET` is enabled.
 ## @param[out] out_patches    Patch paths in declaration order.
 ## @param[out] out_title      Inner `TITLE`, or empty (caller defaults to id).
+## @param[out] out_root       Inner `ROOT`, or empty (caller uses srcdir).
 ## @note Empty `GIT` / `GIT=` / `GIT={}` → WARNING, present TRUE, no ops.
 ##       Flush order is fixed: FETCH → SWITCH → RESET → PATCHs (declaration
 ##       order). Relative `PATCH=` is resolved by the caller against
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Unknown inner keys → WARNING.
-##       Empty `SWITCH=` or empty `PATCH=` → FATAL.
+##       Empty `SWITCH=` or empty `PATCH=` or empty `ROOT=` → FATAL.
 ##       Meta + any GIT op is FATAL in `buildmaster_meta`.
-## @note Git is demanded only when a `GIT` key is present. Parsing every
-##       component optstr must not initialize the git tool.
+## @note `ROOT=` is always a path under the component srcdir. A leading
+##       `/` or drive letter is stripped (not an absolute filesystem path).
+##       Omitted `ROOT` → work tree is srcdir. Git is demanded only when
+##       a `GIT` key is present.
 function(_bm_opt_parse_git options_string
-		out_present out_fetch out_switch out_reset out_patches out_title)
+		out_present out_fetch out_switch out_reset out_patches out_title
+		out_root)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_git")
 	set(_present FALSE)
 	set(_fetch FALSE)
@@ -27,6 +31,7 @@ function(_bm_opt_parse_git options_string
 	set(_reset FALSE)
 	set(_patches "")
 	set(_title "")
+	set(_root "")
 
 	if(NOT "${options_string}" STREQUAL "")
 		_bm_opt_split_pairs("${options_string}" _pairs)
@@ -90,6 +95,12 @@ function(_bm_opt_parse_git options_string
 					list(APPEND _patches "${_iv}")
 				elseif(_ik STREQUAL "TITLE")
 					set(_title "${_iv}")
+				elseif(_ik STREQUAL "ROOT")
+					if("${_iv}" STREQUAL "")
+						_bm_log_message(COMPONENT FATAL
+							"GIT ROOT= requires a directory")
+					endif()
+					set(_root "${_iv}")
 				else()
 					_bm_log_message(COMPONENT WARNING
 						"Unknown GIT sub-option '${_ik}' (ignored)")
@@ -100,7 +111,7 @@ function(_bm_opt_parse_git options_string
 
 	if(_present)
 		_bm_log_message(COMPONENT DEBUG
-			"GIT fetch=${_fetch} switch='${_switch}' reset=${_reset} patches=${_patches}")
+			"GIT fetch=${_fetch} switch='${_switch}' reset=${_reset} patches=${_patches} root='${_root}'")
 		_bm_tools_demand_named(git)
 	endif()
 
@@ -110,24 +121,82 @@ function(_bm_opt_parse_git options_string
 	set(${out_reset} "${_reset}" PARENT_SCOPE)
 	set(${out_patches} "${_patches}" PARENT_SCOPE)
 	set(${out_title} "${_title}" PARENT_SCOPE)
+	set(${out_root} "${_root}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_git")
+endfunction()
+
+## @brief Turn `ROOT=` into a path relative to the component srcdir.
+## @param[out] out_rel Parent-scope relative path (no leading `/` or drive).
+## @param[in]  raw     Token from `ROOT=`.
+## @note A value that looks absolute (`/src`, `C:/src`) is still relative
+##       to srcdir: the root prefix is stripped. Empty after strip → FATAL.
+function(_bm_comp_git_relroot out_rel raw)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_git_relroot")
+	set(_r "${raw}")
+	if(_r MATCHES "^[A-Za-z]:[/\\\\]")
+		string(SUBSTRING "${_r}" 2 -1 _r)
+	endif()
+	string(REGEX REPLACE "^[/\\\\]+" "" _r "${_r}")
+	if("${_r}" STREQUAL "")
+		_bm_log_message(COMPONENT FATAL
+			"GIT ROOT='${raw}' is empty after stripping a filesystem root prefix")
+	endif()
+	set(${out_rel} "${_r}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_git_relroot")
+endfunction()
+
+## @brief Resolve the GIT work tree under the component srcdir.
+## @param[out] out_repo Parent-scope absolute work tree.
+## @param[in]  srcdir   Component source directory.
+## @param[in]  raw_root `ROOT=` token, or empty (→ srcdir).
+## @note Order: normalize under srcdir → FATAL if the result is not
+##       srcdir or a descendant (no existence probe) → FATAL if the
+##       directory does not exist. `_bm_git_require_component_root`
+##       runs later in `_bm_tools_git_*`.
+function(_bm_comp_git_worktree out_repo srcdir raw_root)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_git_worktree")
+	get_filename_component(_src "${srcdir}" ABSOLUTE)
+	file(TO_CMAKE_PATH "${_src}" _src)
+	if("${raw_root}" STREQUAL "")
+		set(_repo "${_src}")
+	else()
+		_bm_comp_git_relroot(_rel "${raw_root}")
+		get_filename_component(_repo "${_src}/${_rel}" ABSOLUTE)
+		file(TO_CMAKE_PATH "${_repo}" _repo)
+	endif()
+	file(RELATIVE_PATH _inside "${_src}" "${_repo}")
+	if(_inside MATCHES "^\\.\\.")
+		_bm_log_message(COMPONENT FATAL
+			"GIT ROOT escapes the component srcdir")
+	endif()
+	if(NOT IS_DIRECTORY "${_repo}")
+		_bm_log_message(COMPONENT FATAL
+			"GIT work tree is not a directory (${_repo})")
+	endif()
+	set(${out_repo} "${_repo}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_git_worktree")
 endfunction()
 
 ## @brief Apply `GIT={…}` on a concrete component srcdir.
 ## @param[in] _id     Component id.
 ## @param[in] _title  Default TITLE when the group omits it.
-## @param[in] _srcdir Component source directory (git work tree).
+## @param[in] _srcdir Component source directory.
 ## @param[in] _optstr Trailing options string (may omit GIT).
 ## @note No-op when GIT is absent. Empty group is already WARNING in parse.
 ##       PATCH paths: absolute unchanged; relative to
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Missing file is FATAL.
+##       `ROOT=` is always under `_srcdir` (leading `/` or drive stripped).
+##       Escape above `_srcdir` is FATAL before any existence check.
+##       Missing work tree is FATAL after the escape check.
+##       The work tree is passed to `_bm_tools_git_*`, which refuse a
+##       path that is not its own git root or that is the host repo.
 ##       Calls `_bm_tools_git_fetch` / `_switch` / `_reset` / `_patch` so
 ##       flush order stays FETCH → SWITCH → RESET → PATCH regardless of
 ##       declaration order inside the group (RESET/PATCH still flush
 ##       reset-then-patch).
 function(_bm_comp_apply_git _id _title _srcdir _optstr)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_git")
-	_bm_opt_parse_git("${_optstr}" _present _fetch _switch _reset _patches _gtitle)
+	_bm_opt_parse_git("${_optstr}" _present _fetch _switch _reset _patches _gtitle _groot)
 	if(NOT _present)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_apply_git")
 		return()
@@ -141,17 +210,19 @@ function(_bm_comp_apply_git _id _title _srcdir _optstr)
 		set(_t "${_id}")
 	endif()
 
+	_bm_comp_git_worktree(_repo "${_srcdir}" "${_groot}")
+
 	if(_fetch)
-		_bm_log_message(COMPONENT DEBUG "GIT FETCH ${_id}")
-		_bm_tools_git_fetch("${_id}" "${_t}" "${_srcdir}")
+		_bm_log_message(COMPONENT DEBUG "GIT FETCH ${_id} ${_repo}")
+		_bm_tools_git_fetch("${_id}" "${_t}" "${_repo}")
 	endif()
 	if(NOT "${_switch}" STREQUAL "")
-		_bm_log_message(COMPONENT DEBUG "GIT SWITCH ${_id} ${_switch}")
-		_bm_tools_git_switch("${_id}" "${_t}" "${_srcdir}" "${_switch}")
+		_bm_log_message(COMPONENT DEBUG "GIT SWITCH ${_id} ${_switch} ${_repo}")
+		_bm_tools_git_switch("${_id}" "${_t}" "${_repo}" "${_switch}")
 	endif()
 	if(_reset)
-		_bm_log_message(COMPONENT DEBUG "GIT RESET ${_id}")
-		_bm_tools_git_reset("${_id}" "${_t}" "${_srcdir}")
+		_bm_log_message(COMPONENT DEBUG "GIT RESET ${_id} ${_repo}")
+		_bm_tools_git_reset("${_id}" "${_t}" "${_repo}")
 	endif()
 	foreach(_p IN LISTS _patches)
 		if(IS_ABSOLUTE "${_p}")
@@ -165,7 +236,7 @@ function(_bm_comp_apply_git _id _title _srcdir _optstr)
 				"GIT PATCH='${_p}' not found (${_abs})")
 		endif()
 		_bm_log_message(COMPONENT DEBUG "GIT PATCH ${_id} ${_abs}")
-		_bm_tools_git_patch("${_id}" "${_t}" "${_srcdir}" "${_abs}")
+		_bm_tools_git_patch("${_id}" "${_t}" "${_repo}" "${_abs}")
 	endforeach()
 
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_apply_git")

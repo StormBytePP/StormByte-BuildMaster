@@ -28,7 +28,8 @@
 ##            platform groups WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers),
-##            GIT={…}, FILES={…}, REQUIRE_TOOL=… / REQUIRE_TOOL={…}.
+##            GIT={…} (`ROOT=` is always under srcdir), FILES={…},
+##            REQUIRE_TOOL=… / REQUIRE_TOOL={…}.
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
@@ -113,7 +114,7 @@ function(_bm_graph_create _component _component_title _srcdir
 	_bm_opt_parse_repack("${_options_string}" _reg_repack)
 	_bm_opt_parse_git(
 		"${_options_string}" _git_present _git_fetch _git_switch _git_reset
-		_git_patches _git_title)
+		_git_patches _git_title _git_root)
 	_bm_opt_parse_files(
 		"${_options_string}" _files_present
 		_files_urls _files_names _files_hashes _files_algos

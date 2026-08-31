@@ -135,7 +135,7 @@ function(_bm_meta_impl _id _title)
 	_bm_opt_parse_linkflags("${_optstr}" _meta_linkflags)
 	_bm_opt_parse_git(
 		"${_optstr}" _git_present _git_fetch _git_switch _git_reset
-		_git_patches _git_title)
+		_git_patches _git_title _git_root)
 	_bm_opt_parse_files(
 		"${_optstr}" _files_present
 		_files_urls _files_names _files_hashes _files_algos
