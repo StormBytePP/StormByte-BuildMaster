@@ -1,8 +1,36 @@
 # -----------------------------------------------------------------------------
-# Version
+# Version (pin local, before any redirect)
 # -----------------------------------------------------------------------------
 set(BUILDMASTER_VERSION "2.0.1-9999")
+set(_BM_PIN_VERSION "${BUILDMASTER_VERSION}")
+set(_BM_PIN_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
+
+# -----------------------------------------------------------------------------
+# Trunk pointer — cache (same cmake process) + toolchain (nested cmake)
+# -----------------------------------------------------------------------------
+if(NOT DEFINED BUILDMASTER_ROOT OR "${BUILDMASTER_ROOT}" STREQUAL "")
+	if(DEFINED CACHE{BUILDMASTER_ROOT} AND NOT "$CACHE{BUILDMASTER_ROOT}" STREQUAL "")
+		set(BUILDMASTER_ROOT "$CACHE{BUILDMASTER_ROOT}")
+	endif()
+endif()
+
+if(DEFINED BUILDMASTER_ROOT AND NOT "${BUILDMASTER_ROOT}" STREQUAL ""
+		AND NOT _BM_PIN_SRCDIR STREQUAL BUILDMASTER_ROOT)
+	if(DEFINED BUILDMASTER_VERSION AND NOT "${BUILDMASTER_VERSION}" STREQUAL ""
+			AND NOT _BM_PIN_VERSION STREQUAL BUILDMASTER_VERSION)
+		message(WARNING
+			"BuildMaster pin ${_BM_PIN_VERSION} (${_BM_PIN_SRCDIR}) "
+			"does not match trunk ${BUILDMASTER_VERSION} (${BUILDMASTER_ROOT}). "
+			"Match submodule versions.")
+	endif()
+	include("${BUILDMASTER_ROOT}/helpers.cmake")
+	include("${BUILDMASTER_ROOT}/tools/helpers.cmake")
+	include("${BUILDMASTER_ROOT}/propagate_vars.cmake")
+	include("${BUILDMASTER_ROOT}/persist.cmake")
+	_bm_core_persist_bootstrap()
+	return()
+endif()
 
 # -----------------------------------------------------------------------------
 # 0. Log API (init_vars and helpers may call _bm_log_level_init)
@@ -38,13 +66,19 @@ include(init_vars.cmake)
 # modules. Nested hosts still need helpers.cmake so create_* APIs remain
 # available; then we propagate and stop.
 if(BUILDMASTER_CONFIGURED)
-	include(helpers.cmake)
-	include("${BUILDMASTER_SRCDIR}/tools/helpers.cmake")
+	include("${BUILDMASTER_ROOT}/helpers.cmake")
+	include("${BUILDMASTER_ROOT}/tools/helpers.cmake")
 	include(propagate_vars.cmake)
 	include(persist.cmake)
 	_bm_core_persist_bootstrap()
 	return()
 endif()
+
+# This tree is the trunk.
+set(BUILDMASTER_ROOT "${_BM_PIN_SRCDIR}" CACHE INTERNAL
+	"Source tree of the trunk BuildMaster")
+set(BUILDMASTER_VERSION "${_BM_PIN_VERSION}" CACHE INTERNAL
+	"Trunk BuildMaster version")
 
 _bm_log_message(CORE STATUS
 	"Bootstrapping StormByte-BuildMaster ${BUILDMASTER_VERSION} (https://github.com/StormBytePP/StormByte-BuildMaster)")
@@ -52,7 +86,7 @@ _bm_log_message(CORE STATUS
 # -----------------------------------------------------------------------------
 # 2. Helper functions (utilities + module helpers; loads toolchain export API)
 # -----------------------------------------------------------------------------
-include(helpers.cmake)
+include("${BUILDMASTER_ROOT}/helpers.cmake")
 
 # -----------------------------------------------------------------------------
 # 3. Toolchain registry (primary bootstrap only)
@@ -99,6 +133,11 @@ include(component/propagate_vars.cmake)
 # Single write after every module has registered. This file is the sole source
 # of truth for nested projects (CONFIGURED=TRUE path above).
 _bm_tc_write("${BUILDMASTER_TOOLCHAIN_FILE}")
+
+# Same-process children (Buffer → Logger) do not load the dump. Cache it.
+set(BUILDMASTER_CONFIGURED TRUE CACHE INTERNAL
+	"Trunk BuildMaster already bootstrapped")
+set(BUILDMASTER_CONFIGURED TRUE)
 
 # -----------------------------------------------------------------------------
 # 9. Final propagation to the parent scope

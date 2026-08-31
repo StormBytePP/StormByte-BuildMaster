@@ -2,9 +2,16 @@
 # helpers.cmake — include stub only (public entry)
 # =============================================================================
 
+if(DEFINED BUILDMASTER_ROOT AND NOT "${BUILDMASTER_ROOT}" STREQUAL ""
+		AND NOT CMAKE_CURRENT_LIST_DIR STREQUAL BUILDMASTER_ROOT
+		AND EXISTS "${BUILDMASTER_ROOT}/helpers.cmake")
+	include("${BUILDMASTER_ROOT}/helpers.cmake")
+	return()
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/log.cmake")
 if(COMMAND _bm_log_level_init)
-    _bm_log_level_init()
+	_bm_log_level_init()
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/paths.cmake")
