@@ -2,25 +2,12 @@
 # toolchain/export.cmake — toolchain file registry (parent + component dumps)
 # =============================================================================
 
-## @brief Clear the in-memory toolchain export registry.
-## @note Empties the GLOBAL property `BUILDMASTER_TOOLCHAIN_LINES`.
-## @note Call once at the start of a **primary** BuildMaster bootstrap, before
-##       any `_bm_tc_export` / `export_raw`. Nested bootstraps
-##       with `BUILDMASTER_CONFIGURED` must **not** call this (they would wipe
-##       the parent dump). Safe to call more than once in the primary path.
 function(_bm_tc_reset)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_reset")
 endfunction()
 
-## @brief Register a simple string assignment for the toolchain file dump.
-## @param[in] name  CMake variable name (unquoted identifier).
-## @param[in] value Value written as `set(name "value")`. Backslashes should
-##            already be normalized (prefer `_bm_path_normalize` for paths).
-## @note Appends one line to the global `BUILDMASTER_TOOLCHAIN_LINES` property.
-##       Does not write the toolchain file; call `_bm_tc_write`.
-## @note Empty `name` is fatal.
 function(_bm_tc_export name value)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export")
 	if("${name}" STREQUAL "")
@@ -33,12 +20,6 @@ function(_bm_tc_export name value)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export")
 endfunction()
 
-## @brief Register a pre-formatted CMake line for the toolchain file dump.
-## @param[in] line Full line without trailing newline (e.g. a `CACHE FORCE`
-##            assignment, or `set(ENV_RUNNER ${ENV_RUNNER})` for list expansion).
-## @note Use when quoting rules differ from `_bm_tc_export`.
-##       Empty lines are ignored. Does not write the file until
-##       `_bm_tc_write` is called.
 function(_bm_tc_export_raw line)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export_raw")
 	if("${line}" STREQUAL "")
@@ -49,12 +30,6 @@ function(_bm_tc_export_raw line)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export_raw")
 endfunction()
 
-## @brief Write all registered toolchain lines to a file.
-## @param[in] path Absolute or CMake-style path of the output `.cmake` file.
-## @note Overwrites @p path. Creates parent directories if needed. Order of
-##       lines matches registration order. Component TOOLCHAIN overlays should
-##       call `_bm_tc_write_component` instead.
-## @note Empty `path` is fatal.
 function(_bm_tc_write path)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write")
 	if("${path}" STREQUAL "")
@@ -77,26 +52,49 @@ function(_bm_tc_write path)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_write")
 endfunction()
 
-## @brief Write a component toolchain file: parent registry snapshot + profile overlay.
-## @param[in] path Absolute path of the component `toolchain.cmake` to write.
-## @param[in] toolchain_name Profile name (for comments only; tools come from
-##            `BM_TC_*` already loaded in the caller).
-## @note Implemented as a **macro** so `BM_TC_*` from
-##       `_bm_tc_load_profile` are visible.
-## @note The generated file is the active toolchain while that component
-##       (and any nested `_bm_tools_*_stages` generated under it) runs.
-##       After the registry snapshot, appends `CACHE FORCE` lines for the
-##       loaded profile and sets `BUILDMASTER_TOOLCHAIN_FILE` to this file's
-##       path so children without an explicit `TOOLCHAIN` keep propagating
-##       the same modified toolchain instead of falling back to the parent
-##       dump.
-## @note If `_bm_tc_get_meson_native_file` exists, also records
-##       `BUILDMASTER_MESON_NATIVE_FILE` for nested Meson under this component.
 macro(_bm_tc_write_component path toolchain_name)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_component")
 	_bm_tc_write("${path}")
 
 	_bm_path_normalize(_bm_tc_self "${path}")
+
+	if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_LINKER}")
+		find_program(_bm_tc_link_abs NAMES "${BM_TC_LINKER}")
+		if(_bm_tc_link_abs)
+			set(BM_TC_LINKER "${_bm_tc_link_abs}")
+		endif()
+		unset(_bm_tc_link_abs)
+	endif()
+
+	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_AR}")
+		if(BUILDMASTER_TOOLS_ARCHIVER AND BUILDMASTER_TOOLS_ARCHIVER_STYLE STREQUAL "gnu_ar")
+			set(BM_TC_AR "${BUILDMASTER_TOOLS_ARCHIVER}")
+		else()
+			find_program(_bm_tc_ar_abs NAMES "${BM_TC_AR}" llvm-ar gcc-ar ar)
+			if(_bm_tc_ar_abs)
+				set(BM_TC_AR "${_bm_tc_ar_abs}")
+			endif()
+			unset(_bm_tc_ar_abs)
+		endif()
+	endif()
+
+	if(DEFINED BM_TC_RANLIB AND NOT BM_TC_RANLIB STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_RANLIB}")
+		find_program(_bm_tc_ranlib_abs NAMES llvm-ranlib gcc-ranlib ranlib)
+		if(_bm_tc_ranlib_abs)
+			set(BM_TC_RANLIB "${_bm_tc_ranlib_abs}")
+		else()
+			set(BM_TC_RANLIB "")
+		endif()
+		unset(_bm_tc_ranlib_abs)
+	endif()
+
+	if(DEFINED BM_TC_NM AND NOT BM_TC_NM STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_NM}")
+		find_program(_bm_tc_nm_abs NAMES llvm-nm gcc-nm nm)
+		if(_bm_tc_nm_abs)
+			set(BM_TC_NM "${_bm_tc_nm_abs}")
+		endif()
+		unset(_bm_tc_nm_abs)
+	endif()
 
 	set(_bm_tc_overlay "")
 	string(APPEND _bm_tc_overlay
@@ -130,13 +128,14 @@ macro(_bm_tc_write_component path toolchain_name)
 		string(APPEND _bm_tc_overlay "set(CMAKE_CXX_COMPILER_AR \"${_bm_tc_ar}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_NM AND NOT BM_TC_NM STREQUAL "")
-		string(APPEND _bm_tc_overlay "set(CMAKE_NM \"${BM_TC_NM}\" CACHE FILEPATH \"\" FORCE)\n")
+		_bm_path_normalize(_bm_tc_nm "${BM_TC_NM}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_NM \"${_bm_tc_nm}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 	if(DEFINED BM_TC_RANLIB AND NOT BM_TC_RANLIB STREQUAL "")
-		string(APPEND _bm_tc_overlay "set(CMAKE_RANLIB \"${BM_TC_RANLIB}\" CACHE FILEPATH \"\" FORCE)\n")
+		_bm_path_normalize(_bm_tc_ranlib "${BM_TC_RANLIB}")
+		string(APPEND _bm_tc_overlay "set(CMAKE_RANLIB \"${_bm_tc_ranlib}\" CACHE FILEPATH \"\" FORCE)\n")
 	endif()
 
-	# Nested Meson under this component should use the profile native file
 	if(COMMAND _bm_tc_get_meson_native_file)
 		_bm_tc_get_meson_native_file(_bm_tc_nf TOOLCHAIN "${toolchain_name}")
 		if(NOT _bm_tc_nf STREQUAL "")

@@ -28,7 +28,7 @@
 ##            platform groups WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers),
-##            GIT={…}, FILES={…}.
+##            GIT={…}, FILES={…}, REQUIRE_TOOL=… / REQUIRE_TOOL={…}.
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
@@ -118,6 +118,7 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_options_string}" _files_present
 		_files_urls _files_names _files_hashes _files_algos
 		_files_unpacks _files_forces _files_sources _files_titles)
+	_bm_opt_parse_require_tool("${_options_string}")
 	if(_reg_repack)
 		_bm_log_message(COMPONENT FATAL
 			"REPACK is only valid on buildmaster_meta(). A component publishes its own artifacts; to merge several components into one archive, put REPACK on the meta and buildmaster_meta_add those ids.")

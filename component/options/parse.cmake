@@ -21,24 +21,26 @@
 ##            → WARNING and ignored. Non-MSVC toolchains are a silent no-op
 ##            at install time.
 ## @param[in]  options_string Optional `"KEY=value;KEY2=…"` string. Empty is valid.
-##            `PC={…}`, `LINK={…}`, `LINKFLAGS={…}`, `GIT={…}` and `FILES={…}`
-##            groups are allowed; `;` inside braces is not a pair break. A
-##            trailing orphan `;` is allowed (dropped).
+##            `PC={…}`, `LINK={…}`, `LINKFLAGS={…}`, `GIT={…}`, `FILES={…}`
+##            and `REQUIRE_TOOL={…}` groups are allowed; `;` inside braces is
+##            not a pair break. A trailing orphan `;` is allowed (dropped).
 ## @note Flag keys listed in BUILDMASTER_COMPONENT_OPTION_FLAGS may omit `=`.
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
-## @note `PC`, `LINK`, `LINKFLAGS`, `GIT`, `FILES` and `REPACK` are recognized
-##       so they are not “unknown keys”. Details: `_bm_opt_parse_pc()`,
-##       `_bm_opt_parse_link()`, `_bm_opt_parse_linkflags()`,
-##       `_bm_opt_parse_git()`, `_bm_opt_parse_files()`,
-##       `_bm_opt_parse_repack()`.
+## @note `PC`, `LINK`, `LINKFLAGS`, `GIT`, `FILES`, `REPACK` and
+##       `REQUIRE_TOOL` are recognized so they are not “unknown keys”.
+##       Details: `_bm_opt_parse_pc()`, `_bm_opt_parse_link()`,
+##       `_bm_opt_parse_linkflags()`, `_bm_opt_parse_git()`,
+##       `_bm_opt_parse_files()`, `_bm_opt_parse_repack()`,
+##       `_bm_opt_parse_require_tool()`.
 ##       Meta + PC is FATAL in `buildmaster_meta`.
 ##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
 ##       Meta + FILES is FATAL in `buildmaster_meta`.
 ##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
 ##       meta at materialize.
+##       Meta + REQUIRE_TOOL is accepted (demand extras).
 ##       `REPACK` on a component is FATAL in `_bm_graph_create`.
 ##       `REPACK` on a meta merges member archives (see `buildmaster_meta`).
 ## @note `INDENT` / `INDENT_LEVEL` is accepted only so it is not “unknown”.
@@ -82,6 +84,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_files()
 			elseif(_key STREQUAL "REPACK")
 				# parsed by _bm_opt_parse_repack()
+			elseif(_key STREQUAL "REQUIRE_TOOL")
+				# parsed by _bm_opt_parse_require_tool()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
 					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")

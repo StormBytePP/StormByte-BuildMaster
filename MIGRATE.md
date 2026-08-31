@@ -21,9 +21,10 @@ A 1.x `CMakeLists.txt` will not configure. That is the point.
 
 ## Unreleased
 
-Nothing yet. After 2.0.0 ships, new breaking notes go here
-(`old call → new call`, one table or one snippet). Do not paste
-changelog bullets.
+Nothing pending after the notes already folded into **2.0.0** below
+(`REQUIRE_TOOL`, death of `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`).
+After 2.0.0 ships, new breaking notes go here (`old call → new call`).
+Do not paste changelog bullets.
 
 ---
 
@@ -44,7 +45,7 @@ materializes at the end of `CMAKE_SOURCE_DIR` via
 Declaration order does not matter. Generated fragments are not a
 public API. `_bm_*` is not a public API.
 
-Public surface on `master` is **eight** commands
+Public surface on `master` is **ten** commands
 (see `.github/tests/expected/public_functions.txt`):
 
 | Command | Role |
@@ -54,6 +55,8 @@ Public surface on `master` is **eight** commands
 | `buildmaster_link(source dest)` | Link on the component `INTERFACE` **and** a depend edge when `dest` is a graph node |
 | `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
 | `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
+| `buildmaster_group(id [title])` | Outline banner. No target, no edge |
+| `buildmaster_group_add(group member…)` | Membership. Group must already exist |
 | `buildmaster_hook_component(id fn alias [CAPTURE …])` | Run `fn` after that id materializes |
 | `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
 | `buildmaster_message(level text [, indent])` | Log. Module is always `USER` |
@@ -61,7 +64,8 @@ Public surface on `master` is **eight** commands
 There is no `create_*`. There is no `include()` of a BM fragment.
 There is no public git / download / decompress / repack / builddir
 helper. Those jobs are optstr on the component (`GIT=`, `FILES=`,
-`REPACK` on a **meta**).
+`REPACK` on a **meta**). Extra host tools are optstr too
+(`REQUIRE_TOOL=`).
 
 ---
 
@@ -86,6 +90,7 @@ helper. Those jobs are optstr on the component (`GIT=`, `FILES=`,
 | `file(WRITE) …pc` into the prefix | `PC={VERSION=…;NAME=…}` on the **leaf** |
 | `POST_BUILD` rename / `lib /REMOVE:*.res` | `RENAME` / `STRIPRES` (both default ON) |
 | Parent `--whole-archive` loop | `WHOLE` |
+| `set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS "pkgconf")` then `add_subdirectory(buildmaster)` | Delete the `set`. Put `REQUIRE_TOOL=pkgconfig` on the component or meta that **needs the binary** |
 | `BUILDMASTER_DEBUG` | Ignored. `BUILDMASTER_LOGLEVEL` |
 | `buildmaster_message(USER STATUS "…")` | Drop `USER` |
 | `create_cmake_stages` / `create_meson_stages` | Internal |
@@ -94,6 +99,62 @@ helper. Those jobs are optstr on the component (`GIT=`, `FILES=`,
 `buildmaster_prerequisite` does **not** exist on `master`. A download
 is no longer a host target you wait on; it is `FILES=` and it always
 runs before that id’s nested configure.
+
+---
+
+### Extra tools (replaces `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`)
+
+**2.x draft / early 2.0 tree**
+
+```cmake
+set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS "pkgconf")
+add_subdirectory(thirdparty/buildmaster)
+```
+
+That variable is **gone**. Setting it does nothing useful. Extra
+tools are not started with the tools tree.
+
+**master**
+
+```cmake
+add_subdirectory(thirdparty/buildmaster)
+
+buildmaster_component(
+	ffmpeg
+	"FFmpeg"
+	"${FFMPEG_SRC}"
+	""
+	static
+	avcodec
+	"REQUIRE_TOOL=pkgconfig;PC={VERSION=7.0;NAME=libavcodec}"
+)
+```
+
+Or several ids:
+
+```cmake
+"REQUIRE_TOOL={pkgconfig}"
+```
+
+Rules:
+
+- The token is `pkgconfig` (folder `tools/extra/pkgconfig`), not
+  `pkgconf`.
+- Empty `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is
+  WARNING and ignored.
+- An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN` is FATAL.
+  BM will not silently use a same-named system binary.
+- `PC={…}` only **writes** a helper `.pc`. It does **not** demand
+  `pkgconfig`. The leaf that *reads* `.pc` files is the one that
+  must say `REQUIRE_TOOL=pkgconfig`.
+- `pkgconfig` still probes the system first and builds the bundled
+  tree only when that probe fails (Windows, broken PATH).
+- Allowed on `buildmaster_component` and `buildmaster_meta`.
+- `cmake` / `meson` / `git` / `file` / `ninja` are **not** extras.
+  Do not put them in `REQUIRE_TOOL` (FATAL).
+
+`ninja` and the archiver always start at bootstrap. Everything else
+is on demand.
 
 ---
 
@@ -145,7 +206,7 @@ way the old headers wrappers did.
 Neutral entries in the `options` list (`CFLAGS`, `CXXFLAGS`,
 `CPPFLAGS`, `LDFLAGS`, `INCLUDES`, `DEFINITIONS`) are **private**
 to the nested compile and **append** to the parent job / toolchain.
-They are not `ENV{CFLAGS}`. Anything else in that list is FATAL.
+They are not `ENV{CFLAGS}`.
 
 `CMakeLists.txt` **and** `meson.build` in `srcdir` is FATAL.
 Neither marker + mode `headers` → backend `none` (headers island).
@@ -172,18 +233,19 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 
 | Key | Default | Notes |
 |-----|---------|--------|
-| `INDENT` / `INDENT_LEVEL` | `0` | Tabs after the log header |
+| `INDENT` / `INDENT_LEVEL` | `0` | WARNING + ignored. Use `buildmaster_group` |
 | `TOOLCHAIN` | inherit | `gcc`, `clang`, `clang-cl`, `msvc` |
 | `RENAME` | ON | Canonical archive name after install (or in the build dir if `BUILDONLY`) |
 | `WHOLE` | OFF | Whole-archive link of **static** produced archives |
 | `BUILDONLY` | OFF | Do not publish into the shared prefix |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives after `RENAME` |
 | `REPACK` | OFF | **Meta only.** Merge every produced static of the members. Stem = meta id |
-| `PC={…}` | off unless the group is present | Helper `.pc` for **this** prefix. Bare `PC` / `PC=ON` is FATAL |
+| `PC={…}` | off unless the group is present | Helper `.pc` for **this** prefix. Bare `PC` / `PC=ON` is FATAL. Does **not** start pkg-config |
 | `LINK=` / `LINK={…}` | empty | Raw system linker **names** on the id `INTERFACE` |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw linker **flags**, nested link only. Groups: `WINDOWS`, `LINUX`, `MAC`, `UNIX` |
 | `GIT={…}` | off | Srcdir git. Empty group is WARNING. Meta + any op is FATAL |
 | `FILES={…}` | off | Download / unpack. Meta + any group is FATAL |
+| `REQUIRE_TOOL=` / `REQUIRE_TOOL={…}` | off | Demand an extra (`pkgconfig`). Empty group is WARNING. Unknown id is FATAL |
 
 `PC` on a meta is FATAL. `BUILDONLY` + enabled `PC` is FATAL.
 `REPACK` on a component is FATAL. `BUILDONLY` + shared as a
@@ -321,7 +383,8 @@ Wait edge is `_install` for a publishing leaf and `_build` for
 | `buildmaster_message(USER STATUS "…")` | Drop `USER` |
 | — | `-DBUILDMASTER_LOGLEVEL=DEBUG` |
 
-`BUILDMASTER_VERBOSE` is unchanged (live compiler / linker output).
+`BUILDMASTER_VERBOSE` is nested compile `--verbose` / `-v` plus the
+configure report. It is not a log level.
 `WARNING` and `FATAL` are never filtered.
 
 ---
@@ -341,7 +404,7 @@ thirdparty/
 
 `add_subdirectory(thirdparty/buildmaster)` (or a `thirdparty`
 that adds it) is enough. Do not `include(…/helpers.cmake)` after
-that.
+that. Do not set `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` first.
 
 ---
 
@@ -368,6 +431,9 @@ that.
 - [ ] Replace `create_git_*` + `include` with `GIT={…}`.
 - [ ] Replace `file_download*` / `file_decompress` + wait target
       with `FILES={…}`.
+- [ ] Delete `set(BUILDMASTER_INITIALIZE_EXTRA_TOOLS …)`.
+      Put `REQUIRE_TOOL=pkgconfig` on the id that reads `.pc`
+      files (not on every `PC=` writer).
 - [ ] Drop `USER` from `buildmaster_message`.
 - [ ] Stop reading `BUILDMASTER_DEBUG`; set `BUILDMASTER_LOGLEVEL`.
 - [ ] Do not call `_bm_*` from a consumer. If configure dies with

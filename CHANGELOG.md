@@ -170,10 +170,20 @@ and the declaration shape changed.
   archiver (`tools/bootstrap/`). `cmake`, `meson`, `git`, and `file`
   initialize on first use: backend wrappers (`cmake` / `meson`),
   `GIT={…}` / `FILES={…}` on the optstr, or a pending `FILES SOURCE`
-  after the tree is unpacked. A second request is a no-op. Extra tools
-  (`pkgconf`, …) are still initialized with the tools tree (unchanged
-  this release). Configure prints `Setting up tools: <name>` only when
-  that tool actually starts.
+  after the tree is unpacked. Extra tools live under `tools/extra/<id>/`
+  (`pkgconfig` is the only extra in this release) and start only via
+  `REQUIRE_TOOL=<id>` / `REQUIRE_TOOL={id;id2}` on
+  `buildmaster_component` or `buildmaster_meta`. Empty
+  `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and
+  ignored. An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN` (or
+  whose directory is missing) is FATAL — BM never silently falls back
+  to a same-named system binary. A second request is a no-op.
+  `PC={…}` only writes a helper `.pc`; it does **not** demand
+  `pkgconfig`. `pkgconfig` still prefers a working system
+  pkg-config/`pkgconf` and builds the bundled tree only when that
+  probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone.
+  Configure prints `Setting up tools: <name>` only when that tool
+  actually starts.
 
 ### Changed
 
@@ -242,7 +252,8 @@ and the declaration shape changed.
   does not change how `WARNING` is printed.
 - **Breaking — options string.** One optional trailing `KEY=value;…`
   (`TOOLCHAIN`, `RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`,
-  `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`, `FILES={…}`).
+  `REPACK`, `PC={…}`, `LINK=`, `LINKFLAGS=`, `GIT={…}`, `FILES={…}`,
+  `REQUIRE_TOOL=` / `REQUIRE_TOOL={…}`).
   `INDENT=` is accepted only to warn. `;` inside `{…}` is not a pair
   break. Unknown keys warn; extra positionals are fatal.
 - Stage `COMMENT`: configure stays CMake/Meson; compile and install
@@ -254,6 +265,8 @@ and the declaration shape changed.
 - Tools no longer all initialize at bootstrap. Only `ninja` and the
   archiver are mandatory. `cmake` / `meson` / `git` / `file` start
   when a component (or a harness that calls internals) requests them.
+  Extra tools start only from `REQUIRE_TOOL`. There is no
+  `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

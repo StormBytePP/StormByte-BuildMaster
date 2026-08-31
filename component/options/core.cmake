@@ -3,9 +3,9 @@
 # =============================================================================
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, BUILDONLY, WHOLE, STRIPRES, PC, GIT, REPACK and FILES accept
-##       `KEY`, `KEY=` and `KEY=ON|OFF`. Other keys require `KEY=value`.
-##       Keep this list in sync with `_bm_opt_parse()`.
+## @note RENAME, BUILDONLY, WHOLE, STRIPRES, PC, GIT, REPACK, FILES and
+##       REQUIRE_TOOL accept `KEY`, `KEY=` and `KEY=ON|OFF`. Other keys
+##       require `KEY=value`. Keep this list in sync with `_bm_opt_parse()`.
 ## @note `PC` as a bare flag is accepted by the splitter so it is not treated
 ##       as an unknown token, but a `.pc` is only generated from `PC={…}`.
 ##       A bare `PC` / `PC=ON` without a brace group is FATAL.
@@ -13,6 +13,9 @@
 ##       Work lives in `GIT={FETCH;SWITCH=…;RESET;PATCH=…}`.
 ## @note `FILES` as a bare flag / `FILES=` / `FILES={}` is WARNING and ignored.
 ##       Work lives in `FILES={URL=…;NAME=…;…}` or `FILES={{…};{…}}`.
+## @note `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING
+##       and ignored (`Use REQUIRE_TOOL=pkgconfig or REQUIRE_TOOL={…}`).
+##       Unknown extra ids are FATAL in `_bm_tools_demand_extra`.
 ## @note `REPACK` is a meta-only flag. On `buildmaster_component` it is FATAL.
 ##       On `buildmaster_meta` it merges every produced static archive of
 ##       the meta's member leaves into one prefix archive named after the
@@ -25,7 +28,8 @@
 ## @note Non-empty `GIT={…}` is forbidden on meta components (no srcdir).
 ## @note Any `FILES` key is forbidden on meta components (no srcdir, no
 ##       nested configure).
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES")
+## @note `REQUIRE_TOOL` is allowed on meta and component.
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES;REQUIRE_TOOL")
 
 # CMake lists use ';' as the element separator. Tokens that contain ';'
 # inside `{…}` are stored with this stand-in so foreach(IN LISTS) does

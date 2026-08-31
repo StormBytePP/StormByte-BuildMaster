@@ -62,8 +62,9 @@ endfunction()
 ## @param[in] _id     Meta identifier (also the REPACK archive stem).
 ## @param[in] _title  Human-readable title.
 ## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `LINK=`,
-##                    `LINKFLAGS=`, `TOOLCHAIN=`). `INDENT=` is WARNING and
-##                    ignored; put the meta in a `buildmaster_group()`.
+##                    `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`).
+##                    `INDENT=` is WARNING and ignored; put the meta in a
+##                    `buildmaster_group()`.
 ## @note Invoked only from the public macro. Origin is the caller's list file.
 ## @note `REPACK` merges every produced *static* archive of the member leaves
 ##       into one prefix archive named after `_id`. Shared/DLL members are
@@ -81,6 +82,7 @@ endfunction()
 ## @note `FILES={…}` is FATAL on a meta (no srcdir, no configure). Empty
 ##       `FILES` / `FILES={}` is still FATAL here: a leftover on a meta is
 ##       not a download.
+## @note `REQUIRE_TOOL` on a meta is accepted (demand extras at register).
 ## @note A second `buildmaster_meta()` for the same id is FATAL (origin
 ##       of the first registration is in the message).
 ## @note Clash with a component or group id is FATAL via `_bm_id_clash_fatal`.
@@ -138,6 +140,7 @@ function(_bm_meta_impl _id _title)
 		"${_optstr}" _files_present
 		_files_urls _files_names _files_hashes _files_algos
 		_files_unpacks _files_forces _files_sources _files_titles)
+	_bm_opt_parse_require_tool("${_optstr}")
 	_bm_opt_parse_repack("${_optstr}" _repack)
 	if(_pc_present)
 		_bm_log_message(COMPONENT FATAL
