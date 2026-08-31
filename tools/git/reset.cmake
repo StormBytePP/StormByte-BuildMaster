@@ -50,8 +50,11 @@ endfunction()
 ##       repo, then every patch. Call order of `_bm_tools_git_*` does not
 ##       matter. Call as: `_bm_tools_git_reset(<id> <title> <repo>)`.
 ## @note Does **not** write the post-install reset marker. That is PATCH-only.
+## @note `_git_repo_dir` must be the component work tree
+##       (`_bm_git_require_component_root`).
 function(_bm_tools_git_reset _component_id _title _git_repo_dir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_reset")
+	_bm_git_require_component_root("${_git_repo_dir}")
 	set(GIT_REPO "${_git_repo_dir}")
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_RESET_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_reset_${_safe}.cmake")

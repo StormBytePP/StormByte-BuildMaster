@@ -13,8 +13,11 @@
 ## @note Post-install reset is registered **here only**. A PATCH dirties
 ##       the srcdir for the compile; install must restore it. FETCH /
 ##       SWITCH / RESET-only do not write that marker.
+## @note `_git_repo_dir` must be the component work tree
+##       (`_bm_git_require_component_root`).
 function(_bm_tools_git_patch _component_id _title _git_repo_dir _git_patches)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_patch")
+	_bm_git_require_component_root("${_git_repo_dir}")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(_patches "${_git_patches}")
 	string(REPLACE ";" " " GIT_PATCHES "${_patches}")

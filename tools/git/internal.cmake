@@ -37,11 +37,40 @@ function(_bm_git_toplevel _out _path)
 		RESULT_VARIABLE _rc
 	)
 	if(_rc EQUAL 0 AND NOT _root STREQUAL "")
+		file(TO_CMAKE_PATH "${_root}" _root)
 		set(${_out} "${_root}" PARENT_SCOPE)
 	else()
 		set(${_out} "${_abs}" PARENT_SCOPE)
 	endif()
 	_bm_log_message(GIT LOWLEVEL "Exiting _bm_git_toplevel")
+endfunction()
+
+## @brief FATAL unless `_path` is its own git work tree and not the host repo.
+## @param[in] _path Directory passed to RESET / PATCH / FETCH / SWITCH / clean.
+## @note `git rev-parse --show-toplevel` must equal `_path`. A wrapper
+##       directory (no `.git`) climbs to another repo — another component
+##       or the host — and is refused.
+## @note Toplevel equal to `CMAKE_SOURCE_DIR`'s toplevel is FATAL even if
+##       the caller passed that directory on purpose.
+function(_bm_git_require_component_root _path)
+	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_require_component_root")
+	get_filename_component(_abs "${_path}" ABSOLUTE)
+	file(TO_CMAKE_PATH "${_abs}" _abs)
+	get_filename_component(_host "${CMAKE_SOURCE_DIR}" ABSOLUTE)
+	file(TO_CMAKE_PATH "${_host}" _host)
+	_bm_git_toplevel(_root "${_abs}")
+	file(TO_CMAKE_PATH "${_root}" _root)
+	_bm_git_toplevel(_host_root "${_host}")
+	file(TO_CMAKE_PATH "${_host_root}" _host_root)
+	if(_root STREQUAL "${_host_root}")
+		_bm_log_message(GIT FATAL
+			"Refusing git on '${_abs}': toplevel '${_root}' is the host project (CMAKE_SOURCE_DIR).")
+	endif()
+	if(NOT _root STREQUAL "${_abs}")
+		_bm_log_message(GIT FATAL
+			"Refusing git on '${_abs}': not a git work tree (toplevel '${_root}'). GIT ops run only on the component work tree, never a wrapper or a sibling.")
+	endif()
+	_bm_log_message(GIT LOWLEVEL "Exiting _bm_git_require_component_root")
 endfunction()
 
 ## @brief Path of the post-install reset -P script for one git root.
@@ -63,6 +92,7 @@ endfunction()
 ##       succeeded). Invoked from install_exec after the component install.
 function(_bm_git_register_post_install_reset _git_root)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_register_post_install_reset")
+	_bm_git_require_component_root("${_git_root}")
 	_bm_git_marker_path(_marker "${_git_root}")
 	set(_git_cmd_line "")
 	foreach(_tok IN LISTS ENV_GIT_SILENT_COMMAND)
@@ -113,6 +143,7 @@ endfunction()
 ##       `buildmaster_clean_git_<id>` under `buildmaster_clean`.
 function(_bm_git_register_op _component_id _git_repo_dir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_git_register_op")
+	_bm_git_require_component_root("${_git_repo_dir}")
 	_bm_path_sanitize(_cid "${_component_id}")
 	_bm_git_toplevel(_git_root "${_git_repo_dir}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_ROOT_${_cid} "${_git_root}")

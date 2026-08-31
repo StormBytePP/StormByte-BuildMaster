@@ -9,8 +9,11 @@
 ## @param[in] _git_branch   Branch name.
 ## @note Generates the script and include()s it immediately. No out-variable.
 ## @note Does **not** write the post-install reset marker. That is PATCH-only.
+## @note `_git_repo_dir` must be the component work tree
+##       (`_bm_git_require_component_root`).
 function(_bm_tools_git_switch _component_id _title _git_repo_dir _git_branch)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_switch")
+	_bm_git_require_component_root("${_git_repo_dir}")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(GIT_BRANCH "${_git_branch}")
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
