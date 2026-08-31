@@ -102,16 +102,18 @@ endfunction()
 
 ## @brief Declare a link from a component (and order when dest is a graph node).
 ## @param[in] source Registered component id (INTERFACE from `_bm_graph_create`).
-## @param[in] dest   Registered component or meta, existing CMake target,
-##            an on-disk archive path, or a library spec
-##            (`<name>` or `<subdir>/<name>`) under the BM prefix.
-## @note A group id is FATAL on either side (outline only).
+## @param[in] dest   One or more dests. Each may be a registered component or
+##            meta, existing CMake target, an on-disk archive path, or a
+##            library spec (`<name>` or `<subdir>/<name>`) under the BM prefix.
+## @note `buildmaster_link(A B C)` is the same as `buildmaster_link(A B)`
+##       then `buildmaster_link(A C)`. Each pair is recorded on its own.
+## @note A group id is FATAL on source or any dest (outline only).
 ## @note Dest that is none of the above is FATAL at materialize. Raw system
 ##       linker names (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}`
 ##       on the producer, not here.
 ## @note A spec dest is resolved with the source component’s mode against
 ##       `BUILDMASTER_INSTALL_LIBDIR`. The archive need not exist yet.
-## @note Linking to a BUILDONLY component is FATAL at materialize unless
+## @note Linking to a NOINSTALL component is FATAL at materialize unless
 ##       that dest is `PRIVATE_HEADERS`.
 ## @note buildmaster_link only participates in the BuildMaster graph; host app
 ##       targets use target_link_libraries(… PRIVATE <component_id>).
@@ -119,15 +121,15 @@ endfunction()
 ##       so `buildmaster_link(A B)` before `buildmaster_component(B)` still
 ##       defers A. A second explicit `buildmaster_link` with the same pair
 ##       is WARNING and a no-op. The auto-dependency does not WARN.
-function(buildmaster_link source dest)
+function(buildmaster_link source)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_link")
-	if(ARGC GREATER 2)
+	if(ARGC LESS 2)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_link: expected exactly two arguments")
+			"buildmaster_link: expected source dest [dest…]")
 	endif()
-	if("${source}" STREQUAL "" OR "${dest}" STREQUAL "")
+	if("${source}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_link: source and dest must be non-empty")
+			"buildmaster_link: source must be non-empty")
 	endif()
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
 	if(_done)
@@ -136,26 +138,33 @@ function(buildmaster_link source dest)
 	endif()
 	if(COMMAND _bm_group_forbid)
 		_bm_group_forbid("${source}" "buildmaster_link")
-		_bm_group_forbid("${dest}" "buildmaster_link")
 	endif()
-	_bm_graph_pair_in_lists(
-		BUILDMASTER_COMPONENT_LINK_SOURCES
-		BUILDMASTER_COMPONENT_LINK_DESTS
-		"${source}" "${dest}" _have)
-	if(_have)
-		_bm_log_message(COMPONENT WARNING
-			"buildmaster_link('${source}', '${dest}'): edge already recorded — extra call ignored")
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_link")
-		return()
-	endif()
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES
-		"${source}")
-	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS
-		"${dest}")
 
-	_bm_graph_record_dep("${source}" "${dest}")
+	foreach(_dest IN LISTS ARGN)
+		if("${_dest}" STREQUAL "")
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_link: dest must be non-empty")
+		endif()
+		if(COMMAND _bm_group_forbid)
+			_bm_group_forbid("${_dest}" "buildmaster_link")
+		endif()
+		_bm_graph_pair_in_lists(
+			BUILDMASTER_COMPONENT_LINK_SOURCES
+			BUILDMASTER_COMPONENT_LINK_DESTS
+			"${source}" "${_dest}" _have)
+		if(_have)
+			_bm_log_message(COMPONENT WARNING
+				"buildmaster_link('${source}', '${_dest}'): edge already recorded — extra call ignored")
+			continue()
+		endif()
+		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES
+			"${source}")
+		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS
+			"${_dest}")
+		_bm_graph_record_dep("${source}" "${_dest}")
+		_bm_log_message(COMPONENT DEBUG "buildmaster_link ${source} → ${_dest}")
+	endforeach()
 
 	_bm_graph_defer_arm()
-	_bm_log_message(COMPONENT DEBUG "buildmaster_link ${source} → ${dest}")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_link")
 endfunction()
