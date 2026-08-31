@@ -1,7 +1,3 @@
-# =============================================================================
-# tools/git/patch.cmake — _bm_tools_git_patch
-# =============================================================================
-
 ## @brief Queue git patches for configure-time apply; register post-install reset.
 ## @param[in] _component_id Component identifier (ties to install reset / clean).
 ## @param[in] _title        Human-readable title (script filename).
@@ -15,13 +11,34 @@
 ##       SWITCH / RESET-only do not write that marker.
 ## @note `_git_repo_dir` must be the component work tree
 ##       (`_bm_git_require_component_root`).
+## @note Status lines show paths relative to `CMAKE_SOURCE_DIR` when the
+##       patch lives under the host project. Absolute path is unchanged
+##       if the file is outside that tree.
 function(_bm_tools_git_patch _component_id _title _git_repo_dir _git_patches)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_patch")
 	_bm_git_require_component_root("${_git_repo_dir}")
 	set(GIT_REPO "${_git_repo_dir}")
 	set(_patches "${_git_patches}")
 	string(REPLACE ";" " " GIT_PATCHES "${_patches}")
-	string(REPLACE ";" ", " GIT_PATCHES_DISPLAY "${_patches}")
+	set(_display "")
+	foreach(_p IN LISTS _patches)
+		if(_p STREQUAL "")
+			continue()
+		endif()
+		get_filename_component(_abs "${_p}" ABSOLUTE)
+		file(RELATIVE_PATH _rel "${CMAKE_SOURCE_DIR}" "${_abs}")
+		if(_rel MATCHES "^\\.\\.")
+			set(_show "${_abs}")
+		else()
+			set(_show "${_rel}")
+		endif()
+		if(_display STREQUAL "")
+			set(_display "${_show}")
+		else()
+			string(APPEND _display ", ${_show}")
+		endif()
+	endforeach()
+	set(GIT_PATCHES_DISPLAY "${_display}")
 	_bm_path_sanitize(_safe "${_component_id}_${_title}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_safe}.cmake")
 	configure_file(
