@@ -3,7 +3,21 @@ if(COMMAND _bm_log_level_init)
 	_bm_log_level_init()
 endif()
 
-_bm_log_message(TOOLS STATUS "Setting up tools..." 1)
+# Hardcoded until demand-load knows the real subset.
+set(_BM_TOOL_SETUP_LIST
+	cmake
+	git
+	meson
+	ninja
+	extra
+	file
+	archive
+	bundle
+	pkgconfig
+	rename
+)
+string(REPLACE ";" ", " _BM_TOOL_SETUP_HDR "${_BM_TOOL_SETUP_LIST}")
+_bm_log_message(TOOLS STATUS "Setting up tools: ${_BM_TOOL_SETUP_HDR}" 1)
 
 # Initialize variables
 include("${CMAKE_CURRENT_LIST_DIR}/init_vars.cmake")
