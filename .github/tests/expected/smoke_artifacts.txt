@@ -8,10 +8,10 @@
 <lib>/baselib.lib|windows
 <lib>/libbaselib.a|unix
 
-# buildonly
-!<include>/bolib.h|all
-!<lib>/bolib.lib|windows
-!<lib>/libbolib.a|unix
+# backend-pick
+<include>/bepick.h|all
+<lib>/bepick.lib|windows
+<lib>/libbepick.a|unix
 
 # dep
 <include>/dep.h|all
@@ -123,6 +123,11 @@
 <lib>/meta-toolchain/libmtcpinned.a|unix
 <lib>/meta-toolchain/mtcinherit.lib|windows
 <lib>/meta-toolchain/mtcpinned.lib|windows
+
+# noinstall
+!<include>/bolib.h|all
+!<lib>/bolib.lib|windows
+!<lib>/libbolib.a|unix
 
 # omit-builddir
 <include>/omit.h|all

@@ -11,7 +11,7 @@
 ##       `BUILDMASTER_COMPONENT_<id>_INDENT`; the backend reads that
 ##       *after* this function. OPTSTR `INDENT=` is create-time (usually 0)
 ##       and must not overwrite the walk depth.
-## @note BUILDONLY uses the component BUILDDIR as the library root; otherwise
+## @note NOINSTALL uses the component BUILDDIR as the library root; otherwise
 ##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
 ## @note Extra `buildmaster_link` dests that are library specs (`<name>` or
 ##       `<subdir>/<name>`, not a component, meta, CMake target, or existing
@@ -24,19 +24,20 @@
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
 ## @note `_BM_PC_*` comes from `_bm_component_pkgconfig_fill_vars`
 ##       (`component/pkgconfig`). ENABLED is `1` only when `PC={…}` is on and
-##       not BUILDONLY (already FATAL at _bm_graph_create).
+##       not NOINSTALL (already FATAL at `_bm_graph_create`).
 function(_bm_materialize_collect_outputs _component)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
+	get_property(_noinstall GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_NOINSTALL)
 
 	_bm_opt_parse(
-		_indent_ignored _toolchain _rename_on _buildonly _whole_ignored _stripres_on
+		_indent_ignored _toolchain _rename_on _noinstall_ignored _whole_ignored _stripres_on
 		"${_options_string}")
 
-	if(_buildonly)
+	if(_noinstall)
 		set(_BM_BUILDONLY "1")
 		set(_base_libdir "${_builddir}")
 	else()
@@ -66,7 +67,7 @@ function(_bm_materialize_collect_outputs _component)
 	set(_output_libraries "")
 
 	if(_library_mode STREQUAL "headers")
-		if(_buildonly)
+		if(_noinstall)
 			set(_headers_stamp
 				"${_builddir}/.bm_${_component}_headers.stamp")
 		else()
@@ -85,7 +86,7 @@ function(_bm_materialize_collect_outputs _component)
 				_LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
 
-		if(NOT _buildonly)
+		if(NOT _noinstall)
 			get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 			get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 			if(_lsrcs)
@@ -176,8 +177,9 @@ function(_bm_materialize_write_fragment _component _deferred)
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
 	get_property(_options_string GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRODUCED)
-	_bm_opt_parse(_il _toolchain _rn _bo _wh _sr "${_options_string}")
-	if(_bo)
+	get_property(_noinstall GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_NOINSTALL)
+	_bm_opt_parse(_il _toolchain _rn _ni_ignored _wh _sr "${_options_string}")
+	if(_noinstall)
 		set(_BM_BUILDONLY "1")
 	else()
 		set(_BM_BUILDONLY "0")
@@ -272,7 +274,7 @@ function(_bm_materialize_write_fragment _component _deferred)
 	if(NOT _library_mode STREQUAL "headers" AND TARGET "${_component}_install")
 		set(_declared "")
 		set(_base_libdir "${BUILDMASTER_INSTALL_LIBDIR}")
-		if(_bo)
+		if(_noinstall)
 			get_property(_base_libdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
 		endif()
 		foreach(_spec IN LISTS _produced)

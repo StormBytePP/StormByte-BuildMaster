@@ -6,8 +6,8 @@
 # base
 base -> base_install
 
-# buildonly
-buildonly-lib -> buildonly-lib_install
+# backend-pick
+be-pick -> be-pick_install
 
 # dep
 dep -> dep_install
@@ -71,6 +71,9 @@ meta-tc_install -> mtc-inherit_install
 meta-tc_install -> mtc-pinned_install
 mtc-inherit -> mtc-inherit_install
 mtc-pinned -> mtc-pinned_install
+
+# noinstall
+noinstall-lib -> noinstall-lib_install
 
 # omit-builddir
 omit-lib -> omit-lib_install

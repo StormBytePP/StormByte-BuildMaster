@@ -3,14 +3,16 @@
 # =============================================================================
 
 ## @brief Detect cmake / meson / none from files in `srcdir` and the mode.
-## @param[in]  srcdir  Component source directory.
-## @param[in]  mode    `static`, `shared`, or `headers`.
-## @param[out] out_var Parent-scope `cmake`, `meson`, or `none`.
+## @param[in]  srcdir   Component source directory (already SOURCE=-resolved).
+## @param[in]  mode     `static`, `shared`, or `headers`.
+## @param[in]  backend  Override from `BACKEND=` (empty = detect).
+## @param[out] out_var  Parent-scope `cmake`, `meson`, or `none`.
 ## @note Exactly one of `CMakeLists.txt` / `meson.build` → that backend.
-##       Both markers → FATAL. No recursion into subdirectories.
-## @note `headers` + neither marker → `none` (private tree, no nested
-##       generate). `static` / `shared` + neither marker → FATAL.
-function(_bm_factory_detect srcdir mode out_var)
+##       Both markers → FATAL unless `backend` is a known name in
+##       `BUILDMASTER_FACTORY_BACKENDS`. No recursion into subdirectories.
+## @note `headers` + neither marker → `none`. `static` / `shared` +
+##       neither marker → FATAL.
+function(_bm_factory_detect srcdir mode backend out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_factory_detect")
 	if("${srcdir}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL
@@ -22,6 +24,7 @@ function(_bm_factory_detect srcdir mode out_var)
 	endif()
 
 	string(TOLOWER "${mode}" _mode)
+	string(TOLOWER "${backend}" _be)
 	set(_cmake FALSE)
 	set(_meson FALSE)
 	if(EXISTS "${srcdir}/CMakeLists.txt")
@@ -31,9 +34,30 @@ function(_bm_factory_detect srcdir mode out_var)
 		set(_meson TRUE)
 	endif()
 
+	if(NOT "${_be}" STREQUAL "")
+		set(_known "${BUILDMASTER_FACTORY_BACKENDS}")
+		if("${_known}" STREQUAL "")
+			set(_known "cmake;meson")
+		endif()
+		set(_ok FALSE)
+		foreach(_k IN LISTS _known)
+			if(_be STREQUAL "${_k}")
+				set(_ok TRUE)
+				break()
+			endif()
+		endforeach()
+		if(NOT _ok)
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_component: BACKEND='${backend}' is not in BUILDMASTER_FACTORY_BACKENDS (${_known})")
+		endif()
+		set(${out_var} "${_be}" PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_factory_detect")
+		return()
+	endif()
+
 	if(_cmake AND _meson)
 		_bm_log_message(COMPONENT FATAL
-			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — use _bm_backend_cmake_create or _bm_backend_meson_create")
+			"buildmaster_component: '${srcdir}' has both CMakeLists.txt and meson.build — set BACKEND=cmake or BACKEND=meson")
 	endif()
 	if(_cmake)
 		set(${out_var} "cmake" PARENT_SCOPE)
@@ -55,7 +79,7 @@ function(_bm_factory_detect srcdir mode out_var)
 	endif()
 
 	_bm_log_message(COMPONENT FATAL
-		"buildmaster_component: unknown build system in '${srcdir}' (need CMakeLists.txt or meson.build)")
+		"buildmaster_component: unknown build system in '${srcdir}' (need CMakeLists.txt or meson.build, or BACKEND=)")
 endfunction()
 
 ## @brief Split `KEY=value` (first `=`). Empty key is FATAL.
@@ -222,35 +246,26 @@ endfunction()
 ## @brief Register a component; backend is inferred from `srcdir` + mode.
 ## @param[in] _component Short component identifier.
 ## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Source directory. For `static`/`shared`: exactly one
-##            of `CMakeLists.txt` or `meson.build`. For `headers`: those
-##            markers select cmake/meson; neither marker selects `none`
-##            (private include tree, no nested generate).
+## @param[in] _srcdir Source directory. `SOURCE=` (optstr) selects a child
+##            of this path **before** detect. GIT ops stay on this
+##            positional path (the git work tree), not on the SOURCE child.
+##            For `static`/`shared`: exactly one of `CMakeLists.txt` or
+##            `meson.build` unless `BACKEND=`.
+##            For `headers`: those markers select cmake/meson; neither
+##            marker selects `none`.
 ##            **By design ignored when `FILES` contains `SOURCE`:** the
 ##            unpacked tree is the only srcdir. A dummy or empty path is
 ##            accepted in that case (WARNING).
 ## @param[in] options CMake list of `KEY=value` (one string is a
-##            one-element list). Human-readable, backend-agnostic:
-##            do not write CMake `-D` or Meson `-D` unless you want
-##            to; a leading `-D` / `-d` / `/D` on the key is stripped.
-##            Idioms (append to the parent job / toolchain; never
-##            replace it): `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
-##            `LDFLAGS`, `INCLUDES` (dir; relative to `srcdir`),
-##            `DEFINITIONS` (`FOO` or `FOO=1` → compiler `-D`).
-##            Any other key is forwarded as `-DKEY=value` to the
-##            nested CMake configure or the nested Meson setup
-##            (Meson also uses `-D`, not `-d`).
-##            Private to that nested step, never INTERFACE on `<id>`.
-##            Ignored when the backend is `none`. Not `ENV{CFLAGS}`.
+##            one-element list). Human-readable, backend-agnostic.
 ## @param[in] mode `static`, `shared`, or `headers`.
 ## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
 ##            for headers.
-## @param[in] optstr Optional trailing `KEY=value;…` (`LINK=`, `PC=`,
-##            `WHOLE`, `GIT={…}`, `FILES={…}`, …). GIT / FILES run from
-##            materialize after the INTERFACE exists.
+## @param[in] optstr Optional trailing `KEY=value;…`. `SOURCE=` and
+##            `BACKEND=` are read here, before detect.
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
-## @note Both marker files: FATAL.
+## @note Both marker files without `BACKEND=`: FATAL.
 ## @note INTERFACE `<id>` exists on return.
 function(buildmaster_component _component _component_title _srcdir
 		_options _library_mode _produced)
@@ -266,6 +281,34 @@ function(buildmaster_component _component _component_title _srcdir
 		set(_options_string "${ARGV6}")
 	endif()
 
+	set(_opt_source "")
+	set(_opt_backend "")
+	if(NOT "${_options_string}" STREQUAL "")
+		_bm_opt_split_pairs("${_options_string}" _pairs)
+		foreach(_pair IN LISTS _pairs)
+			if(_pair STREQUAL "")
+				continue()
+			endif()
+			_bm_opt_split_pair("${_pair}" _key _val _ok)
+			if(NOT _ok)
+				continue()
+			endif()
+			if(_key STREQUAL "SOURCE")
+				if("${_val}" STREQUAL "")
+					_bm_log_message(COMPONENT FATAL
+						"buildmaster_component('${_component}'): SOURCE= requires a directory")
+				endif()
+				set(_opt_source "${_val}")
+			elseif(_key STREQUAL "BACKEND")
+				if("${_val}" STREQUAL "")
+					_bm_log_message(COMPONENT FATAL
+						"buildmaster_component('${_component}'): BACKEND= requires cmake or meson")
+				endif()
+				set(_opt_backend "${_val}")
+			endif()
+		endforeach()
+	endif()
+
 	_bm_opt_parse_files(
 		"${_options_string}" _files_present
 		_files_urls _files_names _files_hashes _files_algos
@@ -278,39 +321,49 @@ function(buildmaster_component _component _component_title _srcdir
 		endif()
 	endforeach()
 
+	set(_src_pos "${_srcdir}")
+	set(_src_build "${_srcdir}")
+
 	if(_files_has_source)
 		_bm_log_message(COMPONENT WARNING
 			"buildmaster_component('${_component}'): srcdir ignored because FILES SOURCE supplies the tree")
 		set(_sys "pending")
 		set(_xopts "")
-		if("${_srcdir}" STREQUAL "")
-			set(_srcdir "${CMAKE_CURRENT_SOURCE_DIR}")
+		if("${_src_pos}" STREQUAL "")
+			set(_src_pos "${CMAKE_CURRENT_SOURCE_DIR}")
+			set(_src_build "${_src_pos}")
 		endif()
 	else()
-		if("${_srcdir}" STREQUAL "")
+		if("${_src_pos}" STREQUAL "")
 			_bm_log_message(COMPONENT FATAL
 				"buildmaster_component('${_component}'): empty source directory")
 		endif()
-		_bm_factory_detect("${_srcdir}" "${_library_mode}" _sys)
-		_bm_factory_translate_options("${_sys}" "${_srcdir}" "${_options}" _xopts)
+		if(NOT "${_opt_source}" STREQUAL "")
+			_bm_comp_git_worktree(_src_build "${_src_pos}" "${_opt_source}")
+		endif()
+		_bm_factory_detect("${_src_build}" "${_library_mode}" "${_opt_backend}" _sys)
+		_bm_factory_translate_options("${_sys}" "${_src_build}" "${_options}" _xopts)
 	endif()
+
+	set_property(GLOBAL PROPERTY
+		BUILDMASTER_COMPONENT_${_component}_GIT_WORKDIR "${_src_pos}")
 
 	_bm_log_message(COMPONENT DEBUG
 		"buildmaster_component('${_component}'): ${_sys}")
 
 	if(_sys STREQUAL "none" OR _sys STREQUAL "pending")
 		_bm_graph_create(
-			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_component}" "${_component_title}" "${_src_build}"
 			"${_xopts}" "${_library_mode}"
 			"${_sys}" "${_produced}" "${_options_string}")
 	elseif(_sys STREQUAL "cmake")
 		_bm_backend_cmake_create(
-			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_component}" "${_component_title}" "${_src_build}"
 			"${_xopts}" "${_library_mode}"
 			"${_produced}" "${_options_string}")
 	else()
 		_bm_backend_meson_create(
-			"${_component}" "${_component_title}" "${_srcdir}"
+			"${_component}" "${_component_title}" "${_src_build}"
 			"${_xopts}" "${_library_mode}"
 			"${_produced}" "${_options_string}")
 	endif()

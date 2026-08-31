@@ -5,20 +5,23 @@
 ## @brief Register a component. Creates an empty INTERFACE `<id>` before return.
 ## @param[in] _component Short component identifier (INTERFACE target name).
 ## @param[in] _component_title Human-readable title.
-## @param[in] _srcdir Component source directory. Ignored when FILES SOURCE
+## @param[in] _srcdir Backend source directory (after optstr `SOURCE=`).
+##            GIT ops use `BUILDMASTER_COMPONENT_<id>_GIT_WORKDIR` when set
+##            (positional srcdir / git work tree). Ignored when FILES SOURCE
 ##            supplies the tree (by design); the positional value is stored
 ##            only until apply rewrites SRCDIR.
 ## @param[in] _options Options forwarded to internal stage generators.
 ## @param[in] _library_mode `static`, `shared`, or `headers`.
 ## @param[in] _build_system `cmake`, `meson`, `none`, or `pending`.
 ##            `pending` means FILES SOURCE will unpack the tree and
-##            autodetect runs after apply. `none` is valid only with
-##            `headers`.
+##            autodetect runs after apply. `none` is valid for `headers`,
+##            or for any mode when `NOINSTALL` is set (no nested generate).
 ## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
 ##            Empty for headers mode. Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
 ##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
-##            BUILDONLY (flag), WHOLE (flag; static whole-archive link),
+##            NOINSTALL (flag; do not publish to the shared prefix),
+##            WHOLE (flag; static whole-archive link),
 ##            STRIPRES (flag; default ON; strip `.res` members from static
 ##            MSVC/clang-cl archives after RENAME),
 ##            LINK=<name> / LINK={name;name2} (raw linker names on the
@@ -28,12 +31,12 @@
 ##            platform groups WINDOWS / LINUX / MAC / UNIX),
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers),
-##            GIT={…} (`ROOT=` is always under srcdir), FILES={…},
+##            GIT={…} (`ROOT=` is always under the git work tree), FILES={…},
 ##            REQUIRE_TOOL=… / REQUIRE_TOOL={…}.
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
-##       `BUILDONLY` is set on a headers id. A non-BUILDONLY source may
+##       `NOINSTALL` is set on a headers id. A source that does install may
 ##       wait on those dests (PRIVATE `-I` injection is not a prefix publish).
 ## @note The INTERFACE exists as soon as this function returns, so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see `<id>`.
@@ -59,11 +62,14 @@
 ## @note `STRIPRES` default is ON. INFO only when the user wrote the key and
 ##       mode is not static (shared/headers have nothing to strip).
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
-##       skips VERSION and does not write a file. BUILDONLY + PC enabled is
+##       skips VERSION and does not write a file. `NOINSTALL` + PC enabled is
 ##       FATAL (no shared prefix). `none` + PC enabled is FATAL. An upstream
 ##       `.pc` already at the canonical path is FATAL at install time (do not
-##       clobber). Meta + PC is FATAL in buildmaster_meta.
+##       clobber). Meta + PC is FATAL in `_bm_meta_impl`.
 ## @note GIT + FILES SOURCE is FATAL (two owners of the same tree).
+## @note `SOURCE=` does not move the git work tree. GIT uses
+##       `BUILDMASTER_COMPONENT_<id>_GIT_WORKDIR` (positional srcdir).
+## @note `BUILDONLY` is removed; the parser FATALs (`use NOINSTALL`).
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_create")
@@ -104,7 +110,7 @@ function(_bm_graph_create _component _component_title _srcdir
 	endif()
 
 	_bm_opt_parse(
-		_reg_indent _reg_tc _reg_rename _reg_buildonly _reg_whole _reg_stripres
+		_reg_indent _reg_tc _reg_rename _reg_noinstall _reg_whole _reg_stripres
 		"${_options_string}")
 	_bm_opt_parse_pc(
 		"${_options_string}"
@@ -157,8 +163,10 @@ function(_bm_graph_create _component _component_title _srcdir
 	endif()
 
 	if(_build_system STREQUAL "none" AND NOT _library_mode STREQUAL "headers")
-		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create('${_component}'): backend 'none' is only valid for headers")
+		if(NOT _reg_noinstall)
+			_bm_log_message(COMPONENT FATAL
+				"_bm_graph_create('${_component}'): backend 'none' is only valid for headers, or with NOINSTALL")
+		endif()
 	endif()
 
 	if(NOT _library_mode STREQUAL "headers")
@@ -192,9 +200,9 @@ function(_bm_graph_create _component _component_title _srcdir
 		set(_reg_linkflags "")
 	endif()
 
-	if(_pc_enabled AND (_reg_buildonly OR _build_system STREQUAL "none"))
+	if(_pc_enabled AND (_reg_noinstall OR _build_system STREQUAL "none"))
 		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create('${_component}'): PC={…} cannot be used with BUILDONLY or a headers tree that does not install (helper .pc files are for internal consumers of the shared BM prefix)")
+			"_bm_graph_create('${_component}'): PC={…} cannot be used with NOINSTALL or a headers tree that does not install (helper .pc files are for internal consumers of the shared BM prefix)")
 	endif()
 
 	if(_pc_name STREQUAL "")
@@ -259,12 +267,12 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_files_sources}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_TITLES
 		"${_files_titles}")
-	if(_reg_buildonly)
-		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY TRUE)
+	if(_reg_noinstall)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_NOINSTALL TRUE)
 	else()
-		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDONLY FALSE)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_NOINSTALL FALSE)
 	endif()
-	if(_build_system STREQUAL "none" OR (_reg_buildonly AND _library_mode STREQUAL "headers"))
+	if(_build_system STREQUAL "none" OR (_reg_noinstall AND _library_mode STREQUAL "headers"))
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRIVATE_HEADERS TRUE)
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PRIVATE_HEADERS FALSE)
@@ -293,8 +301,12 @@ function(_bm_graph_create _component _component_title _srcdir
 
 	add_library("${_component}" INTERFACE)
 
+	get_property(_git_wd GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_GIT_WORKDIR)
+	if("${_git_wd}" STREQUAL "")
+		set(_git_wd "${_srcdir}")
+	endif()
 	_bm_comp_apply_git(
-		"${_component}" "${_component_title}" "${_srcdir}" "${_options_string}")
+		"${_component}" "${_component_title}" "${_git_wd}" "${_options_string}")
 
 	_bm_graph_defer_arm()
 	_bm_log_message(COMPONENT DEBUG "Registered component ${_component} (${_build_system}/${_library_mode})")

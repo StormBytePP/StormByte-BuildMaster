@@ -61,8 +61,8 @@ endfunction()
 ## @brief Declare a meta component (INTERFACE collection, optional REPACK).
 ## @param[in] _id     Meta identifier (also the REPACK archive stem).
 ## @param[in] _title  Human-readable title.
-## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `LINK=`,
-##                    `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`).
+## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `NOINSTALL`,
+##                    `LINK=`, `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`).
 ##                    `INDENT=` is WARNING and ignored; put the meta in a
 ##                    `buildmaster_group()`.
 ## @note Invoked only from the public macro. Origin is the caller's list file.
@@ -70,12 +70,15 @@ endfunction()
 ##       into one prefix archive named after `_id`. Shared/DLL members are
 ##       not merged (WARNING); they stay INTERFACE links on the meta.
 ##       Wait edge per leaf: `_install` if the leaf publishes; `_build` if
-##       `BUILDONLY`. `REPACK` on `buildmaster_component` is FATAL.
+##       `NOINSTALL`. `REPACK` on `buildmaster_component` is FATAL.
 ## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see the target.
-## @note RENAME / BUILDONLY / STRIPRES → INFO, ignored (meta produces no
-##       archives of its own except the REPACK merge). STRIPRES default is
-##       ON; the INFO fires only when the user actually wrote the key.
+## @note RENAME / STRIPRES → INFO, ignored (meta produces no archives of
+##       its own except the REPACK merge). STRIPRES default is ON; the INFO
+##       fires only when the user actually wrote the key.
+## @note `NOINSTALL` on a meta is prevalent: finalize stamps
+##       `BUILDMASTER_COMPONENT_<leaf>_NOINSTALL` on every member. A child
+##       cannot turn it off.
 ## @note `PC` / `PC={…}` is FATAL on a meta.
 ## @note `GIT={…}` with FETCH / SWITCH / RESET / PATCH is FATAL on a meta
 ##       (no srcdir). Empty `GIT` / `GIT={}` is the parser WARNING only.
@@ -128,7 +131,7 @@ function(_bm_meta_impl _id _title)
 	endif()
 
 	_bm_opt_parse(
-		_indent _tc _rename _buildonly _whole _stripres "${_optstr}")
+		_indent _tc _rename _noinstall _whole _stripres "${_optstr}")
 	_bm_opt_parse_pc(
 		"${_optstr}" _pc_present _pc_enabled _pc_name _pc_ver _pc_desc)
 	_bm_opt_parse_link("${_optstr}" _meta_link)
@@ -153,10 +156,6 @@ function(_bm_meta_impl _id _title)
 	if(_files_present)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta('${_id}'): FILES={…} is not allowed on a meta (no srcdir, no configure)")
-	endif()
-	if(_buildonly)
-		_bm_log_message(COMPONENT INFO
-			"buildmaster_meta('${_id}'): BUILDONLY ignored (meta does not install member artifacts)")
 	endif()
 	if("${_optstr}" MATCHES "[Rr][Ee][Nn][Aa][Mm][Ee]")
 		_bm_log_message(COMPONENT INFO
@@ -186,6 +185,11 @@ function(_bm_meta_impl _id _title)
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK TRUE)
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK FALSE)
+	endif()
+	if(_noinstall)
+		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_NOINSTALL TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_NOINSTALL FALSE)
 	endif()
 
 	add_library("${_id}" INTERFACE)
@@ -300,3 +304,52 @@ macro(buildmaster_meta_add _meta)
 	endif()
 	_bm_meta_add_impl("${_meta}" ${ARGN})
 endmacro()
+
+## @brief Stamp meta NOINSTALL onto every reachable member (prevalent).
+## @note Nested metas inherit the flag. Leaves get
+##       `BUILDMASTER_COMPONENT_<id>_NOINSTALL`. Headers leaves also get
+##       `PRIVATE_HEADERS`. A leaf cannot unset this.
+function(_bm_meta_stamp_noinstall)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_stamp_noinstall")
+	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
+	if(NOT _metas)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_stamp_noinstall")
+		return()
+	endif()
+	foreach(_meta IN LISTS _metas)
+		get_property(_mni GLOBAL PROPERTY BUILDMASTER_META_${_meta}_NOINSTALL)
+		if(NOT _mni)
+			continue()
+		endif()
+		set(_stack "${_meta}")
+		set(_seen "")
+		while(_stack)
+			list(GET _stack 0 _cur)
+			list(REMOVE_AT _stack 0)
+			list(FIND _seen "${_cur}" _hit)
+			if(NOT _hit EQUAL -1)
+				continue()
+			endif()
+			list(APPEND _seen "${_cur}")
+			_bm_meta_is("${_cur}" _is_m)
+			if(_is_m)
+				set_property(GLOBAL PROPERTY BUILDMASTER_META_${_cur}_NOINSTALL TRUE)
+				get_property(_mem GLOBAL PROPERTY BUILDMASTER_META_${_cur}_MEMBERS)
+				if(_mem)
+					list(APPEND _stack ${_mem})
+				endif()
+				continue()
+			endif()
+			_bm_graph_is_registered("${_cur}" _is_c)
+			if(_is_c)
+				set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_cur}_NOINSTALL TRUE)
+				get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_cur}_MODE)
+				if(_mode STREQUAL "headers")
+					set_property(GLOBAL PROPERTY
+						BUILDMASTER_COMPONENT_${_cur}_PRIVATE_HEADERS TRUE)
+				endif()
+			endif()
+		endwhile()
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_stamp_noinstall")
+endfunction()

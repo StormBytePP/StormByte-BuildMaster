@@ -51,7 +51,7 @@ endfunction()
 ## @note Runs at the start of finalize, before component materialize, so
 ##       `buildmaster_link` / `buildmaster_depend` can resolve meta ids.
 ## @note DFS via `_bm_meta_collect_leaves` (cycles FATAL). Each leaf must
-##       be a registered component. `BUILDONLY` leaves are FATAL unless
+##       be a registered component. `NOINSTALL` leaves are FATAL unless
 ##       this meta has `REPACK` (merge reads those archives from BUILDDIR).
 ## @note `buildmaster_meta` already created `<id>` INTERFACE. This
 ##       function does `add_library(INTERFACE)` only for lazy metas.
@@ -78,15 +78,15 @@ function(_bm_meta_materialize)
 				_bm_log_message(COMPONENT FATAL
 					"buildmaster_meta_add('${_id}', '${_leaf}'): cannot resolve member. Accepted: registered component id or another meta id.")
 			endif()
-			_bm_graph_is_buildonly("${_leaf}" _bo)
+			_bm_graph_is_noinstall("${_leaf}" _ni)
 			get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
-			if(_bo AND NOT _repack)
+			if(_ni AND NOT _repack)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_meta_add('${_id}', '${_leaf}'): BUILDONLY components cannot be meta members unless the meta has REPACK")
+					"buildmaster_meta_add('${_id}', '${_leaf}'): NOINSTALL components cannot be meta members unless the meta has REPACK")
 			endif()
-			if(_bo AND _repack AND _lmode STREQUAL "shared")
+			if(_ni AND _repack AND _lmode STREQUAL "shared")
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_meta_add('${_id}', '${_leaf}'): REPACK cannot take a BUILDONLY shared component (the .so/.dll is not installed and its build directory is not a public path)")
+					"buildmaster_meta_add('${_id}', '${_leaf}'): REPACK cannot take a NOINSTALL shared component (the .so/.dll is not installed and its build directory is not a public path)")
 			endif()
 		endforeach()
 

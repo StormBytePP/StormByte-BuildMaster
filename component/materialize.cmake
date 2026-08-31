@@ -33,6 +33,8 @@ endfunction()
 ##       a member configure sits under its group banner.
 ## @note `_bm_report_emit` is the last BuildMaster output of this configure
 ##       when `BUILDMASTER_VERBOSE` is ON.
+## @note Meta `NOINSTALL` is stamped onto every member leaf before inject /
+##       materialize so collect_outputs and resolve_dest see the property.
 function(_bm_materialize_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -57,6 +59,8 @@ function(_bm_materialize_finalize)
 	if(COMMAND _bm_group_plan)
 		_bm_group_plan()
 	endif()
+
+	_bm_meta_stamp_noinstall()
 
 	_bm_materialize_inject_private_headers()
 	_bm_materialize_inject_linkflags()

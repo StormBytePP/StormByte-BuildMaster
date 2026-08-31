@@ -1,4 +1,4 @@
-# BUILDONLY phases → meta REPACK → link all symbols from the merge.
+# NOINSTALL phases → meta REPACK → link all symbols from the merge.
 
 set(_ra_src "${CMAKE_CURRENT_SOURCE_DIR}/phase_a")
 set(_rb_src "${CMAKE_CURRENT_SOURCE_DIR}/phase_b")
@@ -10,7 +10,7 @@ _bm_backend_cmake_create(
 	""
 	static
 	"alib;aextra"
-	"BUILDONLY"
+	"NOINSTALL"
 )
 
 _bm_backend_cmake_create(
@@ -20,7 +20,7 @@ _bm_backend_cmake_create(
 	""
 	static
 	"blib"
-	"BUILDONLY"
+	"NOINSTALL"
 )
 
 buildmaster_meta(mergedlib "Harness repack merge" "REPACK")

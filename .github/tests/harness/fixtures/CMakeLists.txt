@@ -2,16 +2,16 @@
 # One subdirectory per feature. recursive/ stays as cmake|meson.
 
 if(NOT BM_TEST_REPO_ROOT)
-    get_filename_component(BM_TEST_REPO_ROOT
-        "${CMAKE_CURRENT_SOURCE_DIR}/../../.."
-        ABSOLUTE
-    )
+	get_filename_component(BM_TEST_REPO_ROOT
+		"${CMAKE_CURRENT_SOURCE_DIR}/../../.."
+		ABSOLUTE
+	)
 endif()
 
 # ---------------------------------------------------------------------------
-# BUILDONLY
+# NOINSTALL
 # ---------------------------------------------------------------------------
-add_subdirectory(buildonly)
+add_subdirectory(noinstall)
 
 # ---------------------------------------------------------------------------
 # File helpers (FILES unpack on a real component)
@@ -99,6 +99,7 @@ add_subdirectory(hooks)
 add_subdirectory(hooks-stamp)
 add_subdirectory(late-link)
 add_subdirectory(omit-builddir)
+add_subdirectory(backend-pick)
 add_subdirectory(dup-link)
 add_subdirectory(link-raw)
 add_subdirectory(git-reset-patch)

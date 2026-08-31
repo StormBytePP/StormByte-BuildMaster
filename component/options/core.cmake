@@ -3,9 +3,12 @@
 # =============================================================================
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, BUILDONLY, WHOLE, STRIPRES, PC, GIT, REPACK, FILES and
+## @note RENAME, NOINSTALL, WHOLE, STRIPRES, PC, GIT, REPACK, FILES and
 ##       REQUIRE_TOOL accept `KEY`, `KEY=` and `KEY=ON|OFF`. Other keys
 ##       require `KEY=value`. Keep this list in sync with `_bm_opt_parse()`.
+## @note `NOINSTALL` is a bare flag. `NOINSTALL=` / truthy values warn and
+##       enable. Falsy values are FATAL. Parsed in `_bm_opt_parse_noinstall`.
+## @note `BUILDONLY` is not a flag. The key is FATAL (`use NOINSTALL`).
 ## @note `PC` as a bare flag is accepted by the splitter so it is not treated
 ##       as an unknown token, but a `.pc` is only generated from `PC={…}`.
 ##       A bare `PC` / `PC=ON` without a brace group is FATAL.
@@ -29,7 +32,9 @@
 ## @note Any `FILES` key is forbidden on meta components (no srcdir, no
 ##       nested configure).
 ## @note `REQUIRE_TOOL` is allowed on meta and component.
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES;REQUIRE_TOOL")
+## @note `NOINSTALL` is allowed on meta and component. On a meta it is
+##       stamped onto every member at finalize (prevalent).
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;NOINSTALL;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES;REQUIRE_TOOL")
 
 # CMake lists use ';' as the element separator. Tokens that contain ';'
 # inside `{…}` are stored with this stand-in so foreach(IN LISTS) does
@@ -71,11 +76,6 @@ endfunction()
 ## @note Brace depth counts nested `{` / `}`. Unbalanced `{` / `}` is FATAL.
 ##       Empty tokens are dropped. Values still must not contain a raw `;`
 ##       outside braces.
-## @note A lone `;` cannot live in a CMake variable. After re-join, the
-##       string is read back as a CMake list (one token per `;`). Depth is
-##       counted per token from `{` / `}`. Separators that sit inside a
-##       brace group are stored as `__BM_SEMI__`; `_bm_opt_split_pair`
-##       restores `;`.
 function(_bm_opt_split_pairs options_string out_pairs)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_split_pairs")
 	_bm_opt_as_string(options_string ${options_string})
@@ -85,9 +85,6 @@ function(_bm_opt_split_pairs options_string out_pairs)
 	_bm_log_message(COMPONENT DEBUG
 		"_bm_opt_split_pairs: in len=${_n} semi=${_semi} [${_dump}]")
 
-	# Do not walk bytes. After re-join, unquoted expansion is the CMake
-	# list of tokens. Brace depth is counted per token; separators that
-	# sit inside `{…}` become __BM_SEMI__.
 	set(_segs ${options_string})
 	set(_pairs "")
 	set(_cur "")
@@ -228,6 +225,7 @@ endfunction()
 ##       Accepted truthy: `1`, `ON`, `TRUE`, `YES` (case-insensitive).
 ##       Accepted falsy: `0`, `OFF`, `FALSE`, `NO`.
 ##       Any other non-empty value → WARNING and FALSE.
+## @note Do not use this for `NOINSTALL` (`_bm_opt_parse_noinstall`).
 function(_bm_opt_flag val out_bool)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_flag")
 	if("${val}" STREQUAL "")

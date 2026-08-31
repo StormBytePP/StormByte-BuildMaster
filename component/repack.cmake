@@ -47,7 +47,7 @@ endfunction()
 ## @param[in]  token    Registered component id.
 ## @param[out] out_files Parent-scope list of static archive paths.
 ## @param[out] out_deps  Parent-scope wait targets (`_build` or `_install`).
-## @note BUILDONLY → files under the component BUILDDIR, wait `_build`.
+## @note NOINSTALL → files under the component BUILDDIR, wait `_build`.
 ##       Otherwise → files under BUILDMASTER_INSTALL_LIBDIR, wait `_install`.
 ##       Shared / headers contribute no files (wire already warned / linked).
 function(_bm_repack_resolve_input token out_files out_deps)
@@ -64,7 +64,7 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_MODE)
 	get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_PRODUCED)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_BUILDDIR)
-	_bm_graph_is_buildonly("${token}" _bo)
+	_bm_graph_is_noinstall("${token}" _ni)
 
 	if(_mode STREQUAL "headers")
 		set(${out_files} "" PARENT_SCOPE)
@@ -79,7 +79,7 @@ function(_bm_repack_resolve_input token out_files out_deps)
 		return()
 	endif()
 
-	if(_bo)
+	if(_ni)
 		set(_root "${_builddir}")
 		if(TARGET "${token}_build")
 			list(APPEND _deps "${token}_build")

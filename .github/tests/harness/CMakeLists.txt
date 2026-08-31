@@ -88,8 +88,6 @@ add_custom_target(run_buildmaster_smoke
 		-P ${CMAKE_CURRENT_SOURCE_DIR}/check_smoke_artifacts.cmake
 	COMMENT "[BuildMaster/Core     ]: smoke — install stages + artifact contract"
 	DEPENDS
-		# BUILDONLY
-		buildonly-lib_install
 		# Consumer (own source dir / DEFER)
 		run_buildmaster_consumer
 		# Core / flat
@@ -109,6 +107,8 @@ add_custom_target(run_buildmaster_smoke
 		# LINKFLAGS
 		lf-os_install lf-unix_install
 		linkflags_os_test_run
+		# NOINSTALL
+		noinstall-lib_install
 		${_BM_SMOKE_UNIX}
 		# Pkg-config helper
 		pc-dep_install pc-lib_install pc_check_run
@@ -117,7 +117,7 @@ add_custom_target(run_buildmaster_smoke
 		recursion_cmake_link_test recursion_meson_link_test
 		# Rename
 		rename-variant_install rename_variant_link_test
-		# Repack (BUILDONLY phases + REPACK meta)
+		# Repack (NOINSTALL phases + REPACK meta)
 		repack-a_install repack-b_install mergedlib_install
 		repack_link_test
 		# Slow configure
@@ -133,6 +133,8 @@ add_custom_target(run_buildmaster_smoke
 		hooks-stamp_install
 		late-dst_install late-src_install
 		omit-lib_install
+		omit-lib_install
+		be-pick_install
 		dup-a_install dup-b_install
 		raw-lib_install
 		# PRIVATE headers consumer (compile fails if -I missing)

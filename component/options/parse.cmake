@@ -9,9 +9,9 @@
 ## @param[out] out_toolchain  Toolchain name (empty = inherit parent profile).
 ## @param[out] out_rename     TRUE/FALSE — normalize variant archive names
 ##            (default TRUE).
-## @param[out] out_buildonly  TRUE/FALSE — build without installing to the shared
-##            prefix (default FALSE). Artifacts live under the component BUILDDIR
-##            only; RENAME runs in that tree after build.
+## @param[out] out_noinstall  TRUE/FALSE — configure/build without publishing
+##            to the shared prefix (default FALSE). Artifacts stay under the
+##            component BUILDDIR; RENAME runs in that tree after build.
 ## @param[out] out_whole      TRUE/FALSE — link produced statics with whole-archive
 ##            semantics (default FALSE). Only meaningful for static mode;
 ##            shared/headers → WARNING and ignored at materialize.
@@ -28,31 +28,21 @@
 ##       Unknown keys → WARNING and ignored. `LINK_EXTRA` is removed; use
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
-##       graph nodes. Values may contain `=` and spaces but not `;` outside `{…}`.
-## @note `PC`, `LINK`, `LINKFLAGS`, `GIT`, `FILES`, `REPACK` and
-##       `REQUIRE_TOOL` are recognized so they are not “unknown keys”.
-##       Details: `_bm_opt_parse_pc()`, `_bm_opt_parse_link()`,
-##       `_bm_opt_parse_linkflags()`, `_bm_opt_parse_git()`,
-##       `_bm_opt_parse_files()`, `_bm_opt_parse_repack()`,
-##       `_bm_opt_parse_require_tool()`.
-##       Meta + PC is FATAL in `buildmaster_meta`.
-##       Meta + non-empty GIT is FATAL in `buildmaster_meta`.
-##       Meta + FILES is FATAL in `buildmaster_meta`.
-##       Meta + LINK / LINKFLAGS is accepted and applied INTERFACE on the
-##       meta at materialize.
-##       Meta + REQUIRE_TOOL is accepted (demand extras).
-##       `REPACK` on a component is FATAL in `_bm_graph_create`.
-##       `REPACK` on a meta merges member archives (see `buildmaster_meta`).
-## @note `INDENT` / `INDENT_LEVEL` is accepted only so it is not “unknown”.
-##       Value is discarded. Use `buildmaster_group()`.
+##       graph nodes.
+## @note `BUILDONLY` is removed. Use `NOINSTALL`. The old key is FATAL.
+## @note `NOINSTALL` (bare) enables with no message. `NOINSTALL=` and
+##       truthy `NOINSTALL=ON|TRUE|1|YES` enable with WARNING
+##       (`write NOINSTALL, not NOINSTALL=…`). Falsy values are FATAL
+##       (`omit the key to install`). Any other value is FATAL.
+## @note `INDENT` / `INDENT_LEVEL` is ignored. Use `buildmaster_group()`.
 function(_bm_opt_parse out_indent out_toolchain out_rename
-											out_buildonly out_whole out_stripres
+											out_noinstall out_whole out_stripres
 											options_string)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse")
 	set(_indent 0)
 	set(_toolchain "")
 	set(_rename TRUE)
-	set(_buildonly FALSE)
+	set(_noinstall FALSE)
 	set(_whole FALSE)
 	set(_stripres TRUE)
 
@@ -86,13 +76,26 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_repack()
 			elseif(_key STREQUAL "REQUIRE_TOOL")
 				# parsed by _bm_opt_parse_require_tool()
+			elseif(_key STREQUAL "BACKEND")
+				# parsed by _bm_opt_parse_backend()
+			elseif(_key STREQUAL "SOURCE")
+				# parsed by _bm_opt_parse_source()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
 					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")
 			elseif(_key STREQUAL "RENAME")
 				_bm_opt_flag("${_val}" _rename)
 			elseif(_key STREQUAL "BUILDONLY")
-				_bm_opt_flag("${_val}" _buildonly)
+				_bm_log_message(COMPONENT FATAL
+					"BUILDONLY is removed; use NOINSTALL")
+			elseif(_key STREQUAL "NOINSTALL")
+				string(REPLACE "${_BM_OPT_SEMI}" ";" _npair "${_pair}")
+				string(FIND "${_npair}" "=" _neq)
+				if(_neq EQUAL -1)
+					set(_noinstall TRUE)
+				else()
+					_bm_opt_parse_noinstall("${_val}" _noinstall)
+				endif()
 			elseif(_key STREQUAL "WHOLE")
 				_bm_opt_flag("${_val}" _whole)
 			elseif(_key STREQUAL "STRIPRES")
@@ -113,10 +116,41 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 	set(${out_indent} "${_indent}" PARENT_SCOPE)
 	set(${out_toolchain} "${_toolchain}" PARENT_SCOPE)
 	set(${out_rename} "${_rename}" PARENT_SCOPE)
-	set(${out_buildonly} "${_buildonly}" PARENT_SCOPE)
+	set(${out_noinstall} "${_noinstall}" PARENT_SCOPE)
 	set(${out_whole} "${_whole}" PARENT_SCOPE)
 	set(${out_stripres} "${_stripres}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse")
+endfunction()
+
+## @brief Interpret `NOINSTALL=<val>` (the bare token is handled by the caller).
+## @param[in]  val      Text after `=`. Empty means `NOINSTALL=`.
+## @param[out] out_bool Parent-scope TRUE when the flag is accepted.
+## @note Empty and truthy → TRUE + WARNING
+##       (`write NOINSTALL, not NOINSTALL=…`).
+##       Falsy → FATAL (`omit the key to install`).
+##       Any other value → FATAL.
+function(_bm_opt_parse_noinstall val out_bool)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_noinstall")
+	if("${val}" STREQUAL "")
+		_bm_log_message(COMPONENT WARNING
+			"NOINSTALL is a flag; write NOINSTALL, not NOINSTALL=…")
+		set(${out_bool} TRUE PARENT_SCOPE)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_noinstall")
+		return()
+	endif()
+	string(TOUPPER "${val}" _v)
+	if(_v STREQUAL "1" OR _v STREQUAL "ON" OR _v STREQUAL "TRUE" OR _v STREQUAL "YES")
+		_bm_log_message(COMPONENT WARNING
+			"NOINSTALL is a flag; write NOINSTALL, not NOINSTALL=…")
+		set(${out_bool} TRUE PARENT_SCOPE)
+	elseif(_v STREQUAL "0" OR _v STREQUAL "OFF" OR _v STREQUAL "FALSE" OR _v STREQUAL "NO")
+		_bm_log_message(COMPONENT FATAL
+			"NOINSTALL cannot be turned off; omit the key to install")
+	else()
+		_bm_log_message(COMPONENT FATAL
+			"NOINSTALL: invalid value '${val}' (write NOINSTALL, or omit the key)")
+	endif()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_parse_noinstall")
 endfunction()
 
 ## @brief Parse `REPACK` / `REPACK=ON|OFF` from an options string.

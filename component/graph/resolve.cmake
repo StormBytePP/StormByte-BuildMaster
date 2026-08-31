@@ -21,19 +21,19 @@ function(_bm_graph_is_registered id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_is_registered")
 endfunction()
 
-## @brief Whether a registered component is BUILDONLY.
+## @brief Whether a registered component is NOINSTALL.
 ## @param[in]  id      Component identifier.
-## @param[out] out_var Parent-scope TRUE if the BUILDONLY flag is set, else FALSE.
+## @param[out] out_var Parent-scope TRUE if the NOINSTALL flag is set, else FALSE.
 ## @note Unregistered ids yield FALSE (property unset).
-function(_bm_graph_is_buildonly id out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_is_buildonly")
-	get_property(_bo GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_BUILDONLY)
-	if(_bo)
+function(_bm_graph_is_noinstall id out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_is_noinstall")
+	get_property(_ni GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_NOINSTALL)
+	if(_ni)
 		set(${out_var} TRUE PARENT_SCOPE)
 	else()
 		set(${out_var} FALSE PARENT_SCOPE)
 	endif()
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_is_buildonly")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_is_noinstall")
 endfunction()
 
 ## @brief Whether this component must use build-time configure.
@@ -59,22 +59,33 @@ endfunction()
 
 ## @brief Resolve one dependency dest to a CMake target name.
 ## @param[in]  dest    Component id, meta id, stage name, or existing target.
-## @param[out] out_tgt Resolved target (e.g. `<id>_install`).
+## @param[out] out_tgt Resolved target (e.g. `<id>_install` or `<id>_build`).
 ## @param[out] out_ok  TRUE if dest resolved.
 ## @note Resolution order: registered component → meta → `*_install` /
 ##       `*_configure` / `*_build` → existing CMake target.
+##       A `NOINSTALL` component or meta resolves to `<id>_build`.
 function(_bm_graph_resolve_dest dest out_tgt out_ok)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_resolve_dest")
 	_bm_graph_is_registered("${dest}" _is_comp)
 	if(_is_comp)
-		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		_bm_graph_is_noinstall("${dest}" _ni)
+		if(_ni)
+			set(${out_tgt} "${dest}_build" PARENT_SCOPE)
+		else()
+			set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		endif()
 		set(${out_ok} TRUE PARENT_SCOPE)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_resolve_dest")
 		return()
 	endif()
 	_bm_meta_is("${dest}" _is_meta)
 	if(_is_meta)
-		set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		get_property(_mni GLOBAL PROPERTY BUILDMASTER_META_${dest}_NOINSTALL)
+		if(_mni)
+			set(${out_tgt} "${dest}_build" PARENT_SCOPE)
+		else()
+			set(${out_tgt} "${dest}_install" PARENT_SCOPE)
+		endif()
 		set(${out_ok} TRUE PARENT_SCOPE)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_resolve_dest")
 		return()
@@ -102,14 +113,14 @@ endfunction()
 ##            (empty if this component has no recorded dests).
 ## @note FATAL if dest cannot be resolved, unless the same pair is also a
 ##       `buildmaster_link` (spec or on-disk archive: link-only, no wait target).
-##       FATAL if a non-BUILDONLY `id` depends on a BUILDONLY dest that is
+##       FATAL if a publishing `id` depends on a `NOINSTALL` dest that is
 ##       not `PRIVATE_HEADERS`.
 function(_bm_graph_dep_targets id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_dep_targets")
 	set(_dep_targets "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
-	_bm_graph_is_buildonly("${id}" _src_bo)
+	_bm_graph_is_noinstall("${id}" _src_ni)
 
 	set(_i 0)
 	foreach(_src IN LISTS _srcs)
@@ -121,12 +132,12 @@ function(_bm_graph_dep_targets id out_var)
 
 		_bm_graph_is_registered("${_dst}" _dst_comp)
 		if(_dst_comp)
-			_bm_graph_is_buildonly("${_dst}" _dst_bo)
+			_bm_graph_is_noinstall("${_dst}" _dst_ni)
 			get_property(_dst_priv GLOBAL PROPERTY
 				BUILDMASTER_COMPONENT_${_dst}_PRIVATE_HEADERS)
-			if(_dst_bo AND NOT _src_bo AND NOT _dst_priv)
+			if(_dst_ni AND NOT _src_ni AND NOT _dst_priv)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_depend('${id}', '${_dst}'): a non-BUILDONLY component cannot depend on BUILDONLY '${_dst}' (publish it with a REPACK meta, or make '${id}' BUILDONLY too)")
+					"buildmaster_depend('${id}', '${_dst}'): a publishing component cannot depend on NOINSTALL '${_dst}' (publish it with a REPACK meta, or put NOINSTALL on '${id}' too)")
 			endif()
 		endif()
 
@@ -142,7 +153,7 @@ function(_bm_graph_dep_targets id out_var)
 				continue()
 			endif()
 			_bm_log_message(COMPONENT FATAL
-				"buildmaster_depend('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install; meta id → <id>_install; <id>_install / _configure / _build; existing CMake target.")
+				"buildmaster_depend('${id}', '${_dst}'): cannot resolve dest. Accepted: registered component id → <id>_install or <id>_build; meta id → <id>_install or <id>_build; <id>_install / _configure / _build; existing CMake target.")
 		endif()
 		list(APPEND _dep_targets "${_tgt}")
 	endforeach()

@@ -49,11 +49,14 @@ BuildMaster is that layer, written once:
 | `/FORCE:MULTIPLE` on the **parent** because one leaf needed it | `LINKFLAGS={…}` on **that** leaf (not inherited) |
 | Hand-written `.pc` so the next Meson node finds this prefix | `PC={…}` on the leaf |
 | Six hours of “it works on my Linux box”, then 02:00 and a Windows CI that never heard of `pkg-config` | `REQUIRE_TOOL=pkgconfig` |
+| A submodule whose `meson.build` / `CMakeLists.txt` lives one folder down | `SOURCE=libfoo` (same isolation as `GIT ROOT=`) |
+| Dual markers and a private `_bm_backend_*_create` | `BACKEND=cmake` / `BACKEND=meson` |
 | `cmake_language(DEFER)` so a summary line appears *after* the graph | Hooks |
 | Waiting on a slow tarball every `rm -rf build` | `BUILDMASTER_DOWNLOADSDIR` outside the build tree |
 | Four public git helpers plus an `include()` | `GIT={…}` on the component |
 | A download target plus a prerequisite edge | `FILES={…}` on the component |
 | Manual `INDENT=` so related leaves line up in the log | `buildmaster_group` |
+| `BUILDONLY=` because “maybe I can turn it off later” | `NOINSTALL` (a flag, not a switch) |
 
 The cost is a short public API. The payoff is a parent tree that looks like
 a product, not a build blog.
@@ -71,7 +74,9 @@ a product, not a build blog.
 - [Meta components](#meta-components)
 - [Groups](#groups)
 - [Component options](#component-options)
-- [Build-only components and repack](#build-only-components-and-repack)
+- [Source tree (`SOURCE`)](#source-tree-source)
+- [Backend (`BACKEND`)](#backend-backend)
+- [No-install components and repack](#no-install-components-and-repack)
 - [Header-only components](#header-only-components)
 - [Files (`FILES`)](#files-files)
 - [Git (`GIT`)](#git-git)
@@ -116,10 +121,10 @@ target_link_libraries(MyApp PRIVATE mylib)
 ```
 
 No build directory. No out-variable. No generated fragment to `include()`.
-The backend is inferred from `srcdir` (`CMakeLists.txt` vs `meson.build`).
-Stage targets and the `INTERFACE` stub named `mylib` exist when
-registration returns; produced paths are filled in at the end of
-`CMAKE_SOURCE_DIR`.
+The backend is inferred from `srcdir` (`CMakeLists.txt` vs `meson.build`),
+after `SOURCE=` if you wrote one. Stage targets and the `INTERFACE` stub
+named `mylib` exist when registration returns; produced paths are filled
+in at the end of `CMAKE_SOURCE_DIR`.
 
 The fourth argument is a **CMake list** of `KEY=value` (a single string
 is a one-element list). It is backend-agnostic on purpose: write names
@@ -171,7 +176,7 @@ Ten commands. If you need an eleventh, the optstr is lying or the graph is.
 
 | Command | Role |
 |---------|------|
-| `buildmaster_component(id title srcdir options mode produced [optstr])` | Factory. Backend from `srcdir`. No builddir |
+| `buildmaster_component(id title srcdir options mode produced [optstr])` | Factory. Backend from `srcdir` (after `SOURCE=` / `BACKEND=`). No builddir |
 | `buildmaster_depend(source dest)` | Order-only edge |
 | `buildmaster_link(source dest)` | Link on the component `INTERFACE` **and** a depend edge when `dest` is a graph node |
 | `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
@@ -207,7 +212,7 @@ end of `CMAKE_SOURCE_DIR`.
 | `<id>` | `INTERFACE`. Depends on `<id>_install`. **This is what you link.** |
 | `<id>_configure` | Nested CMake or Meson setup |
 | `<id>_build` | Compile |
-| `<id>_install` | Install into the shared prefix (skipped for `BUILDONLY`) |
+| `<id>_install` | Install into the shared prefix (the script is a no-op under `NOINSTALL`) |
 | produced libs | `STATIC` / `SHARED` **IMPORTED** files under the prefix (or the build dir) |
 
 | Nested configure | When |
@@ -233,7 +238,7 @@ Extra tools (`pkgconfig`, …) start only from `REQUIRE_TOOL`.
 
 Order-only edge. At materialize time `dest` resolves as the first match:
 
-1. Registered component id → `<id>_install`
+1. Registered component id → `<id>_install` (or `<id>_build` when that dest is `NOINSTALL`)
 2. Registered **meta** id → `<id>_install`
 3. Name matching `*_install` / `*_configure` / `*_build`
 4. Existing CMake target
@@ -257,6 +262,9 @@ archive that already exists on disk, or a library spec (`<name>` /
 **Link already waits.** `buildmaster_link(A B)` records the same
 order-only edge as `buildmaster_depend(A B)` when `B` is a graph node,
 even if `B` is registered later.
+
+`buildmaster_link` to a `NOINSTALL` dest is FATAL. Wait with
+`buildmaster_depend`, or publish the archives through a `REPACK` meta.
 
 ---
 
@@ -300,9 +308,10 @@ buildmaster_link(engine plugins)
 `buildmaster_meta_add` may run before `buildmaster_meta`.
 
 A meta is an `INTERFACE` bucket. No `srcdir`, no nested configure.
-`GIT=` / `FILES=` on a meta are FATAL. `LINKFLAGS=` on a meta is
-WARNING + ignore. `TOOLCHAIN=` copies onto members that did not pin
-one. `REQUIRE_TOOL=` on a meta is accepted.
+`GIT=` / `FILES=` / `SOURCE=` / `BACKEND=` on a meta are FATAL.
+`LINKFLAGS=` on a meta is WARNING + ignore. `TOOLCHAIN=` copies onto
+members that did not pin one. `REQUIRE_TOOL=` on a meta is accepted.
+`NOINSTALL` on a meta is prevalent: finalize stamps every member.
 
 A group cannot be a meta member.
 
@@ -337,8 +346,10 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 - `;` inside `{…}` is **not** a pair break.
 - A trailing `;` is allowed.
 - Keys are case-insensitive, stored uppercase.
-- Bare flag (`RENAME`, `WHOLE`, `BUILDONLY`, `STRIPRES`, `REPACK`,
+- Bare flag (`RENAME`, `WHOLE`, `NOINSTALL`, `STRIPRES`, `REPACK`,
   `REQUIRE_TOOL`) is accepted by the splitter.
+- `BUILDONLY` is accepted by the splitter only so the parser can FATAL
+  (`use NOINSTALL`).
 - Unknown keys: **WARNING**, ignored.
 - Extra positionals: **FATAL**.
 
@@ -348,30 +359,88 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | `RENAME` | ON | Normalize variant archive names after install |
 | `WHOLE` | OFF | Whole-archive the produced statics |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives |
-| `BUILDONLY` | OFF | Build without publishing to the shared prefix |
+| `NOINSTALL` | OFF | Build without publishing to the shared prefix. Flag, not a switch |
+| `BACKEND` | detect | `cmake` or `meson` when both markers exist |
+| `SOURCE` | (srcdir) | Subtree under the positional `srcdir`. Applied **before** detect |
 | `REPACK` | OFF | Meta only. Merge member statics into one prefix archive |
 | `PC={…}` | off | Write a helper `.pc` after install. Does **not** demand pkg-config |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names on the INTERFACE |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw flags for the nested link only |
-| `GIT={…}` | empty | Fetch / switch / reset / patch the srcdir |
-| `FILES={…}` | empty | Download / unpack / optional SOURCE tree |
+| `GIT={…}` | empty | Fetch / switch / reset / patch. `ROOT=` uses the same isolation as `SOURCE=` |
+| `FILES={…}` | empty | Download / unpack / optional inner `SOURCE` tree (not the optstr) |
 | `REQUIRE_TOOL=` / `REQUIRE_TOOL={…}` | empty | Demand an extra tool (`pkgconfig`, …) |
 | `INDENT=` | ignored | WARNING. Use `buildmaster_group` |
 
 `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and
 ignored. A name that is not a known extra is FATAL.
 
+`NOINSTALL=` and `NOINSTALL=ON` enable with WARNING
+(`write NOINSTALL, not NOINSTALL=…`). `NOINSTALL=OFF` is FATAL
+(`omit the key to install`).
+
 ---
 
-## Build-only components and repack
+## Source tree (`SOURCE`)
 
-`BUILDONLY` keeps artifacts under the component build dir. They never
-land in the shared prefix.
+Tired of a git submodule whose `meson.build` or `CMakeLists.txt` sits
+in a subfolder and not at the tree root? That is what `SOURCE=` is for.
+
+```cmake
+buildmaster_component(
+	foo
+	"Foo"
+	"${CMAKE_SOURCE_DIR}/thirdparty/foo/src"
+	""
+	static
+	foo
+	"SOURCE=libfoo"
+)
+```
+
+`SOURCE=` is **always** under the positional `srcdir`. A leading `/`
+is still a child of that srcdir (`/libfoo` → `srcdir/libfoo`), not an
+absolute path on the host. Escape above the component srcdir — or
+above the host `CMAKE_SOURCE_DIR` — is FATAL **before** any existence
+probe. After that check, a missing directory is FATAL.
+
+Detect runs on the resolved tree. Dual markers there are still FATAL
+unless you also write `BACKEND=`.
+
+This is not `FILES={…;SOURCE}`. FILES `SOURCE` *replaces* the srcdir
+after an unpack. The optstr `SOURCE=` *selects a child* of the srcdir
+you already passed.
+
+---
+
+## Backend (`BACKEND`)
+
+When `srcdir` (after `SOURCE=`) contains both `CMakeLists.txt` and
+`meson.build`, detect is FATAL. Say which generator you meant:
+
+```cmake
+"BACKEND=meson"
+```
+
+Allowed names live in `BUILDMASTER_FACTORY_BACKENDS` (`cmake`, `meson`
+in this release). Empty or unknown: FATAL. There is no `BACKEND=none`
+— that is `headers` without a backend, or `NOINSTALL` when you truly
+have no generator.
+
+---
+
+## No-install components and repack
+
+`NOINSTALL` keeps artifacts under the component build dir. They never
+land in the shared prefix. The `<id>_install` target still exists; the
+script does not run `cmake --install`.
 
 `buildmaster_meta(id title "REPACK")` plus `buildmaster_meta_add`
 merges every produced **static** archive of the member leaves into one
 prefix archive named after the meta id. Shared members stay INTERFACE
 (WARNING). `REPACK` on `buildmaster_component` is FATAL.
+`NOINSTALL` + shared as a `REPACK` member is FATAL.
+
+`BUILDONLY` is gone. Write `NOINSTALL`.
 
 ---
 
@@ -379,8 +448,8 @@ prefix archive named after the meta id. Shared members stay INTERFACE
 
 Mode `headers`. No produced spec.
 
-- Backend + not `BUILDONLY`: headers install into the shared prefix.
-- No backend (`none`) or `BUILDONLY` headers: private island. Direct
+- Backend + not `NOINSTALL`: headers install into the shared prefix.
+- No backend (`none`) or `NOINSTALL` headers: private island. Direct
   consumers get a quoted `-I` on *that* id’s nested compile only.
 
 ---
@@ -392,18 +461,22 @@ Mode `headers`. No produced spec.
 ```
 
 Cached under `BUILDMASTER_DOWNLOADSDIR`. Meta + any `FILES` key is FATAL.
-`GIT={…}` + `SOURCE` is FATAL (two owners of the same tree).
+`GIT={…}` + FILES `SOURCE` is FATAL (two owners of the same tree).
 
 ---
 
 ## Git (`GIT`)
 
 ```cmake
-"GIT={FETCH;SWITCH=release/1.2;RESET;PATCH=patches/foo.patch}"
+"GIT={FETCH;SWITCH=release/1.2;RESET;PATCH=patches/foo.patch;ROOT=src}"
 ```
 
 Order is fixed: FETCH → SWITCH → RESET → PATCH. Empty `GIT` / `GIT={}`
 is WARNING. Meta + a real git op is FATAL.
+
+`ROOT=` is the same isolation contract as optstr `SOURCE=`: always
+under the component srcdir, escape FATAL before existence, host repo
+FATAL. Operations never run in the parent project.
 
 ---
 
@@ -419,6 +492,8 @@ install. FATAL if that path already exists. Not a portable package.
 `PC=` only **writes** the file. It does not demand the `pkgconfig`
 extra. The next Meson or Autotools leaf that *reads* `.pc` files is
 your problem — see [`REQUIRE_TOOL`](#extra-tools-require_tool).
+
+`NOINSTALL` + enabled `PC=` is FATAL (no shared prefix).
 
 ---
 

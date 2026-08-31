@@ -3,7 +3,7 @@
 # =============================================================================
 
 ## @brief After real components exist: wire `<meta>_install` and INTERFACE.
-## @note Wait edge: leaf `_install` unless the leaf is BUILDONLY, then
+## @note Wait edge: leaf `_install` unless the leaf is NOINSTALL, then
 ##       `_build` (end of that component's phase).
 ## @note `REPACK` metas do not INTERFACE-link static leaves (the merge
 ##       publishes one archive). Shared/headers leaves stay INTERFACE;
@@ -24,8 +24,8 @@ function(_bm_meta_wire)
 		get_property(_repack GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK)
 
 		foreach(_leaf IN LISTS _leaves)
-			_bm_graph_is_buildonly("${_leaf}" _bo)
-			if(_bo)
+			_bm_graph_is_noinstall("${_leaf}" _ni)
+			if(_ni)
 				if(TARGET "${_leaf}_build")
 					add_dependencies(${_id}_install ${_leaf}_build)
 				endif()

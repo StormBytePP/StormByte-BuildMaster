@@ -218,7 +218,7 @@ endfunction()
 ## @note Dest that is none of the above is FATAL. Raw system linker names
 ##       (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}` on the producer,
 ##       not here.
-## @note FATAL if source is not a target. FATAL if dest is BUILDONLY and
+## @note FATAL if source is not a target. FATAL if dest is NOINSTALL and
 ##       not `PRIVATE_HEADERS`. A `PRIVATE_HEADERS` dest is wait-only here
 ##       (no INTERFACE link line; `-I` was injected into the source OPTIONS).
 function(_bm_materialize_apply_links)
@@ -256,10 +256,10 @@ function(_bm_materialize_apply_links)
 					"buildmaster_link '${_src}' → PRIVATE headers '${_dst}' (no INTERFACE line)")
 				continue()
 			endif()
-			_bm_graph_is_buildonly("${_dst}" _dst_bo)
-			if(_dst_bo)
+			_bm_graph_is_noinstall("${_dst}" _dst_ni)
+			if(_dst_ni)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_link: cannot link to BUILDONLY component '${_dst}' (order only via buildmaster_depend between BUILDONLY phases, or publish it with a REPACK meta)")
+					"buildmaster_link: cannot link to NOINSTALL component '${_dst}' (order only via buildmaster_depend between NOINSTALL phases, or publish it with a REPACK meta)")
 			endif()
 			get_property(_dst_whole GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_WHOLE)
 			if(_dst_whole)
