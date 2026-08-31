@@ -1,100 +1,16 @@
-# Here we don't protect against double initialization as it is already done by extra tools helpers
-include("${CMAKE_CURRENT_LIST_DIR}/../../../log.cmake")
-if(COMMAND _bm_log_level_init)
-	_bm_log_level_init()
+# =============================================================================
+# tools/extra/pkgconfig/init_vars.cmake — paths only
+# =============================================================================
+
+if(NOT BUILDMASTER_TOOLS_PKGCONF_SRCDIR)
+	set(BUILDMASTER_TOOLS_PKGCONF_SRCDIR "${CMAKE_CURRENT_LIST_DIR}" CACHE INTERNAL
+		"tools/extra/pkgconfig source dir")
 endif()
-include("${CMAKE_CURRENT_LIST_DIR}/../../../paths.cmake")
-include("${CMAKE_CURRENT_LIST_DIR}/../../meson/helpers.cmake")
 
-set(BUILDMASTER_TOOLS_PKGCONF_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
-
-# Set initial state: assume pkg-config/pkgconf is not usable
 set(PKG_CONFIG_WORKING FALSE)
-
-# We try to find an existing pkg-config or pkgconf installation
-find_package(PkgConfig QUIET)
-
-if(PKG_CONFIG_FOUND)
-	# Test if pkg-config is functional
-	execute_process(
-		COMMAND "${PKG_CONFIG_EXECUTABLE}" --version
-		OUTPUT_VARIABLE _pkg_config_version_ignored
-		RESULT_VARIABLE _pkg_config_test_result
-		ERROR_VARIABLE _pkg_config_test_err_ignored
-	)
-
-	if(NOT _pkg_config_test_result EQUAL 0)
-		_bm_log_message(PKGCONF WARNING "Testing system pkg-config failed, using bundled one instead")
-	else()
-		set(PKG_CONFIG_WORKING TRUE)
-		set(PKG_CONFIG_VERSION "${PKG_CONFIG_VERSION_STRING}")
-		_bm_log_message(PKGCONF STATUS "Using system pkg-config version: ${PKG_CONFIG_VERSION}" 3)
-	endif()
+if(NOT DEFINED PKG_CONFIG)
+	set(PKG_CONFIG "")
 endif()
-
-# Force build our pkgconf if none found or on Windows because it might have installed a broken pkgconfig (like Strawbery)
-if(NOT PKG_CONFIG_WORKING)
-	set(PKGCONF_SRCDIR "${BUILDMASTER_TOOLS_PKGCONF_SRCDIR}/src")
-	_bm_path_component_builddir(PKGCONF_BUILD_DIR pkgconf)
-	file(MAKE_DIRECTORY "${PKGCONF_BUILD_DIR}")
-
-	set(PKGCONF_MESON_OPTIONS "-Ddefault_library=static")
-
-	set(PKGCONF_COMPONENT "pkgconf")
-	set(PKGCONF_OPTIONS "${PKGCONF_MESON_OPTIONS}")
-	set(PKGCONF_SRCDIR "${PKGCONF_SRCDIR}")
-	_bm_tools_meson_stages(
-		PKGCONF_MESON_SETUP_FILE
-		_ignored_compile_file
-		_ignored_install_file
-		"${PKGCONF_COMPONENT}"
-		"pkgconf"
-		"${PKGCONF_SRCDIR}"
-		"${PKGCONF_BUILD_DIR}"
-		"${PKGCONF_OPTIONS}"
-		"static"
-		"pkgconf"
-		3
-	)
-	include("${PKGCONF_MESON_SETUP_FILE}")
-
-	# Build and install pkgconf
-	execute_process(
-		COMMAND ${ENV_NINJA_SILENT_COMMAND} -C "${PKGCONF_BUILD_DIR}" install
-		RESULT_VARIABLE _pkgconf_build_result
-		OUTPUT_VARIABLE _pkgconf_build_out
-		ERROR_VARIABLE _pkgconf_build_err
-		WORKING_DIRECTORY "${PKGCONF_BUILD_DIR}"
-	)
-	if(NOT _pkgconf_build_result EQUAL 0)
-		_bm_log_message(PKGCONF FATAL "Building pkgconf failed:\n${_pkgconf_build_err}")
-	endif()
-
-	# Set pkgconf executable path and config path
-	set(PKG_CONFIG "${BUILDMASTER_INSTALL_BINDIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
-
-	# Test pkgconf/pkg-config version
-	execute_process(
-		COMMAND ${ENV_RUNNER} "${PKG_CONFIG}" --version
-		RESULT_VARIABLE _pkgconf_test_result
-		OUTPUT_VARIABLE _pkgconf_version
-		ERROR_VARIABLE _pkgconf_test_err_ignored
-	)
-
-	if(NOT _pkgconf_test_result EQUAL 0)
-		_bm_log_message(PKGCONF FATAL "Testing pkgconf failed")
-	else()
-		set(PKG_CONFIG_WORKING TRUE) # Not really needed, but for consistency
-		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
-		_bm_log_message(PKGCONF STATUS "Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
-
-		# Propagate to parent scope and regenerate bootstrap env runner
-		_bm_env_update_runner()
-	endif()
+if(NOT DEFINED PKG_CONFIG_PATH OR PKG_CONFIG_PATH STREQUAL "")
+	set(PKG_CONFIG_PATH "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
 endif()
-
-# In any case, set pkg-config path
-set(PKG_CONFIG_PATH "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
-
-# Update out part of the toolchain file
-include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")

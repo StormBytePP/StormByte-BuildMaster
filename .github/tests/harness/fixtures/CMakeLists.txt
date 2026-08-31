@@ -58,6 +58,7 @@ add_subdirectory(linkflags)
 # Pkg-config helper
 # ---------------------------------------------------------------------------
 add_subdirectory(pc)
+add_subdirectory(require-tool-pkgconfig)
 
 # ---------------------------------------------------------------------------
 # Recursive nested BuildMaster

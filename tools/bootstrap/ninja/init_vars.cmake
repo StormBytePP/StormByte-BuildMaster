@@ -10,6 +10,9 @@ if(NOT BUILDMASTER_CONFIGURED)
 	set(_env_ninja_silent_list ${ENV_RUNNER_SILENT} "${NINJA_EXECUTABLE}" "-j${NPROC}")
 	_bm_env_prepare_command(ENV_NINJA_COMMAND "${_env_ninja_list}")
 	_bm_env_prepare_command(ENV_NINJA_SILENT_COMMAND "${_env_ninja_silent_list}")
+	set(ENV_NINJA_COMMAND "${ENV_NINJA_COMMAND}" CACHE INTERNAL "ninja + env runner")
+	set(ENV_NINJA_SILENT_COMMAND "${ENV_NINJA_SILENT_COMMAND}" CACHE INTERNAL
+		"ninja + silent env runner")
 
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()
