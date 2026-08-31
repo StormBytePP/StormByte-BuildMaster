@@ -8,6 +8,27 @@ if(NOT EXISTS "@GIT_REPO@")
 endif()
 
 execute_process(
+	COMMAND "@GIT_EXECUTABLE@" status --porcelain
+	WORKING_DIRECTORY "@GIT_REPO@"
+	RESULT_VARIABLE GIT_ST_RC
+	OUTPUT_VARIABLE GIT_ST_OUT
+	ERROR_VARIABLE GIT_ST_ERR
+	OUTPUT_STRIP_TRAILING_WHITESPACE
+	ERROR_STRIP_TRAILING_WHITESPACE
+)
+if(NOT GIT_ST_RC EQUAL 0)
+	_bm_log_message(GIT FATAL
+		"Git status failed (exit ${GIT_ST_RC}) in\n  @GIT_REPO@\n\n--- stderr ---\n${GIT_ST_ERR}")
+endif()
+
+if("${GIT_ST_OUT}" STREQUAL "")
+	_bm_log_message(GIT DEBUG
+		"git reset skipped (clean worktree) in @GIT_REPO@")
+	_bm_log_message(GIT LOWLEVEL "Exiting git reset script")
+	return()
+endif()
+
+execute_process(
 	COMMAND "@GIT_EXECUTABLE@" reset --hard
 	WORKING_DIRECTORY "@GIT_REPO@"
 	RESULT_VARIABLE GIT_RESULT

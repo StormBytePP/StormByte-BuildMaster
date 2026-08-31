@@ -16,6 +16,8 @@
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Unknown inner keys → WARNING.
 ##       Empty `SWITCH=` or empty `PATCH=` → FATAL.
 ##       Meta + any GIT op is FATAL in `buildmaster_meta`.
+## @note Git is demanded only when a `GIT` key is present. Parsing every
+##       component optstr must not initialize the git tool.
 function(_bm_opt_parse_git options_string
 		out_present out_fetch out_switch out_reset out_patches out_title)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_parse_git")
@@ -99,9 +101,8 @@ function(_bm_opt_parse_git options_string
 	if(_present)
 		_bm_log_message(COMPONENT DEBUG
 			"GIT fetch=${_fetch} switch='${_switch}' reset=${_reset} patches=${_patches}")
+		_bm_tools_demand_named(git)
 	endif()
-
-	_bm_tools_demand_named(git)
 
 	set(${out_present} "${_present}" PARENT_SCOPE)
 	set(${out_fetch} "${_fetch}" PARENT_SCOPE)
