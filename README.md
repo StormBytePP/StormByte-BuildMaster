@@ -22,6 +22,11 @@ with extra macros. It is a small language for **graphs of third-party builds**.
 
 ## Why spend an afternoon on this
 
+Want to say “I need to link my app (or my lib) against something BuildMaster
+already built — freetype, harfbuzz, libpng, the library you wrote last
+Tuesday — and **not** keep a spreadsheet of everything *that* library
+quietly pulls in”? That is the sentence this file is for.
+
 One well-behaved CMake library? `FetchContent` is enough.
 
 Twelve upstreams — some CMake, some Meson, some that install `zsd.lib` when
@@ -29,7 +34,9 @@ you asked for `z.lib`, some that must configure *after* another prefix
 exists, some that only work under `clang-cl`, and a static plugin pack the
 linker will drop unless you wrap it in `--whole-archive` — and you already
 have a private orchestration layer. Usually it is `add_custom_command`,
-hardcoded paths, and “remember to declare zlib before libpng”.
+hardcoded paths, and “remember to declare zlib before libpng”. Then you
+link `libpng` and Windows reminds you about `shlwapi` because somebody
+three levels down needed it and nobody wrote it down.
 
 Those weeks do not make you a worse programmer. They make you the person
 this file is for.
@@ -41,6 +48,8 @@ BuildMaster is that layer, written once:
 | “Declare A before B or configure explodes” | Order-independent registration |
 | `ExternalProject` that only configures at *build* time | Eager configure when the graph allows it |
 | A wait edge *and* a link edge for the same pair | `buildmaster_link` already waits |
+| “Link png, and also freetype, and also harfbuzz, and also whatever they grew last week” | `links/` + `buildmaster_link(app png)` |
+| A second `add_library(Foo::Bar ALIAS …)` in every consumer | `ALIAS=Foo::Bar` on the component |
 | Hand-rolled Meson `setup` that misses `.pc` files | Same prefix, `PKG_CONFIG_PATH`, compilers, cache launchers |
 | `POST_BUILD` rename scripts per MSVC flavor | `RENAME` (default on) |
 | `--whole-archive` soup in the parent | `WHOLE` on a component or a **meta** |
@@ -69,6 +78,8 @@ a product, not a build blog.
 - [Ten commands](#ten-commands)
 - [How a component works](#how-a-component-works)
 - [Dependencies and links](#dependencies-and-links)
+- [Aliases (`ALIAS`)](#aliases-alias)
+- [Exported links (`links/`)](#exported-links-links)
 - [Raw system libraries (`LINK`)](#raw-system-libraries-link)
 - [Raw linker flags (`LINKFLAGS`)](#raw-linker-flags-linkflags)
 - [Meta components](#meta-components)
@@ -115,9 +126,11 @@ buildmaster_component(
 	"ENABLE_FOO=ON;WITH_TESTS=OFF"
 	shared
 	mylib
+	"ALIAS=My::Lib"
 )
 
 target_link_libraries(MyApp PRIVATE mylib)
+# or: target_link_libraries(MyApp PRIVATE My::Lib)
 ```
 
 No build directory. No out-variable. No generated fragment to `include()`.
@@ -158,7 +171,7 @@ buildmaster_component(
 	"ENABLE_FOO=ON"
 	static
 	mylib
-	"TOOLCHAIN=clang-cl;WHOLE;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib};REQUIRE_TOOL=pkgconfig"
+	"TOOLCHAIN=clang-cl;WHOLE;ALIAS=My::Lib;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib};REQUIRE_TOOL=pkgconfig"
 )
 ```
 
@@ -178,7 +191,7 @@ Ten commands. If you need an eleventh, the optstr is lying or the graph is.
 |---------|------|
 | `buildmaster_component(id title srcdir options mode produced [optstr])` | Factory. Backend from `srcdir` (after `SOURCE=` / `BACKEND=`). No builddir |
 | `buildmaster_depend(source dest)` | Order-only edge |
-| `buildmaster_link(source dest)` | Link on the component `INTERFACE` **and** a depend edge when `dest` is a graph node |
+| `buildmaster_link(source dest [dest…])` | Link on the component `INTERFACE` **and** a depend edge when `dest` is a graph node. Aliases resolve to ids |
 | `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
 | `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
 | `buildmaster_group(id [title])` | Outline banner. No target, no edge |
@@ -221,7 +234,9 @@ end of `CMAKE_SOURCE_DIR`.
 | **Deferred** | It must wait on another node — configure runs at build time under `<id>_configure` |
 
 The `INTERFACE` stub exists as soon as you call `buildmaster_component`.
-You may `add_library(Vendor::Foo ALIAS foo)` in the same file.
+`ALIAS=` on the optstr is applied at that moment. You may still write
+`add_library(Vendor::Foo ALIAS foo)` yourself; a clash with a different
+target is FATAL.
 
 BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it.
 There is no public builddir argument and no `ensure_build_dir`.
@@ -251,13 +266,17 @@ and a no-op. Unresolvable dest at finalize stays **FATAL**.
 
 A group is not a graph node. `buildmaster_depend(foo grp-audio)` is FATAL.
 
-### `buildmaster_link(source dest)`
+Aliases passed as `source` or `dest` resolve to the id first.
 
-Records a link on the component `INTERFACE`.
+### `buildmaster_link(source dest [dest…])`
 
-`dest` may be another component, a meta, an existing CMake target, an
-archive that already exists on disk, or a library spec (`<name>` /
-`<subdir>/<name>`) under the BM prefix.
+Records a link on the component `INTERFACE`. Several dests on one call
+are the same contract applied once each. A dest repeated in the same
+call is WARNING + skip.
+
+`dest` may be another component, a meta, an alias of either, an existing
+CMake target, an archive that already exists on disk, or a library spec
+(`<name>` / `<subdir>/<name>`) under the BM prefix.
 
 **Link already waits.** `buildmaster_link(A B)` records the same
 order-only edge as `buildmaster_depend(A B)` when `B` is a graph node,
@@ -265,6 +284,89 @@ even if `B` is registered later.
 
 `buildmaster_link` to a `NOINSTALL` dest is FATAL. Wait with
 `buildmaster_depend`, or publish the archives through a `REPACK` meta.
+
+---
+
+## Aliases (`ALIAS`)
+
+```cmake
+"ALIAS=Vendor::Foo"
+"ALIAS={Vendor::Foo;Vendor::FooLegacy}"
+```
+
+After the INTERFACE stub exists, BuildMaster does
+`add_library(<alias> ALIAS <id>)` for each name. Valid on a component
+and on a meta.
+
+If `<alias>` already maps to a *different* target: **FATAL** with a BM
+sentence, not the raw CMake one. Mapping again to the same id is a
+no-op.
+
+`buildmaster_link` / `buildmaster_depend` accept the alias. The edge is
+stored under the real id.
+
+---
+
+## Exported links (`links/`)
+
+This is the “I only wanted png” clause.
+
+Every materialized component and every created meta writes one file:
+
+```text
+${BUILDMASTER_LINKS_DIR}/<sanitized-id>.cmake
+```
+
+`BUILDMASTER_LINKS_DIR` sits next to `scripts/` under the **trunk**
+bindir. It is propagated and dumped into the toolchain file, so a
+nested cmake — another process, another repo — still sees the same
+directory. There is one BuildMaster. There is one `links/`.
+
+The file is generated from a template (same idea as the git / cmake
+stage scripts). It carries:
+
+- the id and its `ALIAS=` names
+- the prefix include dir (or the `NOINSTALL` build dir)
+- linker **names** plus `-L` (not raw `.a` / `.lib` paths: those
+  have no Ninja rule in a parent that never registered the leaf)
+- BM dests recorded with `buildmaster_link`
+
+A later tree `include()`s those files and can write:
+
+```cmake
+buildmaster_component(
+	myapp_plugin
+	"My plugin"
+	"${CMAKE_SOURCE_DIR}/plugin"
+	""
+	static
+	myplugin
+)
+
+buildmaster_link(myapp_plugin freetype)
+```
+
+If freetype, harfbuzz and libpng were all declared with
+`buildmaster_component` (or a meta) in the tree that built them, the
+plugin does not list harfbuzz and libpng. The `links/freetype.cmake`
+file already knows.
+
+Rules that keep this honest:
+
+- Only BM nodes go into `links/`. A raw `target_link_libraries` inside
+  a nested `CMakeLists.txt` is invisible. If the nested project is
+  itself a BM graph, use `buildmaster_link` there too.
+- Same id declared again is first-wins. Configure prints
+  `Skipping configure of <title> — already registered as…` or
+  `already built by…` and does not compile it twice. Version
+  comparison is a 2.1 problem.
+- `buildmaster_clean` deletes `links/` with the rest of the bindir.
+- System libs (`shlwapi`, `m`) stay on `LINK=` / `buildmaster_link`
+  as raw names. They ride along on the INTERFACE; they are not BM ids.
+
+Use BM for the whole chain and the parent stays one line. Mix a
+hand-rolled leaf in the middle and you are back to writing dests
+yourself — that is fair.
 
 ---
 
@@ -300,7 +402,7 @@ actually links.
 ## Meta components
 
 ```cmake
-buildmaster_meta(plugins "plugin pack")
+buildmaster_meta(plugins "plugin pack" "ALIAS=Vendor::Plugins")
 buildmaster_meta_add(plugins opus vorbis)
 buildmaster_link(engine plugins)
 ```
@@ -312,6 +414,7 @@ A meta is an `INTERFACE` bucket. No `srcdir`, no nested configure.
 `LINKFLAGS=` on a meta is WARNING + ignore. `TOOLCHAIN=` copies onto
 members that did not pin one. `REQUIRE_TOOL=` on a meta is accepted.
 `NOINSTALL` on a meta is prevalent: finalize stamps every member.
+`ALIAS=` on a meta is the same contract as on a component.
 
 A group cannot be a meta member.
 
@@ -362,13 +465,14 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | `NOINSTALL` | OFF | Build without publishing to the shared prefix. Flag, not a switch |
 | `BACKEND` | detect | `cmake` or `meson` when both markers exist |
 | `SOURCE` | (srcdir) | Subtree under the positional `srcdir`. Applied **before** detect |
+| `ALIAS=` / `ALIAS={…}` | empty | `add_library(alias ALIAS id)` after the stub |
 | `REPACK` | OFF | Meta only. Merge member statics into one prefix archive |
 | `PC={…}` | off | Write a helper `.pc` after install. Does **not** demand pkg-config |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names on the INTERFACE |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw flags for the nested link only |
 | `GIT={…}` | empty | Fetch / switch / reset / patch. `ROOT=` uses the same isolation as `SOURCE=` |
 | `FILES={…}` | empty | Download / unpack / optional inner `SOURCE` tree (not the optstr) |
-| `REQUIRE_TOOL=` / `REQUIRE_TOOL={…}` | empty | Demand an extra tool (`pkgconfig`, …) |
+| `REQUIRE_TOOL=` / `REQUIRE_TOOL={…}` | empty | Demand extra tool (`pkgconfig`, …) |
 | `INDENT=` | ignored | WARNING. Use `buildmaster_group` |
 
 `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and
@@ -643,12 +747,19 @@ Parent `CMAKE_{C,CXX}_COMPILER_LAUNCHER`, `CCACHE_DIR` and
 ## Recursive usage
 
 `add_subdirectory(buildmaster)` from a nested project is safe. The
-first bootstrap owns `BUILDMASTER_ROOT` and the toolchain dump. A
-second tree loads the parent helpers and returns. Match versions
-across submodules; a mismatch is WARNING.
+first bootstrap owns `BUILDMASTER_ROOT`, the toolchain dump, and
+`BUILDMASTER_LINKS_DIR`. A second tree loads the parent helpers and
+returns. Match versions across submodules; a mismatch is WARNING.
 
 Always `add_subdirectory(buildmaster)`. Do not special-case “I am
 already inside BM”.
+
+Because helpers and `links/` belong to the trunk, a nested project
+that also uses BuildMaster writes into the **same** `links/` folder.
+The parent can `buildmaster_link` an id the child already built.
+That only works if the child declared those nodes with
+`buildmaster_component` / `buildmaster_meta` — not with a private
+`target_link_libraries` the parent will never see.
 
 ---
 
@@ -676,6 +787,7 @@ bug is not a feature.
 | Graph edges | include order | `DEPENDS` | `depend` / `link` |
 | Order-independent declare | no | no | yes |
 | Extra host tools | hope PATH | hope PATH | `REQUIRE_TOOL` |
+| Transitive BM deps across processes | no | no | `links/` |
 
 ---
 

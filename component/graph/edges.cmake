@@ -57,12 +57,8 @@ endfunction()
 ## @param[in] source Component id or CMake target (resolved at finalize).
 ## @param[in] dest   Component id (→ `<dest>_install`), meta id, existing target,
 ##            or `<id>_install` / `<id>_configure` / `<id>_build`.
+## @note Alias tokens are resolved to the owning id before the pair is stored.
 ## @note A group id is FATAL on either side (outline only).
-## @note A non-BUILDONLY component must not depend on a BUILDONLY component
-##       unless the dest is `PRIVATE_HEADERS` (checked at materialize).
-##       BUILDONLY may depend on BUILDONLY or normal.
-## @note May be called before either endpoint exists; edges are recorded and
-##       resolved in `_bm_materialize_finalize`.
 ## @note A second explicit call with the same `(source, dest)` is WARNING and
 ##       a no-op (including when `buildmaster_link` already recorded the pair).
 ##       Unresolvable dest at finalize stays FATAL.
@@ -81,6 +77,8 @@ function(buildmaster_depend source dest)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_depend: called after finalize")
 	endif()
+	_bm_alias_resolve("${source}" source)
+	_bm_alias_resolve("${dest}" dest)
 	if(COMMAND _bm_group_forbid)
 		_bm_group_forbid("${source}" "buildmaster_depend")
 		_bm_group_forbid("${dest}" "buildmaster_depend")
@@ -105,22 +103,16 @@ endfunction()
 ## @param[in] dest   One or more dests. Each may be a registered component or
 ##            meta, existing CMake target, an on-disk archive path, or a
 ##            library spec (`<name>` or `<subdir>/<name>`) under the BM prefix.
-## @note `buildmaster_link(A B C)` is the same as `buildmaster_link(A B)`
-##       then `buildmaster_link(A C)`. Each pair is recorded on its own.
+## @note Alias tokens are resolved to the owning id before each pair is stored.
+## @note `buildmaster_link(A B C)` is the same as two single-dest calls.
 ## @note A group id is FATAL on source or any dest (outline only).
 ## @note Dest that is none of the above is FATAL at materialize. Raw system
 ##       linker names (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}`
 ##       on the producer, not here.
-## @note A spec dest is resolved with the source component’s mode against
-##       `BUILDMASTER_INSTALL_LIBDIR`. The archive need not exist yet.
 ## @note Linking to a NOINSTALL component is FATAL at materialize unless
 ##       that dest is `PRIVATE_HEADERS`.
-## @note buildmaster_link only participates in the BuildMaster graph; host app
-##       targets use target_link_libraries(… PRIVATE <component_id>).
-## @note Always records an order-only edge via `_bm_graph_record_dep`
-##       so `buildmaster_link(A B)` before `buildmaster_component(B)` still
-##       defers A. A second explicit `buildmaster_link` with the same pair
-##       is WARNING and a no-op. The auto-dependency does not WARN.
+## @note A second explicit `buildmaster_link` with the same pair is WARNING
+##       and a no-op. The auto-dependency does not WARN.
 function(buildmaster_link source)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_link")
 	if(ARGC LESS 2)
@@ -136,6 +128,7 @@ function(buildmaster_link source)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_link: called after finalize")
 	endif()
+	_bm_alias_resolve("${source}" source)
 	if(COMMAND _bm_group_forbid)
 		_bm_group_forbid("${source}" "buildmaster_link")
 	endif()
@@ -145,6 +138,7 @@ function(buildmaster_link source)
 			_bm_log_message(COMPONENT FATAL
 				"buildmaster_link: dest must be non-empty")
 		endif()
+		_bm_alias_resolve("${_dest}" _dest)
 		if(COMMAND _bm_group_forbid)
 			_bm_group_forbid("${_dest}" "buildmaster_link")
 		endif()

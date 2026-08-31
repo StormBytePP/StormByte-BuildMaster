@@ -1,0 +1,14 @@
+cmake_minimum_required(VERSION 3.28)
+project(SharedBase-src C)
+include(GNUInstallDirs)
+
+set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
+
+add_library(SharedBase SHARED base.c)
+target_include_directories(SharedBase PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+install(TARGETS SharedBase
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(FILES shared_base.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

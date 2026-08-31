@@ -262,11 +262,22 @@ endfunction()
 ## @param[in] produced Library specs (`<name>` or `<subdir>/<name>`). Empty
 ##            for headers.
 ## @param[in] optstr Optional trailing `KEY=value;…`. `SOURCE=` and
-##            `BACKEND=` are read here, before detect.
+##            `BACKEND=` are read here, before detect. `ALIAS=` /
+##            `ALIAS={…}` is applied after the INTERFACE stub
+##            (`_bm_alias_apply`).
 ## @note No build-directory argument. BuildMaster assigns
 ##       `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` via `_bm_path_component_builddir`.
 ## @note Both marker files without `BACKEND=`: FATAL.
-## @note INTERFACE `<id>` exists on return.
+## @note INTERFACE `<id>` exists on return (or already existed).
+## @note A second `buildmaster_component` with the same `_component` is a
+##       no-op. Same process: STATUS
+##       `Skipping configure of <title> — already registered as '<winner>' (<id>)`.
+##       Other process that already wrote `${BUILDMASTER_LINKS_DIR}/<id>.cmake`:
+##       that file is `include`d and STATUS
+##       `Skipping configure of <title> — already built by '<winner>' (<id>)`.
+##       Identity is the id, not srcdir. The first registration wins.
+## @note `ALIAS=` empty / `ALIAS={}` is FATAL. Alias equal to `<id>` or a
+##       TARGET that is not already an ALIAS of `<id>` is FATAL.
 function(buildmaster_component _component _component_title _srcdir
 		_options _library_mode _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering buildmaster_component")
@@ -274,6 +285,12 @@ function(buildmaster_component _component _component_title _srcdir
 	if(ARGC LESS 6 OR ARGC GREATER 7)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_component: expected id title srcdir options mode produced [optstr]")
+	endif()
+
+	_bm_links_try_reuse("${_component}" "${_component_title}" _reuse)
+	if(_reuse)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting buildmaster_component")
+		return()
 	endif()
 
 	set(_options_string "")

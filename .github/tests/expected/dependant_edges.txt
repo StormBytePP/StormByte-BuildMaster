@@ -43,6 +43,11 @@ late-dst -> late-dst_install
 late-src -> late-src_install
 late-src_configure -> late-dst_install
 
+# links-chain
+StormByte-Buffer -> StormByte-Buffer_install
+links-host -> links-host_install
+links-host_configure -> StormByte-Buffer_install
+
 # link-component
 link-a -> link-a_install
 link-b -> link-b_install

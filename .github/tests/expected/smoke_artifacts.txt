@@ -84,6 +84,20 @@
 <lib>/liblatedstlib.a|unix
 <lib>/liblatesrclib.a|unix
 
+# links-chain
+<include>/links_host.h|all
+<include>/stormbyte_base.h|all
+<include>/stormbyte_buffer.h|all
+<include>/stormbyte_logger.h|all
+<lib>/StormByte-Base.lib|windows
+<lib>/StormByte-Buffer.lib|windows
+<lib>/StormByte-Logger.lib|windows
+<lib>/libStormByte-Base.a|unix
+<lib>/libStormByte-Buffer.a|unix
+<lib>/libStormByte-Logger.a|unix
+<lib>/liblinkshost.a|unix
+<lib>/linkshost.lib|windows
+
 # link-component
 <include>/a.h|all
 <include>/b.h|all

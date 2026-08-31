@@ -5,16 +5,16 @@
 ## @brief Emit CMake stages and include the component fragment (internal).
 ## @param[in] _component Registered component identifier.
 ## @note Called only from `_bm_materialize_finalize`. Uses
-##       `_bm_tools_cmake_stages` (not public) and
+##       `_bm_tools_cmake_stages` and
 ##       `_bm_materialize_collect_outputs` / `_bm_materialize_write_fragment`.
 ## @note Eager components print `Configuring …` from the generated
-##       configure script (parent include). Deferred components
-##       (`buildmaster_depend` sources) print
-##       `Setting up <title> for build-time configure` here so parent
-##       configure is not silent about them; the real nested configure
-##       still runs under `<id>_configure` at build time.
+##       configure script. Deferred components print
+##       `Setting up <title> for build-time configure` here.
+## @note Defer is `_bm_graph_has_deferred_configure`: only registered
+##       dests in this process. Link-to-nested-only dests stay eager so
+##       `links/<dest>.cmake` exists before flatten/apply_links.
 ## @note Indent is `BUILDMASTER_COMPONENT_<id>_INDENT` read *after*
-##       collect_outputs (that function used to PARENT_SCOPE a create-time 0).
+##       collect_outputs.
 ## @note Per-id hooks run after the fragment include (alias order).
 function(_bm_backend_cmake_materialize _component)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_backend_cmake_materialize")

@@ -40,5 +40,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/backend/helpers.cmake")
 
 include("${CMAKE_CURRENT_LIST_DIR}/factory.cmake")
 
+# Transitive link dumps (${BUILDMASTER_LINKS_DIR}/<id>.cmake).
+include("${CMAKE_CURRENT_LIST_DIR}/links/helpers.cmake")
+
 # Verbose configure dump (after the graph API exists).
 include("${CMAKE_CURRENT_LIST_DIR}/../report/helpers.cmake")

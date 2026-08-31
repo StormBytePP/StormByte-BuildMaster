@@ -67,6 +67,13 @@ add_subdirectory(recursive/cmake)
 add_subdirectory(recursive/meson)
 
 # ---------------------------------------------------------------------------
+# ALIAS + links/ (Buffer→Logger→Base; host only links Buffer)
+# static chain (existing) + SHARED host (Crypto analogue)
+# ---------------------------------------------------------------------------
+add_subdirectory(links-chain)
+add_subdirectory(links-shared-chain)
+
+# ---------------------------------------------------------------------------
 # Install archive rename (Meson zs.* → produced z.*)
 # ---------------------------------------------------------------------------
 add_subdirectory(rename)

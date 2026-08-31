@@ -5,6 +5,7 @@
 # Implementation lives in component/options/*.cmake.
 
 include("${CMAKE_CURRENT_LIST_DIR}/options/core.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/options/alias.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/files.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/git.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/options/link.cmake")

@@ -9,10 +9,16 @@ include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 
 ## @brief Materialize one registered component by SYSTEM.
 ## @param[in] id Registered component id.
+## @note After the nested configure returns, `_bm_links_attach_new` hangs
+##       any `links/*.cmake` that appeared during that configure onto `id`.
 function(_bm_materialize_one id)
 	get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_SYSTEM)
 	if("${_sys}" STREQUAL "")
 		return()
+	endif()
+	set(_links_before "")
+	if(NOT "${BUILDMASTER_LINKS_DIR}" STREQUAL "")
+		file(GLOB _links_before "${BUILDMASTER_LINKS_DIR}/*.cmake")
 	endif()
 	if(_sys STREQUAL "cmake")
 		_bm_backend_cmake_materialize("${id}")
@@ -23,6 +29,9 @@ function(_bm_materialize_one id)
 	else()
 		_bm_log_message(COMPONENT FATAL
 			"finalize: unknown system '${_sys}' for '${id}'")
+	endif()
+	if(COMMAND _bm_links_attach_new)
+		_bm_links_attach_new("${id}" "${_links_before}")
 	endif()
 endfunction()
 
@@ -35,6 +44,10 @@ endfunction()
 ##       when `BUILDMASTER_VERBOSE` is ON.
 ## @note Meta `NOINSTALL` is stamped onto every member leaf before inject /
 ##       materialize so collect_outputs and resolve_dest see the property.
+## @note Nested configures write `${BUILDMASTER_LINKS_DIR}/<id>.cmake` in
+##       *their* finalize. This process then rewrites its own links files
+##       (closure + dests that only exist as files) **before** ingest and
+##       apply_links, so the host link line sees Logger and Base.
 function(_bm_materialize_finalize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_finalize")
 	get_property(_done GLOBAL PROPERTY BUILDMASTER_COMPONENTS_FINALIZED)
@@ -85,6 +98,12 @@ function(_bm_materialize_finalize)
 
 	_bm_repack_materialize()
 	_bm_meta_wire()
+	if(COMMAND _bm_links_write_all)
+		_bm_links_write_all()
+	endif()
+	if(COMMAND _bm_links_ingest_needed)
+		_bm_links_ingest_needed()
+	endif()
 	_bm_materialize_apply_links()
 	_bm_meta_warn_orphans()
 

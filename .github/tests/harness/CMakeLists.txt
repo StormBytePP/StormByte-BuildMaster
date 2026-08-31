@@ -115,6 +115,11 @@ add_custom_target(run_buildmaster_smoke
 		# Recursive
 		nest-cmake_install nest-meson_install
 		recursion_cmake_link_test recursion_meson_link_test
+		# ALIAS + links/
+		StormByte-Buffer_install links-host_install
+		links_chain_test links_chain_test_run
+		SharedBuffer_install
+		links_shared_chain_test links_shared_chain_test_run
 		# Rename
 		rename-variant_install rename_variant_link_test
 		# Repack (NOINSTALL phases + REPACK meta)

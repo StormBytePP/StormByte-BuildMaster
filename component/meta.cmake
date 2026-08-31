@@ -62,7 +62,8 @@ endfunction()
 ## @param[in] _id     Meta identifier (also the REPACK archive stem).
 ## @param[in] _title  Human-readable title.
 ## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `NOINSTALL`,
-##                    `LINK=`, `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`).
+##                    `LINK=`, `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`,
+##                    `ALIAS=` / `ALIAS={…}`).
 ##                    `INDENT=` is WARNING and ignored; put the meta in a
 ##                    `buildmaster_group()`.
 ## @note Invoked only from the public macro. Origin is the caller's list file.
@@ -73,6 +74,9 @@ endfunction()
 ##       `NOINSTALL`. `REPACK` on `buildmaster_component` is FATAL.
 ## @note Creates an empty INTERFACE `<id>` before return so ALIAS /
 ##       target_* in the same CMakeLists (before DEFER) see the target.
+## @note `ALIAS=` creates `add_library(name ALIAS <id>)` after that stub.
+##       Empty `ALIAS` / `ALIAS=` / `ALIAS={}` is FATAL. Alias equal to
+##       `<id>` or a TARGET that is not already an ALIAS of `<id>` is FATAL.
 ## @note RENAME / STRIPRES → INFO, ignored (meta produces no archives of
 ##       its own except the REPACK merge). STRIPRES default is ON; the INFO
 ##       fires only when the user actually wrote the key.
@@ -145,6 +149,7 @@ function(_bm_meta_impl _id _title)
 		_files_unpacks _files_forces _files_sources _files_titles)
 	_bm_opt_parse_require_tool("${_optstr}")
 	_bm_opt_parse_repack("${_optstr}" _repack)
+	_bm_opt_parse_alias("${_optstr}" _meta_aliases)
 	if(_pc_present)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_meta('${_id}'): PC={…} is not allowed on a meta (unbounded Requires / clash with upstream .pc). Set PC on the concrete member components instead.")
@@ -193,6 +198,7 @@ function(_bm_meta_impl _id _title)
 	endif()
 
 	add_library("${_id}" INTERFACE)
+	_bm_alias_apply("${_id}" "${_meta_aliases}")
 
 	_bm_graph_defer_arm()
 	if(_repack)

@@ -208,19 +208,22 @@ function(_bm_materialize_inject_linkflags)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_inject_linkflags")
 endfunction()
 
-## @brief Apply recorded buildmaster_link edges after all fragments are included.
-## @note Walks `BUILDMASTER_COMPONENT_LINK_SOURCES` / `_DESTS` in lockstep.
-## @note Dest kinds: meta INTERFACE, registered component (WHOLE vs produced
-##       IMPORTED names), existing CMake target, an existing archive file,
-##       or a library spec (`<name>` or `<subdir>/<name>`) resolved to the
-##       canonical path under `BUILDMASTER_INSTALL_LIBDIR` using the *source*
-##       component mode. The file need not exist at configure (install later).
-## @note Dest that is none of the above is FATAL. Raw system linker names
-##       (`shlwapi`, `ws2_32`) belong in `LINK=` / `LINK={…}` on the producer,
-##       not here.
+## @brief Apply recorded buildmaster_link edges onto CMake targets.
+## @note Visibility: INTERFACE when the source is an INTERFACE library
+##       (BM stub / meta). PUBLIC when the source is a real host
+##       STATIC/SHARED/OBJECT/MODULE so the host compile inherits dest
+##       includes and dest libs.
+## @note Wait: PUBLIC/INTERFACE usage requirements do **not** order
+##       host `.o` compile after dest `_install`. A non-INTERFACE source
+##       also gets `add_dependencies(source dest_install)` when that
+##       target exists.
+## @note `_bm_links_flatten_onto` runs only for real hosts (not BM
+##       stubs). Walks LINK/DEP + `links/<id>.cmake` so a host that only
+##       names Buffer still gets `-lLogger -lBase` on the SHARED line.
+##       Flatten must not add absolute `.so` paths (ninja source, no
+##       rule) and must not `target_link_libraries(host PUBLIC <stub>)`.
 ## @note FATAL if source is not a target. FATAL if dest is NOINSTALL and
-##       not `PRIVATE_HEADERS`. A `PRIVATE_HEADERS` dest is wait-only here
-##       (no INTERFACE link line; `-I` was injected into the source OPTIONS).
+##       not `PRIVATE_HEADERS`. Raw system linker names belong in LINK=.
 function(_bm_materialize_apply_links)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_apply_links")
 	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
@@ -229,6 +232,7 @@ function(_bm_materialize_apply_links)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_materialize_apply_links")
 		return()
 	endif()
+
 	set(_i 0)
 	foreach(_src IN LISTS _lsrcs)
 		list(GET _ldsts ${_i} _dst)
@@ -239,10 +243,23 @@ function(_bm_materialize_apply_links)
 				"buildmaster_link: source '${_src}' is not a target (missing buildmaster_component?)")
 		endif()
 
+		get_property(_src_type TARGET "${_src}" PROPERTY TYPE)
+		if(_src_type STREQUAL "INTERFACE_LIBRARY")
+			set(_src_vis INTERFACE)
+		else()
+			set(_src_vis PUBLIC)
+		endif()
+
 		_bm_meta_is("${_dst}" _dst_meta)
 		if(_dst_meta)
 			if(TARGET "${_dst}")
-				target_link_libraries(${_src} INTERFACE ${_dst})
+				target_link_libraries(${_src} ${_src_vis} ${_dst})
+			endif()
+			if(NOT _src_type STREQUAL "INTERFACE_LIBRARY")
+				_bm_links_flatten_onto("${_src}" "${_dst}" "${_src_vis}")
+			endif()
+			if(NOT _src_type STREQUAL "INTERFACE_LIBRARY" AND TARGET "${_dst}_install")
+				add_dependencies("${_src}" "${_dst}_install")
 			endif()
 			continue()
 		endif()
@@ -264,29 +281,38 @@ function(_bm_materialize_apply_links)
 			get_property(_dst_whole GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_WHOLE)
 			if(_dst_whole)
 				if(TARGET "${_dst}")
-					target_link_libraries(${_src} INTERFACE ${_dst})
+					target_link_libraries(${_src} ${_src_vis} ${_dst})
 				endif()
 			else()
 				get_property(_names GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_dst}_NAMES)
 				foreach(_lib IN LISTS _names)
 					if(TARGET "${_lib}")
-						target_link_libraries(${_src} INTERFACE ${_lib})
+						target_link_libraries(${_src} ${_src_vis} ${_lib})
 					endif()
 				endforeach()
 				if(TARGET "${_dst}")
-					target_link_libraries(${_src} INTERFACE ${_dst})
+					target_link_libraries(${_src} ${_src_vis} ${_dst})
 				endif()
+			endif()
+			if(NOT _src_type STREQUAL "INTERFACE_LIBRARY")
+				_bm_links_flatten_onto("${_src}" "${_dst}" "${_src_vis}")
+			endif()
+			if(NOT _src_type STREQUAL "INTERFACE_LIBRARY" AND TARGET "${_dst}_install")
+				add_dependencies("${_src}" "${_dst}_install")
 			endif()
 			continue()
 		endif()
 
 		if(TARGET "${_dst}")
-			target_link_libraries(${_src} INTERFACE ${_dst})
+			target_link_libraries(${_src} ${_src_vis} ${_dst})
+			if(NOT _src_type STREQUAL "INTERFACE_LIBRARY")
+				_bm_links_flatten_onto("${_src}" "${_dst}" "${_src_vis}")
+			endif()
 			continue()
 		endif()
 
 		if(EXISTS "${_dst}" AND NOT IS_DIRECTORY "${_dst}")
-			target_link_libraries(${_src} INTERFACE "${_dst}")
+			target_link_libraries(${_src} ${_src_vis} "${_dst}")
 			continue()
 		endif()
 
@@ -308,7 +334,7 @@ function(_bm_materialize_apply_links)
 				"${_src_mode}" "${_dst}" "${BUILDMASTER_INSTALL_LIBDIR}"
 				_spec_names _spec_files _spec_dlls)
 			if(_spec_files)
-				target_link_libraries(${_src} INTERFACE ${_spec_files})
+				target_link_libraries(${_src} ${_src_vis} ${_spec_files})
 				_bm_log_message(COMPONENT DEBUG
 					"buildmaster_link '${_src}' → spec '${_dst}' → ${_spec_files}")
 				continue()

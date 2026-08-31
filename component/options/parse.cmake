@@ -29,6 +29,8 @@
 ##       `LINK=` / `LINK={…}` for raw system linker names, `LINKFLAGS=` /
 ##       `LINKFLAGS={…}` for raw linker flags, and `buildmaster_link()` for BM
 ##       graph nodes.
+## @note `ALIAS=` / `ALIAS={…}` is parsed by `_bm_opt_parse_alias`.
+##       Bare `ALIAS` is not a flag (`KEY=value` WARNING from the splitter).
 ## @note `BUILDONLY` is removed. Use `NOINSTALL`. The old key is FATAL.
 ## @note `NOINSTALL` (bare) enables with no message. `NOINSTALL=` and
 ##       truthy `NOINSTALL=ON|TRUE|1|YES` enable with WARNING
@@ -80,6 +82,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 				# parsed by _bm_opt_parse_backend()
 			elseif(_key STREQUAL "SOURCE")
 				# parsed by _bm_opt_parse_source()
+			elseif(_key STREQUAL "ALIAS")
+				# parsed by _bm_opt_parse_alias()
 			elseif(_key STREQUAL "LINK_EXTRA")
 				_bm_log_message(COMPONENT WARNING
 					"LINK_EXTRA is removed; use LINK= / LINK={…} for syslibs, LINKFLAGS= / LINKFLAGS={…} for flags, buildmaster_link() for BM nodes (ignored)")

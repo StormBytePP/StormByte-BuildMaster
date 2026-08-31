@@ -164,6 +164,34 @@ and the declaration shape changed.
 - Harness + consumer tests for recursive cmake/meson, helper `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta ignore), hooks, late link, raw `LINK=`, duplicate edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL), `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE, FILES-on-meta FATAL, outline groups (CMake + Meson leaves), `NOINSTALL` (build without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path, `BUILDONLY` removed / `NOINSTALL=OFF` FATAL.
 - **Configure report (`BUILDMASTER_VERBOSE`).** After graph hooks, the primary bootstrap prints `BuildMaster <version> Configuration:` (module `Report`): parent toolchain paths/flags, then an alphabetical component table (`ID` / `TYPE` / `LINK`) with one-level `NEEDED BY` and explicit overrides only (`CFLAGS`, `CXXFLAGS`, `FILES`, `LINKFLAGS`, `NOINSTALL`). Groups are omitted. Row order is readability, not the graph walk. Nested bootstraps stay silent.
 - **On-demand tools.** Bootstrap always initializes `ninja` and the archiver (`tools/bootstrap/`). `cmake`, `meson`, `git`, and `file` initialize on first use: backend wrappers (`cmake` / `meson`), `GIT={…}` / `FILES={…}` on the optstr, or a pending `FILES SOURCE` after the tree is unpacked. Extra tools live under `tools/extra/<id>/` (`pkgconfig` is the only extra in this release) and start only via `REQUIRE_TOOL=<id>` / `REQUIRE_TOOL={id;id2}` on `buildmaster_component` or `buildmaster_meta`. Empty `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and ignored. An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN` (or whose directory is missing) is FATAL — BM never silently falls back to a same-named system binary. A second request is a no-op. `PC={…}` only writes a helper `.pc`; it does **not** demand `pkgconfig`. `pkgconfig` still prefers a working system pkg-config/`pkgconf` and builds the bundled tree only when that probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone. Configure prints `Setting up tools: <name>` only when that tool actually starts.
+- **`ALIAS=` / `ALIAS={…}`.** After the INTERFACE stub exists,
+  `add_library(<alias> ALIAS <id>)` for each name. Works on
+  `buildmaster_component` and `buildmaster_meta`. A second distinct
+  mapping of the same alias is FATAL (BM text, not the raw CMake
+  error). `buildmaster_link` / `buildmaster_depend` resolve the alias
+  to the id before recording the edge.
+- **`buildmaster_link(source dest [dest…])`.** Several dests on one
+  call. Each dest is the same contract as a single dest. Duplicates
+  in the same call are WARNING + skip.
+- **`links/` export (one BM, any process).** Every materialized
+  component and created meta writes
+  `${BUILDMASTER_LINKS_DIR}/<sanitized-id>.cmake`
+  (`BUILDMASTER_LINKS_DIR` lives next to `scripts/` under the trunk
+  bindir and is propagated / toolchain-dumped so nested cmake sees
+  the same directory). The file is a `configure_file` template: id,
+  aliases, include dir, linker *names* + `-L` (not raw archive
+  paths — those have no Ninja rule in the parent graph), and BM
+  dests. A later process `include()`s those files and can
+  `buildmaster_link(consumer AlreadyBuiltId)` without listing
+  Logger/Base/… by hand, provided **every** node in that chain was
+  declared with `buildmaster_component` / `buildmaster_meta` (raw
+  `target_link_libraries` inside a nested tree is invisible to
+  `links/`). Same id declared again is first-wins: STATUS
+  `Skipping configure of <title> — already registered as…` /
+  `already built by…` and no second compile. `buildmaster_clean`
+  removes `links/`. Harness `links-chain` is host → Buffer only;
+  Logger and Base arrive through `links/` + `buildmaster_link` /
+  `buildmaster_depend` inside the Buffer tree.
 
 ### Changed
 

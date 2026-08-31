@@ -38,22 +38,46 @@ endfunction()
 
 ## @brief Whether this component must use build-time configure.
 ## @param[in]  id      Component identifier.
-## @param[out] out_var Parent-scope TRUE if `id` appears as a dependency source.
-## @note Configure-time configure is used when the component has no recorded
-##       incoming edges; otherwise configure runs as a build step (deferred
-##       template) so artifacts from dest can exist first.
+## @param[out] out_var Parent-scope TRUE if configure is a build step.
+## @note Deferred only when an outgoing DEP dest is a **registered**
+##       component or created meta **in this process**.
+## @note `buildmaster_link` also records DEP. A dest that only lives
+##       inside the nested src (`buildmaster_link(Buffer Logger)` while
+##       Logger is not a node here) must **not** defer: the child writes
+##       `links/Logger.cmake` during this configure, and flatten needs
+##       that file before generate. Deferring here was the Crypto hole
+##       (`Setting up Buffer for build-time configure` → empty glob).
 function(_bm_graph_has_deferred_configure id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_has_deferred_configure")
+	set(_def FALSE)
+	set(_why "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
-	if(_srcs)
-		list(FIND _srcs "${id}" _idx)
-		if(NOT _idx EQUAL -1)
-			set(${out_var} TRUE PARENT_SCOPE)
-			_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_has_deferred_configure")
-			return()
+	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
+	set(_i 0)
+	foreach(_s IN LISTS _srcs)
+		list(GET _dsts ${_i} _d)
+		math(EXPR _i "${_i} + 1")
+		if(NOT _s STREQUAL "${id}")
+			continue()
 		endif()
+		_bm_graph_is_registered("${_d}" _is_c)
+		if(_is_c)
+			set(_def TRUE)
+			set(_why "${_d}")
+			break()
+		endif()
+		_bm_meta_is("${_d}" _is_m)
+		if(_is_m)
+			set(_def TRUE)
+			set(_why "${_d}")
+			break()
+		endif()
+	endforeach()
+	if(_def)
+		_bm_log_message(COMPONENT DEBUG
+			"deferred configure ${id} (wait for registered dest '${_why}')")
 	endif()
-	set(${out_var} FALSE PARENT_SCOPE)
+	set(${out_var} "${_def}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_graph_has_deferred_configure")
 endfunction()
 

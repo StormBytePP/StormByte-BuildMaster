@@ -32,7 +32,10 @@
 ##            PC={VERSION=…;NAME=…;DESCRIPTION=…;ENABLED=…} (write a helper
 ##            `.pc` under the BM prefix for *internal* BM consumers),
 ##            GIT={…} (`ROOT=` is always under the git work tree), FILES={…},
-##            REQUIRE_TOOL=… / REQUIRE_TOOL={…}.
+##            REQUIRE_TOOL=… / REQUIRE_TOOL={…},
+##            ALIAS=<name> / ALIAS={name;name2} (`add_library(name ALIAS <id>)`
+##            after the INTERFACE stub; `buildmaster_link` / `depend` resolve
+##            alias → id before recording the pair).
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
@@ -69,6 +72,8 @@
 ## @note GIT + FILES SOURCE is FATAL (two owners of the same tree).
 ## @note `SOURCE=` does not move the git work tree. GIT uses
 ##       `BUILDMASTER_COMPONENT_<id>_GIT_WORKDIR` (positional srcdir).
+## @note `ALIAS=` / `ALIAS={…}` empty is FATAL. Alias equal to `<id>` or an
+##       existing TARGET that is not already an ALIAS of `<id>` is FATAL.
 ## @note `BUILDONLY` is removed; the parser FATALs (`use NOINSTALL`).
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
@@ -126,6 +131,7 @@ function(_bm_graph_create _component _component_title _srcdir
 		_files_urls _files_names _files_hashes _files_algos
 		_files_unpacks _files_forces _files_sources _files_titles)
 	_bm_opt_parse_require_tool("${_options_string}")
+	_bm_opt_parse_alias("${_options_string}" _reg_aliases)
 	if(_reg_repack)
 		_bm_log_message(COMPONENT FATAL
 			"REPACK is only valid on buildmaster_meta(). A component publishes its own artifacts; to merge several components into one archive, put REPACK on the meta and buildmaster_meta_add those ids.")
@@ -300,6 +306,7 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_pc_description}")
 
 	add_library("${_component}" INTERFACE)
+	_bm_alias_apply("${_component}" "${_reg_aliases}")
 
 	get_property(_git_wd GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_GIT_WORKDIR)
 	if("${_git_wd}" STREQUAL "")

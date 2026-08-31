@@ -47,6 +47,12 @@ hooks-stamp_install
 late-dst_install
 late-src_install
 
+# links-chain
+StormByte-Buffer_install
+links-host_install
+links_chain_test
+links_chain_test_run
+
 # link-component
 link-a_install
 link-b_install
