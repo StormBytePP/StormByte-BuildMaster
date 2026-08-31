@@ -128,7 +128,7 @@ function(_bm_repack_materialize)
 	endif()
 
 	set(_merge_script
-		"${BUILDMASTER_SRCDIR}/tools/bundle/merge_static_archives.cmake")
+		"${BUILDMASTER_SRCDIR}/component/bundle/merge_static_archives.cmake")
 	if(NOT EXISTS "${_merge_script}")
 		_bm_log_message(COMPONENT FATAL "missing ${_merge_script}")
 	endif()

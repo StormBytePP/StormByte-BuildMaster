@@ -50,7 +50,7 @@ from the repo root except through that chain.
 | `tools/meson/helpers.cmake` | `stages.cmake` + `templates/` |
 | `tools/file/helpers.cmake` | `checksum.cmake`, `download.cmake`, `decompress.cmake` + `templates/` |
 | `tools/git/helpers.cmake` | `internal.cmake`, `reset.cmake`, `patch.cmake`, `fetch.cmake`, `switch.cmake` + `templates/` |
-| `tools/archive/helpers.cmake` | archiver lookup |
+| `component/archive/helpers.cmake` | archiver lookup |
 
 `.cmake.in` templates live under the matching `templates/`
 directory, not next to the generator.
@@ -103,7 +103,7 @@ Internal FETCH / SWITCH / RESET / PATCH used by `GIT={…}`.
 Flush order is fixed. Post-install reset runs only when a PATCH
 was queued. There is no public `create_git_*`.
 
-@subsection uf_tools_archive tools/archive/
+@subsection uf_tools_archive component/archive/
 
 Finds `CMAKE_AR` / `ENV{AR}` / platform fallback. Style is
 `msvc_lib` or `gnu_ar`. Used by `RENAME`, `STRIPRES`, `REPACK`.

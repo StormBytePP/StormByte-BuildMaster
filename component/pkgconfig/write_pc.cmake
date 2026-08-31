@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/pkgconfig/write_pc.cmake
+# component/pkgconfig/write_pc.cmake
 # =============================================================================
 # cmake -DPC_NAME= -DPC_VERSION= -DPC_DESCRIPTION= -DPC_LIBS=
 #       -DPC_REQUIRES= -DPC_CFLAGS= -DPREFIX= -DLIBDIR= -DINCLUDEDIR=

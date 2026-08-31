@@ -1,16 +1,16 @@
 # =============================================================================
-# tools/archive/strip_msvc_res.cmake
+# component/archive/strip_msvc_res.cmake
 # =============================================================================
-# Function: _bm_ar_strip_msvc_res(lib)
+# Function: _bm_component_archive_strip_msvc_res(lib)
 # Script:  cmake -DLIB=<archive.lib> -DBUILDMASTER_SRCDIR=<root>
-#          [-DCMAKE_AR=…] -P tools/archive/strip_msvc_res.cmake
+#          [-DCMAKE_AR=…] -P component/archive/strip_msvc_res.cmake
 #
 # After RENAME: list members of a static MSVC/clang-cl archive and
 # /REMOVE every member whose basename ends in .res (case-insensitive).
 # Missing archive, non-msvc_lib archiver, empty list, or already-stripped
 # members are not fatal.
 #
-# This file is also included from tools/archive/helpers.cmake so install_exec
+# This file is also included from component/archive/helpers.cmake so install_exec
 # and other -P scripts can call the function. Script-mode body MUST only run
 # when *this* file is the -P entry point. CMAKE_SCRIPT_MODE_FILE is set for
 # *any* cmake -P (e.g. merge_static_archives.cmake); comparing against
@@ -27,13 +27,13 @@ if(NOT COMMAND buildmaster_message)
 	endif()
 endif()
 
-if(NOT COMMAND _bm_tools_archive_find)
+if(NOT COMMAND _bm_component_archive_find)
 	include("${CMAKE_CURRENT_LIST_DIR}/find_archiver.cmake")
 endif()
 
 ## @brief Strip `*.res` members from one MSVC/clang-cl static archive.
 ## @param[in] lib Absolute path to the `.lib` (canonical name, post-RENAME).
-## @note Resolves the archiver via `_bm_tools_archive_find`. If the style
+## @note Resolves the archiver via `_bm_component_archive_find`. If the style
 ##       is not `msvc_lib` (Unix `ar` / `llvm-ar`), this is a silent no-op.
 ## @note Lists members with `/LIST`. A member is removed only when its
 ##       basename matches `*.res` / `*.RES` (case-insensitive). Paths such
@@ -42,15 +42,15 @@ endif()
 ## @note `/REMOVE` uses the member string exactly as `/LIST` printed it.
 ## @note Missing `lib`, failed `/LIST`, or failed `/REMOVE` of one member
 ##       do not abort the parent install (`WARNING` / `DEBUG` only).
-function(_bm_ar_strip_msvc_res lib)
-	_bm_log_message(ARCHIVE LOWLEVEL "Entering _bm_ar_strip_msvc_res")
+function(_bm_component_archive_strip_msvc_res lib)
+	_bm_log_message(ARCHIVE LOWLEVEL "Entering _bm_component_archive_strip_msvc_res")
 	if("${lib}" STREQUAL "")
-		_bm_log_message(ARCHIVE FATAL "_bm_ar_strip_msvc_res: empty lib path")
+		_bm_log_message(ARCHIVE FATAL "_bm_component_archive_strip_msvc_res: empty lib path")
 	endif()
 
 	if(NOT EXISTS "${lib}")
 		_bm_log_message(ARCHIVE DEBUG "strip_msvc_res: missing ${lib} (skip)")
-		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_ar_strip_msvc_res")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_component_archive_strip_msvc_res")
 		return()
 	endif()
 
@@ -58,11 +58,11 @@ function(_bm_ar_strip_msvc_res lib)
 	if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
 		set(_hint "${CMAKE_AR}")
 	endif()
-	_bm_tools_archive_find(_bm_ar _bm_style "${_hint}")
+	_bm_component_archive_find(_bm_ar _bm_style "${_hint}")
 	if(NOT _bm_style STREQUAL "msvc_lib")
 		_bm_log_message(ARCHIVE DEBUG
 			"strip_msvc_res: archiver style '${_bm_style}' is not msvc_lib (skip)")
-		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_ar_strip_msvc_res")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_component_archive_strip_msvc_res")
 		return()
 	endif()
 
@@ -76,7 +76,7 @@ function(_bm_ar_strip_msvc_res lib)
 	if(NOT _rc EQUAL 0)
 		_bm_log_message(ARCHIVE WARNING
 			"strip_msvc_res: /LIST failed on ${lib} (${_rc}): ${_err}")
-		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_ar_strip_msvc_res")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_component_archive_strip_msvc_res")
 		return()
 	endif()
 
@@ -112,7 +112,7 @@ function(_bm_ar_strip_msvc_res lib)
 
 	_bm_log_message(ARCHIVE DEBUG
 		"strip_msvc_res: removed ${_removed} .res member(s) from ${lib}")
-	_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_ar_strip_msvc_res")
+	_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_component_archive_strip_msvc_res")
 endfunction()
 
 if(CMAKE_SCRIPT_MODE_FILE AND CMAKE_SCRIPT_MODE_FILE STREQUAL CMAKE_CURRENT_LIST_FILE)
@@ -123,5 +123,5 @@ if(CMAKE_SCRIPT_MODE_FILE AND CMAKE_SCRIPT_MODE_FILE STREQUAL CMAKE_CURRENT_LIST
 			message(FATAL_ERROR "strip_msvc_res: need -DLIB=")
 		endif()
 	endif()
-	_bm_ar_strip_msvc_res("${LIB}")
+	_bm_component_archive_strip_msvc_res("${LIB}")
 endif()

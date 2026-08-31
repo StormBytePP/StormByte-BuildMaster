@@ -11,10 +11,6 @@ set(_BM_TOOL_SETUP_LIST
 	ninja
 	extra
 	file
-	archive
-	bundle
-	pkgconfig
-	rename
 )
 string(REPLACE ";" ", " _BM_TOOL_SETUP_HDR "${_BM_TOOL_SETUP_LIST}")
 _bm_log_message(TOOLS STATUS "Setting up tools: ${_BM_TOOL_SETUP_HDR}" 1)

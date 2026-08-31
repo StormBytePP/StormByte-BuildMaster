@@ -22,9 +22,9 @@
 ##       (`OUTPUT <file>` `DEPENDS` `<id>_install`) for each extra.
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
 ##       (default ON). Shared/headers never strip; install_exec is a no-op there.
-## @note `_BM_PC_*` comes from `_bm_pc_fill_vars` (tools/pkgconfig).
-##       ENABLED is `1` only when `PC={…}` is on and not BUILDONLY (already FATAL
-##       at _bm_graph_create).
+## @note `_BM_PC_*` comes from `_bm_component_pkgconfig_fill_vars`
+##       (`component/pkgconfig`). ENABLED is `1` only when `PC={…}` is on and
+##       not BUILDONLY (already FATAL at _bm_graph_create).
 function(_bm_materialize_collect_outputs _component)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -58,7 +58,7 @@ function(_bm_materialize_collect_outputs _component)
 		set(_BM_STRIPRES_ENABLED "0")
 	endif()
 
-	_bm_pc_fill_vars("${_component}")
+	_bm_component_pkgconfig_fill_vars("${_component}")
 
 	set(_LIBRARY_COMPONENT_NAMES "")
 	set(_LIBRARY_COMPONENT_FILES "")
@@ -302,7 +302,7 @@ function(_bm_materialize_write_fragment _component _deferred)
 				VERBATIM
 			)
 			_bm_log_message(COMPONENT DEBUG
-				"Ninja file rule for spec-link '${_file}' via '${_component}_install'")
+				"Ninja file rule for spec-link '${_file}' via '${_component}_install")
 		endforeach()
 	endif()
 

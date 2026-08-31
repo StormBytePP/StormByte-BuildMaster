@@ -29,8 +29,8 @@ endforeach()
 get_filename_component(_out_dir "${OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${_out_dir}")
 
-include("${BUILDMASTER_SRCDIR}/tools/archive/helpers.cmake")
-_bm_tools_archive_find(_ar _style)
+include("${BUILDMASTER_SRCDIR}/component/archive/helpers.cmake")
+_bm_component_archive_find(_ar _style)
 
 # Apple ar has no MRI (-M). Prefer libtool -static.
 if(APPLE)

@@ -1,5 +1,5 @@
 # =============================================================================
-# tools/pkgconfig/fields.cmake — helper .pc field assembly
+# component/pkgconfig/fields.cmake — helper .pc field assembly
 # =============================================================================
 
 ## @brief Drop include-path tokens from a flag string.
@@ -7,8 +7,8 @@
 ## @param[out] out_var Parent-scope string without `-I`, `/I`, `-isystem`.
 ## @note Those paths belong to the BM prefix env, not to a helper .pc.
 ## @note Empty `flags` yields an empty string.
-function(_bm_pc_drop_include_tokens flags out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_pc_drop_include_tokens")
+function(_bm_component_pkgconfig_drop_include_tokens flags out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_pkgconfig_drop_include_tokens")
 	set(_keep "")
 	separate_arguments(_toks UNIX_COMMAND "${flags}")
 	foreach(_t IN LISTS _toks)
@@ -23,7 +23,7 @@ function(_bm_pc_drop_include_tokens flags out_var)
 	string(REPLACE ";" " " _joined "${_keep}")
 	string(STRIP "${_joined}" _joined)
 	set(${out_var} "${_joined}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_drop_include_tokens")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_drop_include_tokens")
 endfunction()
 
 ## @brief Tokens in `child` that are not in `parent`.
@@ -31,8 +31,8 @@ endfunction()
 ## @param[in]  child   Component flags (space-separated).
 ## @param[out] out_var Parent-scope leftover string.
 ## @note Comparison is exact token match after `separate_arguments`.
-function(_bm_pc_subtract_parent parent child out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_pc_subtract_parent")
+function(_bm_component_pkgconfig_subtract_parent parent child out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_pkgconfig_subtract_parent")
 	separate_arguments(_p UNIX_COMMAND "${parent}")
 	separate_arguments(_c UNIX_COMMAND "${child}")
 	set(_out "")
@@ -52,7 +52,7 @@ function(_bm_pc_subtract_parent parent child out_var)
 	string(REPLACE ";" " " _joined "${_out}")
 	string(STRIP "${_joined}" _joined)
 	set(${out_var} "${_joined}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_subtract_parent")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_subtract_parent")
 endfunction()
 
 ## @brief Pull C/C++ flag strings out of a component option list.
@@ -60,8 +60,8 @@ endfunction()
 ## @param[out] out_var Parent-scope combined flag string.
 ## @note Recognized prefixes: `-DCMAKE_C_FLAGS=`, `-DCMAKE_CXX_FLAGS=`,
 ##       `-Dc_args=`, `-Dcpp_args=`. Other options are ignored.
-function(_bm_pc_options_flags options out_var)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_pc_options_flags")
+function(_bm_component_pkgconfig_options_flags options out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_pkgconfig_options_flags")
 	set(_acc "")
 	foreach(_opt IN LISTS options)
 		if(_opt MATCHES "^-DCMAKE_C_FLAGS=(.*)$")
@@ -76,10 +76,10 @@ function(_bm_pc_options_flags options out_var)
 	endforeach()
 	string(STRIP "${_acc}" _acc)
 	set(${out_var} "${_acc}" PARENT_SCOPE)
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_options_flags")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_options_flags")
 endfunction()
 
-## @brief Fill `_BM_PC_*` for `install_exec` / `_bm_tools_*_stages`.
+## @brief Fill `_BM_PC_*` for `install_exec` / create_*_stages.
 ## @param[in] id Registered component id.
 ## @note Parent-scope: `_BM_PC_ENABLED` (`1`/`0`), `_BM_PC_NAME`,
 ##       `_BM_PC_VERSION`, `_BM_PC_DESCRIPTION`, `_BM_PC_LIBS`,
@@ -88,8 +88,8 @@ endfunction()
 ##       components with PC enabled (not metas). Cflags are component
 ##       extras minus parent `CMAKE_C{,XX}_FLAGS`, minus include tokens.
 ## @note When PC is off, all string outs are empty and ENABLED is `0`.
-function(_bm_pc_fill_vars id)
-	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_pc_fill_vars")
+function(_bm_component_pkgconfig_fill_vars id)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_pkgconfig_fill_vars")
 	get_property(_on GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC)
 	if(NOT _on)
 		set(_BM_PC_ENABLED "0" PARENT_SCOPE)
@@ -100,7 +100,7 @@ function(_bm_pc_fill_vars id)
 		set(_BM_PC_REQUIRES "" PARENT_SCOPE)
 		set(_BM_PC_CFLAGS "" PARENT_SCOPE)
 		set(_BM_PC_OUT "" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_fill_vars")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_fill_vars")
 		return()
 	endif()
 
@@ -153,10 +153,10 @@ function(_bm_pc_fill_vars id)
 	endif()
 	string(REPLACE ";" ", " _req "${_req}")
 
-	_bm_pc_options_flags("${_opts}" _child_flags)
+	_bm_component_pkgconfig_options_flags("${_opts}" _child_flags)
 	set(_parent_flags "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS}")
-	_bm_pc_subtract_parent("${_parent_flags}" "${_child_flags}" _delta)
-	_bm_pc_drop_include_tokens("${_delta}" _cflags)
+	_bm_component_pkgconfig_subtract_parent("${_parent_flags}" "${_child_flags}" _delta)
+	_bm_component_pkgconfig_drop_include_tokens("${_delta}" _cflags)
 
 	set(_out "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/${_name}.pc")
 
@@ -169,5 +169,5 @@ function(_bm_pc_fill_vars id)
 	set(_BM_PC_CFLAGS "${_cflags}" PARENT_SCOPE)
 	set(_BM_PC_OUT "${_out}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT DEBUG "PC fields for ${id}: ${_name} ${_ver} → ${_out}")
-	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_pc_fill_vars")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_fill_vars")
 endfunction()

@@ -27,6 +27,11 @@ include("${CMAKE_CURRENT_LIST_DIR}/toolchain_inherit.cmake")
 # Static archive merge (REPACK on buildmaster_meta).
 include("${CMAKE_CURRENT_LIST_DIR}/repack.cmake")
 
+# Post-install helpers (were under tools/).
+include("${CMAKE_CURRENT_LIST_DIR}/archive/helpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/rename/variants.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/pkgconfig/helpers.cmake")
+
 # Deferred materialize + fragment emit + finalize.
 include("${CMAKE_CURRENT_LIST_DIR}/materialize.cmake")
 
