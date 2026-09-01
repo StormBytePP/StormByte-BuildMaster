@@ -13,6 +13,11 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../paths.cmake")
 ## @note `BUILDMASTER_TOOLS_PKGCONFIG_FORCE_BUNDLED=ON` skips the system
 ##       probe (harness only).
 ## @note Bundled install uses `ENV_NINJA_COMMAND` (absolute ninja + runner).
+## @note Always sets `PKG_CONFIG_PATH` to
+##       `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig` (GNUInstallDirs: `lib` or
+##       `lib64`) and calls `_bm_env_update_runner()` so the generated
+##       runner exports it. On-demand tools run after the first runner
+##       write; skipping the refresh leaves `update_pkgconfig_path=""`.
 function(_bm_extra_pkgconfig_init)
 	_bm_log_message(PKGCONF LOWLEVEL "Entering _bm_extra_pkgconfig_init")
 
@@ -110,10 +115,13 @@ function(_bm_extra_pkgconfig_init)
 		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
 		_bm_log_message(PKGCONF STATUS
 			"Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
-		_bm_env_update_runner()
 	endif()
 
 	set(PKG_CONFIG_PATH "${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig")
+	_bm_env_update_runner()
+	_bm_log_message(PKGCONF DEBUG
+		"runner refresh PKG_CONFIG=${PKG_CONFIG} PKG_CONFIG_PATH=${PKG_CONFIG_PATH}")
+
 	set(PKG_CONFIG "${PKG_CONFIG}" PARENT_SCOPE)
 	set(PKG_CONFIG_PATH "${PKG_CONFIG_PATH}" PARENT_SCOPE)
 	set(PKG_CONFIG_WORKING "${PKG_CONFIG_WORKING}" PARENT_SCOPE)
