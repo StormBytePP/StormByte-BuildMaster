@@ -1,0 +1,17 @@
+# Oficio rename_executable.
+# Stem → Unix bin/<stem> or Windows bin/<stem>.exe (never .exe.exe).
+# Emitted only when mode is executable and RENAME is active.
+# Worker: component/rename/normalize_install_executables.cmake
+
+execute_process(
+	COMMAND "${CMAKE_COMMAND}"
+		"-DOUTPUTS=@_BM_OUTPUTS@"
+		"-DBINDIR=@BUILDMASTER_INSTALL_BINDIR@"
+		"-DBUILDMASTER_SRCDIR=@BUILDMASTER_SRCDIR@"
+		-P "@BUILDMASTER_SRCDIR@/component/rename/normalize_install_executables.cmake"
+	RESULT_VARIABLE _BM_RENAME_RC
+)
+if(NOT _BM_RENAME_RC EQUAL 0)
+	_bm_log_message(@_BM_LOG_CHANNEL@ FATAL
+		"Install rename/normalize executables failed for @_BM_COMPONENT_TITLE@ (exit ${_BM_RENAME_RC})")
+endif()

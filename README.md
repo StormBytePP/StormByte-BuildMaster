@@ -89,6 +89,7 @@ a product, not a build blog.
 - [Backend (`BACKEND`)](#backend-backend)
 - [No-install components and repack](#no-install-components-and-repack)
 - [Header-only components](#header-only-components)
+- [Executables](#executables)
 - [Files (`FILES`)](#files-files)
 - [Git (`GIT`)](#git-git)
 - [Helper pkg-config files (`PC`)](#helper-pkg-config-files-pc)
@@ -131,6 +132,24 @@ buildmaster_component(
 
 target_link_libraries(MyApp PRIVATE mylib)
 # or: target_link_libraries(MyApp PRIVATE My::Lib)
+```
+
+Same factory, a tool that uses that library. The nested tree must still
+`target_link_libraries` / `link_with` the archive — BM waits and puts
+`-I`/`-L` on the nested compile; it does not invent a CMake target
+inside someone else’s `CMakeLists.txt`:
+
+```cmake
+buildmaster_component(
+	mytool
+	"My Tool"
+	"${CMAKE_SOURCE_DIR}/thirdparty/mytool/src"
+	""
+	executable
+	mytool
+)
+
+buildmaster_link(mytool mylib)
 ```
 
 No build directory. No out-variable. No generated fragment to `include()`.
@@ -227,6 +246,7 @@ end of `CMAKE_SOURCE_DIR`.
 | `<id>_build` | Compile |
 | `<id>_install` | Install into the shared prefix (the script is a no-op under `NOINSTALL`) |
 | produced libs | `STATIC` / `SHARED` **IMPORTED** files under the prefix (or the build dir) |
+| produced exe | File under `BINDIR` (or the build dir). No `IMPORTED` executable on `<id>` |
 
 | Nested configure | When |
 |------------------|------|
@@ -283,7 +303,8 @@ order-only edge as `buildmaster_depend(A B)` when `B` is a graph node,
 even if `B` is registered later.
 
 `buildmaster_link` to a `NOINSTALL` dest is FATAL. Wait with
-`buildmaster_depend`, or publish the archives through a `REPACK` meta.
+`buildmaster_depend`, or publish the archives through a `REPACK` meta
+or a static `REPACK` component.
 
 ---
 
@@ -358,7 +379,8 @@ Rules that keep this honest:
   itself a BM graph, use `buildmaster_link` there too.
 - Same id declared again is first-wins. Configure prints
   `Skipping configure of <title> — already registered as…` or
-  `already built by…` and does not compile it twice. Version
+  `already built by…` and does not compile it twice. Reuse is valid
+  only if after `include()` the TARGET `<id>` exists. Version
   comparison is a 2.1 problem.
 - `buildmaster_clean` deletes `links/` with the rest of the bindir.
 - System libs (`shlwapi`, `m`) stay on `LINK=` / `buildmaster_link`
@@ -395,7 +417,7 @@ macOS). A group that does not apply is skipped at INFO. An unknown
 platform key is FATAL.
 
 Meta and headers: WARNING + ignore. Put the flags on the member that
-actually links.
+actually links. `executable` keeps them — that *is* a nested link.
 
 ---
 
@@ -459,15 +481,15 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | Key | Default | Notes |
 |-----|---------|-------|
 | `TOOLCHAIN` | parent | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`) |
-| `RENAME` | ON | Normalize variant archive names after install |
+| `RENAME` | ON | Normalize variant archive / binary names after install |
 | `WHOLE` | OFF | Whole-archive the produced statics |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives |
 | `NOINSTALL` | OFF | Build without publishing to the shared prefix. Flag, not a switch |
 | `BACKEND` | detect | `cmake` or `meson` when both markers exist |
 | `SOURCE` | (srcdir) | Subtree under the positional `srcdir`. Applied **before** detect |
 | `ALIAS=` / `ALIAS={…}` | empty | `add_library(alias ALIAS id)` after the stub |
-| `REPACK` | OFF | Meta only. Merge member statics into one prefix archive |
-| `PC={…}` | off | Write a helper `.pc` after install. Does **not** demand pkg-config |
+| `REPACK` | OFF | Meta, or a **static** component: merge NOINSTALL static dests into the prefix archive |
+| `PC={…}` | off | Write a helper `.pc` after install. Does **not** demand pkg-config. FATAL on `executable` |
 | `LINK=` / `LINK={…}` | empty | Raw system linker names on the INTERFACE |
 | `LINKFLAGS=` / `LINKFLAGS={…}` | empty | Raw flags for the nested link only |
 | `GIT={…}` | empty | Fetch / switch / reset / patch. `ROOT=` uses the same isolation as `SOURCE=` |
@@ -541,8 +563,15 @@ script does not run `cmake --install`.
 `buildmaster_meta(id title "REPACK")` plus `buildmaster_meta_add`
 merges every produced **static** archive of the member leaves into one
 prefix archive named after the meta id. Shared members stay INTERFACE
-(WARNING). `REPACK` on `buildmaster_component` is FATAL.
-`NOINSTALL` + shared as a `REPACK` member is FATAL.
+(WARNING). `NOINSTALL` + shared as a `REPACK` member is FATAL.
+
+`REPACK` on a **static** `buildmaster_component` merges first-level
+`depend`/`link` dests that are NOINSTALL static into that component’s
+already-installed prefix archive. Headers / executable + `REPACK` on
+the same id is FATAL. An `executable` dest of a REPACK publisher is
+skipped (INFO), not a member. Shared + `REPACK` on a component is
+WARNING + skip. Zero static members is FATAL. `REPACK` + `NOINSTALL`
+on the same id is FATAL.
 
 `BUILDONLY` is gone. Write `NOINSTALL`.
 
@@ -555,6 +584,27 @@ Mode `headers`. No produced spec.
 - Backend + not `NOINSTALL`: headers install into the shared prefix.
 - No backend (`none`) or `NOINSTALL` headers: private island. Direct
   consumers get a quoted `-I` on *that* id’s nested compile only.
+
+---
+
+## Executables
+
+Mode `executable`. Produced spec is a binary stem, not `libfoo.a`.
+
+The file lands under `BUILDMASTER_INSTALL_BINDIR` (`bin/<stem>` on
+Unix, `bin/<stem>.exe` on Windows). `NOINSTALL` keeps it under the
+component BUILDDIR.
+
+`<id>` is still an `INTERFACE` stub. Do not
+`target_link_libraries(host mytool)` expecting symbols from the
+binary. Run the file after `<id>_install`. The nested project is what
+actually links libraries (`find_library` / `link_with`);
+`buildmaster_link(mytool mylib)` is the wait edge and the parent
+INTERFACE, not a target inside the upstream `CMakeLists.txt`.
+
+`RENAME` (default ON) normalizes variant binary names onto the
+produced stem. `WHOLE` / `STRIPRES` / enabled `PC={…}` do not apply
+(`PC` ENABLED is FATAL). `REPACK` on the executable itself is FATAL.
 
 ---
 
@@ -598,6 +648,7 @@ extra. The next Meson or Autotools leaf that *reads* `.pc` files is
 your problem — see [`REQUIRE_TOOL`](#extra-tools-require_tool).
 
 `NOINSTALL` + enabled `PC=` is FATAL (no shared prefix).
+`executable` + enabled `PC=` is FATAL.
 
 ---
 
@@ -654,7 +705,7 @@ public command.
 
 `WHOLE` on a static component (or a meta) wraps produced archives so
 the linker cannot drop unreferenced objects (plugins, statically
-registered codecs). Shared / headers: INFO + ignore.
+registered codecs). Shared / headers / executable: INFO + ignore.
 
 ---
 
@@ -669,8 +720,9 @@ resources. Other toolchains: silent no-op.
 ## Subcomponent specs
 
 `produced` is `<name>` or `<subdir>/<name>`. Names are canonical
-(post-`RENAME`). `buildmaster_link(consumer subdir/name)` links that
-archive only.
+(post-`RENAME`). Libraries resolve under `LIBDIR`. Executables
+resolve under `BINDIR`. `buildmaster_link(consumer subdir/name)`
+links that library archive only.
 
 ---
 
@@ -797,15 +849,12 @@ From the BuildMaster repo:
 
 ```sh
 rm -rf build/harness && cmake -S .github/tests/harness -B build/harness -G Ninja \
-	&& cmake --build build/harness --target run_buildmaster_smoke \
-	&& cmake --build build/harness --target run_buildmaster_negative
+	&& cmake --build build/harness --target run_buildmaster_main
 ```
 
-Consumer (public API only):
-
-```sh
-cmake --build build/harness --target run_buildmaster_consumer
-```
+That is smoke + negative + consumer (`consumer_nested` and a wiped
+`consumer_ci` bindir). The three older targets still exist if you
+need them split.
 
 ---
 

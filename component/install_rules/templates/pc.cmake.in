@@ -1,0 +1,26 @@
+# Oficio pc.
+# Helper .pc for internal BM consumers of this prefix (not a portable package).
+# Emitted only when PC is on. Values baked at configure_file after
+# `_bm_component_pkgconfig_fill_vars` sealed GLOBAL fields.
+# write_pc FATALs if OUT already exists (upstream .pc).
+
+execute_process(
+	COMMAND "${CMAKE_COMMAND}"
+		"-DPC_NAME=@_BM_PC_NAME@"
+		"-DPC_VERSION=@_BM_PC_VERSION@"
+		"-DPC_DESCRIPTION=@_BM_PC_DESCRIPTION@"
+		"-DPC_LIBS=@_BM_PC_LIBS@"
+		"-DPC_REQUIRES=@_BM_PC_REQUIRES@"
+		"-DPC_CFLAGS=@_BM_PC_CFLAGS@"
+		"-DPREFIX=@BUILDMASTER_INSTALL_DIR@"
+		"-DLIBDIR=@CMAKE_INSTALL_LIBDIR@"
+		"-DINCLUDEDIR=@CMAKE_INSTALL_INCLUDEDIR@"
+		"-DOUT=@_BM_PC_OUT@"
+		"-DBUILDMASTER_SRCDIR=@BUILDMASTER_SRCDIR@"
+		-P "@BUILDMASTER_SRCDIR@/component/pkgconfig/write_pc.cmake"
+	RESULT_VARIABLE _BM_PC_RC
+)
+if(NOT _BM_PC_RC EQUAL 0)
+	_bm_log_message(@_BM_LOG_CHANNEL@ FATAL
+		"helper .pc failed for @_BM_COMPONENT_TITLE@ (exit ${_BM_PC_RC})")
+endif()

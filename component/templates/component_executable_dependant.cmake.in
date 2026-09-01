@@ -1,0 +1,24 @@
+add_custom_target(@_LIBRARY_CONFIGURE_TARGET@
+	COMMAND @ENV_CMAKE_SILENT_COMMAND@ -P "@_LIBRARY_CONFIGURE_FILE@"
+	COMMENT "[BuildMaster/CMake    ]: Configuring @_LIBRARY_NAME@@_LIBRARY_TOOLCHAIN_SUFFIX@"
+	USES_TERMINAL
+	VERBATIM
+)
+
+if(NOT "@_LIBRARY_DEPENDENCIES@" STREQUAL "")
+	add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ @_LIBRARY_DEPENDENCIES@)
+endif()
+if(TARGET buildmaster_build_init)
+	add_dependencies(@_LIBRARY_CONFIGURE_TARGET@ buildmaster_build_init)
+endif()
+
+include(@_LIBRARY_BUILD_FILE@)
+add_dependencies(@_LIBRARY_BUILD_TARGET@ @_LIBRARY_CONFIGURE_TARGET@)
+include(@_LIBRARY_INSTALL_FILE@)
+
+add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+
+set(_bm_link "@_BM_LINK_ITEMS@")
+if(NOT _bm_link STREQUAL "")
+	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_link})
+endif()

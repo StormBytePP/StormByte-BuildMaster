@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.20)
+project(exerename LANGUAGES C)
+include(GNUInstallDirs)
+add_executable(exerename-d main.c)
+set_target_properties(exerename-d PROPERTIES OUTPUT_NAME "exerename-d")
+install(TARGETS exerename-d RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

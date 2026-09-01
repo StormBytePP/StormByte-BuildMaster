@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(exelink LANGUAGES C)
+include(GNUInstallDirs)
+add_executable(exelink main.c)
+find_library(_bm_exeleaf exeleaflib REQUIRED)
+target_link_libraries(exelink PRIVATE "${_bm_exeleaf}")
+install(TARGETS exelink RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

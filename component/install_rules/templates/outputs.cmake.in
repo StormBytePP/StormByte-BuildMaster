@@ -1,0 +1,28 @@
+# Oficio outputs.
+# Contract: every listed path exists after install (or after NOINSTALL build).
+# Always emitted. Headers stamp `.bm_<id>_headers.stamp` may be created here.
+# Data checks only. @_BM_BUILDONLY@ is the NOINSTALL token (unchanged).
+
+set(_BM_OUTPUTS "@_BM_OUTPUTS@")
+foreach(_bm_out IN LISTS _BM_OUTPUTS)
+	if(_bm_out STREQUAL "")
+		continue()
+	endif()
+	if(EXISTS "${_bm_out}")
+		continue()
+	endif()
+	get_filename_component(_bm_out_name "${_bm_out}" NAME)
+	if(_bm_out_name MATCHES "^\\.bm_.*_headers\\.stamp$")
+		get_filename_component(_bm_out_dir "${_bm_out}" DIRECTORY)
+		file(MAKE_DIRECTORY "${_bm_out_dir}")
+		file(WRITE "${_bm_out}" "")
+	else()
+		if("@_BM_BUILDONLY@" STREQUAL "1")
+			_bm_log_message(@_BM_LOG_CHANNEL@ FATAL
+				"NOINSTALL @_BM_COMPONENT_TITLE@: expected output missing under build dir: ${_bm_out}")
+		else()
+			_bm_log_message(@_BM_LOG_CHANNEL@ FATAL
+				"Install of @_BM_COMPONENT_TITLE@ succeeded but expected output is missing: ${_bm_out}")
+		endif()
+	endif()
+endforeach()

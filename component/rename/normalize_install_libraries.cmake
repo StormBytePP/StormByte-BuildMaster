@@ -1,6 +1,7 @@
-# cmake -DOUTPUTS="path1;path2" -DBINDIR=... -DBUILDMASTER_SRCDIR=... -P normalize_install_outputs.cmake
+# cmake -DOUTPUTS="path1;path2" -DBINDIR=... -DBUILDMASTER_SRCDIR=... -P
+# normalize_install_libraries.cmake
 # Rename upstream variant archives to the canonical produced paths.
-# Does not read RENAME=; the caller (install_exec) decides whether to run this.
+# Does not read RENAME=; the oficio list decides whether this runs.
 #
 # Each OUTPUT is renamed in its own directory:
 #   static / Unix shared  → LIBDIR only
@@ -16,9 +17,7 @@ if(NOT DEFINED OUTPUTS OR OUTPUTS STREQUAL "")
 endif()
 
 if(NOT DEFINED BUILDMASTER_SRCDIR OR BUILDMASTER_SRCDIR STREQUAL "")
-	# log.cmake is not reachable without SRCDIR — this is the only raw message()
-	# allowed in this file.
-	message(FATAL_ERROR "normalize_install_outputs: BUILDMASTER_SRCDIR is required")
+	message(FATAL_ERROR "normalize_install_libraries: BUILDMASTER_SRCDIR is required")
 endif()
 
 include("${BUILDMASTER_SRCDIR}/log.cmake")
@@ -32,7 +31,7 @@ if(NOT DEFINED BINDIR)
 	set(BINDIR "")
 endif()
 
-_bm_log_message(RENAME LOWLEVEL "Entering normalize_install_outputs")
+_bm_log_message(RENAME LOWLEVEL "Entering normalize_install_libraries")
 _bm_log_message(RENAME LOWLEVEL "OUTPUTS='${OUTPUTS}'")
 _bm_log_message(RENAME LOWLEVEL "BINDIR='${BINDIR}'")
 _bm_log_message(RENAME LOWLEVEL "VARIANTS='${BUILDMASTER_RENAME_VARIANTS}'")
@@ -40,6 +39,9 @@ _bm_log_message(RENAME LOWLEVEL "VARIANTS='${BUILDMASTER_RENAME_VARIANTS}'")
 # ---- helpers ----
 
 ## @brief Split an archive / import / shared filename into stem and suffix.
+## @param[in]  _filename Basename or path.
+## @param[out] _out_stem Parent-scope stem (no lib prefix).
+## @param[out] _out_suffix Parent-scope suffix (`.a` / `.lib` / `.so` / …).
 function(_bm_component_rename_split_name _filename _out_stem _out_suffix)
 	get_filename_component(_bn "${_filename}" NAME)
 	string(TOLOWER "${_bn}" _bn_l)
@@ -80,6 +82,9 @@ function(_bm_component_rename_split_name _filename _out_stem _out_suffix)
 endfunction()
 
 ## @brief Build glob patterns for variant filenames of one stem + suffix.
+## @param[in]  stem     Canonical stem.
+## @param[in]  suffix   Archive / shared suffix.
+## @param[out] out_list Parent-scope pattern list.
 function(_bm_component_rename_candidate_names stem suffix out_list)
 	set(_names "")
 	foreach(_v IN LISTS BUILDMASTER_RENAME_VARIANTS)
@@ -92,6 +97,11 @@ function(_bm_component_rename_candidate_names stem suffix out_list)
 endfunction()
 
 ## @brief Locate a non-canonical source file to rename onto a produced path.
+## @param[in]  dir     Search directory.
+## @param[in]  stem    Canonical stem.
+## @param[in]  suffix  Expected suffix.
+## @param[out] out_src Parent-scope source path, or empty.
+## @param[out] out_variant_token Parent-scope variant token after the stem.
 function(_bm_component_rename_find_source dir stem suffix out_src out_variant_token)
 	_bm_log_message(RENAME LOWLEVEL
 		"Entering _bm_component_rename_find_source dir='${dir}' stem='${stem}' suffix='${suffix}'")
@@ -157,6 +167,8 @@ function(_bm_component_rename_find_source dir stem suffix out_src out_variant_to
 endfunction()
 
 ## @brief Alternate static-archive suffixes for a missing canonical file.
+## @param[in]  suffix   Canonical suffix.
+## @param[out] out_list Parent-scope alternate suffix list.
 function(_bm_component_rename_archive_alt_suffixes suffix out_list)
 	set(_alts "")
 	if(suffix STREQUAL ".lib")
@@ -247,4 +259,4 @@ foreach(_out IN LISTS OUTPUTS)
 	endif()
 endforeach()
 
-_bm_log_message(RENAME LOWLEVEL "Exiting normalize_install_outputs")
+_bm_log_message(RENAME LOWLEVEL "Exiting normalize_install_libraries")

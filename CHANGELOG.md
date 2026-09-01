@@ -76,6 +76,7 @@ and the declaration shape changed.
   `.git` only when `GIT={…}` is also set; `SOURCE=` itself is not a
   git root. Arity is
   `id title srcdir options mode produced [optstr]`.
+  Mode is `static`, `shared`, `headers`, or `executable`.
   `options` is a backend-agnostic CMake list of `KEY=value` (a single
   string is one pair). Idioms `CFLAGS`, `CXXFLAGS`, `CPPFLAGS`,
   `LDFLAGS`, `INCLUDES`, `DEFINITIONS` are rewritten for the nested
@@ -86,6 +87,19 @@ and the declaration shape changed.
   `none` ignores the list. `none` outside headers mode is FATAL
   unless `NOINSTALL` is set; a unique backend is still used when
   present.
+- **Mode `executable`.** Produced specs are binary stems under
+  `BUILDMASTER_INSTALL_BINDIR` (`<stem>` on Unix,
+  `<stem>${CMAKE_EXECUTABLE_SUFFIX}` on Windows; never `.exe.exe`).
+  The parent stub is still `add_library(<id> INTERFACE)` — it is not
+  an `IMPORTED` executable. Nested CMake/Meson build the binary;
+  `LINK` / `LINKFLAGS` apply to that nested link. `WHOLE` is INFO and
+  ignored. `STRIPRES` does not run. `PC={…}` ENABLED is FATAL.
+  `REPACK` on the executable itself is FATAL. A first-level
+  `depend`/`link` dest that is `executable` is not a REPACK member
+  (INFO skip; not FATAL as a “publishing member”). Extra
+  `buildmaster_link` dests that are raw library specs are **not**
+  folded as IMPORTED archives on an executable. Oficios:
+  `rename_executable` (when `RENAME`) then `outputs`.
 - **Assigned build directory.** There is no public builddir argument.
   The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and
   `file(MAKE_DIRECTORY)`. The path is an internal property, not part
@@ -144,11 +158,17 @@ and the declaration shape changed.
   flags. Post-install reset runs only when a PATCH was queued, and
   only inside that work tree.
 - **`RENAME` (flag, default ON).** Post-install normalize of variant
-  basenames. Headers mode ignores it.
+  basenames. Libraries: oficio `rename_library`, worker
+  `component/rename/normalize_install_libraries.cmake`. Executables:
+  oficio `rename_executable`, worker
+  `normalize_install_executables.cmake`. Headers mode never registers
+  a rename oficio (stamps are not archives).
 - **`WHOLE`.** Whole-archive link of produced static archives.
+  Ignored (INFO) on headers and executable.
 - **`STRIPRES` (flag, default ON).** After `RENAME`, strip `*.res` from
-  static MSVC / clang-cl archives.
-- **`NOINSTALL` + meta `REPACK`.** Bare `NOINSTALL` builds without
+  static MSVC / clang-cl archives. Shared / headers / executable never
+  strip.
+- **`NOINSTALL` + `REPACK`.** Bare `NOINSTALL` builds without
   publishing to the shared prefix (artifacts stay under the component
   BUILDDIR; `RENAME` still runs there). `NOINSTALL=` and truthy
   `NOINSTALL=ON|TRUE|1|YES` enable with WARNING
@@ -164,20 +184,40 @@ and the declaration shape changed.
   that install stay INTERFACE (WARNING: they are not folded into the
   pack). `NOINSTALL` + shared as a `REPACK` member is FATAL (the
   `.so`/`.dll` is not in the prefix and the builddir is not public).
-  `REPACK` on `buildmaster_component` is FATAL. `buildmaster_link` to
-  a `NOINSTALL` dest is FATAL (order-only: `buildmaster_depend`, or
-  publish via a `REPACK` meta).
+  `REPACK` on `buildmaster_component` is valid for **static** only:
+  first-level depend/link dests that are NOINSTALL static are the
+  members; the publisher archive in the prefix is rewritten
+  (`POST_BUILD` on `<id>_install`). `REPACK` + `NOINSTALL` on the
+  same id is FATAL. `REPACK` + headers or executable on the same id
+  is FATAL. Shared + `REPACK` on a component is WARNING + skip at
+  finalize. Zero static members is FATAL. An `executable` dest of a
+  REPACK publisher is skipped (INFO), not a member.
+  `buildmaster_link` to a `NOINSTALL` dest is FATAL (order-only:
+  `buildmaster_depend`, or publish via a `REPACK` meta / component).
 - **Helper `.pc` (`PC={…}`).** After install, write
   `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` for *this* prefix.
   FATAL if the path already exists. Not a portable package.
   `NOINSTALL` + enabled `PC=` is FATAL (no shared prefix).
+  `executable` + enabled `PC=` is FATAL.
+- **Post-install oficios.** Sealed GLOBAL
+  `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` is the ordered list
+  (`rename_library` | `rename_executable`, `outputs`, `strip_res`,
+  `pc`). `_bm_install_rules_write` emits only those files under
+  `scripts/install_rules/` and a rules aggregator with bare
+  `include()`. Templates have no `if(@_BM_*_ENABLED@)` feature
+  flags. CMake and Meson share the same oficios. The stage wrapper
+  is `install_library.cmake.in` → `<id>_install_library.cmake`
+  (`install_exec` is gone). `_BM_BUILDONLY` remains the NOINSTALL
+  token in wrappers and in the `outputs` oficio.
 - **Meta `TOOLCHAIN` inheritance.** `buildmaster_meta(… "TOOLCHAIN=<profile>")` copies the profile onto members and onto empty dests. An explicit child `TOOLCHAIN` wins.
 - **Hooks.** `buildmaster_hook_component(id fn alias [CAPTURE …])` / `buildmaster_hook_graph(fn alias [CAPTURE …])`. `fn` must exist at registration. Alias is the only order key (ASCII ascending). `CAPTURE` snapshots by copy. A hook is not an edge and does not flip the component to deferred.
 - **Unified logging.** `_bm_log_message(<module> <level> "<text>" [<indent>])` is internal. Public `buildmaster_message(<level> "<text>" [<indent>])` always uses module `USER`. `WARNING` and `FATAL` are never filtered. When `BUILDMASTER_LOG_NOCOLOR` is `OFF`, lines are painted: STATUS stays the default CMake color; WARNING yellow (`message(NOTICE)`); INFO green; DEBUG cyan; LOWLEVEL dim; FATAL red. `ON` leaves the text unpainted.
 - **`BUILDMASTER_LOG_NOCOLOR`.** Truthy env or `-D` (`1` / `ON` / `TRUE` / `YES`) stores `ON` and turns ANSI off; anything else is `OFF` (color on). Same pattern as `BUILDMASTER_VERBOSE`. Default `OFF`. Written into `propagate_vars` and the toolchain dump so nested `-P` scripts see the same switch.
 - **Silent env runner** replays nested `[BuildMaster/…]` lines live; the full child log is dumped on failure.
 - Prefix search injection so nested compiles see the shared install tree.
-- Harness + consumer tests for recursive cmake/meson, helper `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta ignore), hooks, late link, raw `LINK=`, duplicate edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL), `REPACK` meta, private-headers `-I`, `FILES=` unpack / SOURCE, FILES-on-meta FATAL, outline groups (CMake + Meson leaves), `NOINSTALL` (build without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path, `BUILDONLY` removed / `NOINSTALL=OFF` FATAL.
+- Harness + consumer tests for recursive cmake/meson, helper `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta ignore), hooks, late link, raw `LINK=`, duplicate edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL), `REPACK` meta and component, private-headers `-I`, `FILES=` unpack / SOURCE, FILES-on-meta FATAL, outline groups (CMake + Meson leaves), `NOINSTALL` (build without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path, `BUILDONLY` removed / `NOINSTALL=OFF` FATAL, mode `executable` (plain CMake/Meson, link a BM static, rename stem, NOINSTALL, REPACK publisher that ignores an executable dest), negatives `exe-pc` / `exe-repack` / `exe-empty-produced`.
+- **Harness entry `run_buildmaster_main`.** One target: smoke (install stages + artifacts) already depends on `run_buildmaster_negative` and `run_buildmaster_consumer` (`consumer_nested`); then a wiped sibling `consumer_ci` bindir. Local one-liner:
+  `rm -rf build/harness && cmake -S .github/tests/harness -B build/harness -G Ninja && cmake --build build/harness --target run_buildmaster_main`.
 - **Configure report (`BUILDMASTER_VERBOSE`).** After graph hooks, the primary bootstrap prints `BuildMaster <version> Configuration:` (module `Report`): parent toolchain paths/flags, then an alphabetical component table (`ID` / `TYPE` / `LINK`) with one-level `NEEDED BY` and explicit overrides only (`CFLAGS`, `CXXFLAGS`, `FILES`, `LINKFLAGS`, `NOINSTALL`). Groups are omitted. Row order is readability, not the graph walk. Nested bootstraps stay silent.
 - **On-demand tools.** Bootstrap always initializes `ninja` and the archiver (`tools/bootstrap/`). `cmake`, `meson`, `git`, and `file` initialize on first use: backend wrappers (`cmake` / `meson`), `GIT={…}` / `FILES={…}` on the optstr, or a pending `FILES SOURCE` after the tree is unpacked. Extra tools live under `tools/extra/<id>/` (`pkgconfig` is the only extra in this release) and start only via `REQUIRE_TOOL=<id>` / `REQUIRE_TOOL={id;id2}` on `buildmaster_component` or `buildmaster_meta`. Empty `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and ignored. An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN` (or whose directory is missing) is FATAL — BM never silently falls back to a same-named system binary. A second request is a no-op. `PC={…}` only writes a helper `.pc`; it does **not** demand `pkgconfig`. `pkgconfig` still prefers a working system pkg-config/`pkgconf` and builds the bundled tree only when that probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone. Configure prints `Setting up tools: <name>` only when that tool actually starts.
 - **`ALIAS=` / `ALIAS={…}`.** After the INTERFACE stub exists,
@@ -204,7 +244,8 @@ and the declaration shape changed.
   `target_link_libraries` inside a nested tree is invisible to
   `links/`). Same id declared again is first-wins: STATUS
   `Skipping configure of <title> — already registered as…` /
-  `already built by…` and no second compile. `buildmaster_clean`
+  `already built by…` and no second compile. Reuse is valid only if
+  after `include()` the TARGET `<id>` exists. `buildmaster_clean`
   removes `links/`. Harness `links-chain` is host → Buffer only;
   Logger and Base arrive through `links/` + `buildmaster_link` /
   `buildmaster_depend` inside the Buffer tree.
@@ -219,7 +260,7 @@ and the declaration shape changed.
   - `meta_component_add` → `buildmaster_meta_add`.
   - `create_git_*` / `buildmaster_git_*` → `GIT={…}` on the component.
   - `file_download` / `file_download_cached` / `file_decompress` → `FILES={…}` on the component. There is no public `buildmaster_download*` / `buildmaster_decompress` / `buildmaster_prerequisite`.
-  - `component_repack` / `buildmaster_repack` are gone. Use `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`.
+  - `component_repack` / `buildmaster_repack` are gone. Use `buildmaster_meta(… "REPACK")` + `buildmaster_meta_add`, or `REPACK` on a static `buildmaster_component`.
   - `buildmaster_on_component_materialize` → `buildmaster_hook_component`.
   - `buildmaster_on_graph_finalized` → `buildmaster_hook_graph`.
   - `buildmaster_message` public arity is `<level> "<text>" [<indent>]`. Module is always `USER`.
@@ -234,6 +275,7 @@ and the declaration shape changed.
 - **Breaking — `BUILDONLY` is gone.** Write `NOINSTALL`. The old key is FATAL. There is no `NOINSTALL=OFF`.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.**
 - **Breaking — options string.** Flag keys may omit `=`. Known flags: `RENAME`, `NOINSTALL`, `WHOLE`, `STRIPRES`, `PC`, `GIT`, `REPACK`, `FILES`, `REQUIRE_TOOL`. `BUILDONLY` is accepted by the splitter only so the parser can FATAL. `BACKEND=` and `SOURCE=` require `KEY=value`. `INDENT=` is accepted only to warn. `;` inside `{…}` is not a pair break. Unknown keys warn; extra positionals are fatal.
+- **Breaking — install wrapper.** `install_exec.cmake.in` / `<id>_install_exec.cmake` are gone. Wrapper is `install_library.cmake.in`. Generated rules live under `scripts/install_rules/`. Worker `normalize_install_outputs.cmake` is `normalize_install_libraries.cmake`.
 - **Stage COMMENT: configure stays CMake/Meson; compile and install use `[BuildMaster/Ninja]`.**
 - **Root `CMakeLists.txt` includes helpers before `init_vars`, so `add_subdirectory(buildmaster)` alone bootstraps a consumer.**
 - **Root configure includes `GNUInstallDirs`.**
@@ -254,6 +296,7 @@ and the declaration shape changed.
 - **Dependant configure progress on Windows + Ninja:** dropped the redundant `cmake -E echo` that concatenated `Configuring x` twice.
 - **Component `TOOLCHAIN=` dump is the trunk toolchain plus a compiler overlay.** Nested `add_subdirectory(buildmaster)` keeps `BUILDMASTER_ROOT`, `BUILDMASTER_INSTALL_DIR` and `BUILDMASTER_CONFIGURED`. A component override no longer bootstraps a second install tree under the component build dir. Harness fixture `tc-prefix` locks the dump.
 - **Git operations never run in the host repository.** A work tree equal to `CMAKE_SOURCE_DIR`, or a `ROOT=` / `SOURCE=` path that escapes the component `srcdir`, is FATAL before the tree is probed.
+- **Fragment GLOBAL `BUILDMASTER_COMPONENT_<id>_NAMES` / `_FILES`.** Sealed after `write_fragment` so REPACK / meta merge see the produced archives.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

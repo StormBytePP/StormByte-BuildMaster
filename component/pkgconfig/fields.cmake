@@ -79,15 +79,39 @@ function(_bm_component_pkgconfig_options_flags options out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_options_flags")
 endfunction()
 
-## @brief Fill `_BM_PC_*` for `install_exec` / create_*_stages.
+## @brief Seal one resolved PC field as GLOBAL for install-time consumers.
+## @param[in] id    Component id.
+## @param[in] field Suffix after `BUILDMASTER_COMPONENT_<id>_PC_`:
+##                  `NAME`, `VERSION`, `DESCRIPTION`, `LIBS`, `REQUIRES`,
+##                  `CFLAGS`, `OUT`, `ENABLED`.
+## @param[in] value Field value.
+## @note Does not write PARENT_SCOPE. The caller (`fill_vars`) assigns
+##       `_BM_PC_*` for stages that still read those names.
+## @note `write_pc` / oficio `pc.cmake.in` must not depend on a
+##       vanished PARENT_SCOPE from `_bm_tools_*_stages`.
+function(_bm_component_pkgconfig_seal id field value)
+	_bm_log_message(COMPONENT LOWLEVEL
+		"Entering _bm_component_pkgconfig_seal (${id}/${field})")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC_${field} "${value}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_seal")
+endfunction()
+
+## @brief Fill `_BM_PC_*` for install rules and `_bm_tools_*_stages`.
 ## @param[in] id Registered component id.
 ## @note Parent-scope: `_BM_PC_ENABLED` (`1`/`0`), `_BM_PC_NAME`,
 ##       `_BM_PC_VERSION`, `_BM_PC_DESCRIPTION`, `_BM_PC_LIBS`,
 ##       `_BM_PC_REQUIRES`, `_BM_PC_CFLAGS`, `_BM_PC_OUT`.
+## @note Also seals GLOBAL `BUILDMASTER_COMPONENT_<id>_PC` (bool) and
+##       `BUILDMASTER_COMPONENT_<id>_PC_{NAME,VERSION,DESCRIPTION,LIBS,REQUIRES,CFLAGS,OUT,ENABLED}`.
+##       Oficio `pc` / `write_pc` read GLOBAL. A `-P` helper does not
+##       see stages PARENT_SCOPE.
 ## @note Requires is direct `buildmaster_link` dests that are registered
 ##       components with PC enabled (not metas). Cflags are component
 ##       extras minus parent `CMAKE_C{,XX}_FLAGS`, minus include tokens.
-## @note When PC is off, all string outs are empty and ENABLED is `0`.
+## @note When PC is off, string outs are empty, ENABLED is `0`, GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_PC` is FALSE.
+## @note Must run before `configure_file` of `pc.cmake.in`. Empty
+##       `-DPC_NAME=` / `-DPC_VERSION=` is FATAL inside `write_pc`.
 function(_bm_component_pkgconfig_fill_vars id)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_component_pkgconfig_fill_vars")
 	get_property(_on GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC)
@@ -100,6 +124,15 @@ function(_bm_component_pkgconfig_fill_vars id)
 		set(_BM_PC_REQUIRES "" PARENT_SCOPE)
 		set(_BM_PC_CFLAGS "" PARENT_SCOPE)
 		set(_BM_PC_OUT "" PARENT_SCOPE)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC FALSE)
+		_bm_component_pkgconfig_seal("${id}" ENABLED "0")
+		_bm_component_pkgconfig_seal("${id}" NAME "")
+		_bm_component_pkgconfig_seal("${id}" VERSION "")
+		_bm_component_pkgconfig_seal("${id}" DESCRIPTION "")
+		_bm_component_pkgconfig_seal("${id}" LIBS "")
+		_bm_component_pkgconfig_seal("${id}" REQUIRES "")
+		_bm_component_pkgconfig_seal("${id}" CFLAGS "")
+		_bm_component_pkgconfig_seal("${id}" OUT "")
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_fill_vars")
 		return()
 	endif()
@@ -168,6 +201,15 @@ function(_bm_component_pkgconfig_fill_vars id)
 	set(_BM_PC_REQUIRES "${_req}" PARENT_SCOPE)
 	set(_BM_PC_CFLAGS "${_cflags}" PARENT_SCOPE)
 	set(_BM_PC_OUT "${_out}" PARENT_SCOPE)
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_PC TRUE)
+	_bm_component_pkgconfig_seal("${id}" ENABLED "1")
+	_bm_component_pkgconfig_seal("${id}" NAME "${_name}")
+	_bm_component_pkgconfig_seal("${id}" VERSION "${_ver}")
+	_bm_component_pkgconfig_seal("${id}" DESCRIPTION "${_desc}")
+	_bm_component_pkgconfig_seal("${id}" LIBS "${_libs}")
+	_bm_component_pkgconfig_seal("${id}" REQUIRES "${_req}")
+	_bm_component_pkgconfig_seal("${id}" CFLAGS "${_cflags}")
+	_bm_component_pkgconfig_seal("${id}" OUT "${_out}")
 	_bm_log_message(COMPONENT DEBUG "PC fields for ${id}: ${_name} ${_ver} → ${_out}")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_component_pkgconfig_fill_vars")
 endfunction()

@@ -26,6 +26,37 @@
 <lib>/libdupalib.a|unix
 <lib>/libdupblib.a|unix
 
+# exe
+bin/exepc|unix
+bin/exepc.exe|windows
+bin/exepm|unix
+bin/exepm.exe|windows
+
+# exe-link
+bin/exelink|unix
+bin/exelink.exe|windows
+<include>/lib.h|all
+<lib>/exeleaflib.lib|windows
+<lib>/libexeleaflib.a|unix
+
+# exe-rename
+bin/exerename|unix
+bin/exerename.exe|windows
+!bin/exerename-d|unix
+!bin/exerename-d.exe|windows
+
+# exe-noinstall
+!bin/exeni|unix
+!bin/exeni.exe|windows
+
+# exe-repack-meta
+bin/exerpackexe|unix
+bin/exerpackexe.exe|windows
+<lib>/exerpackpub.lib|windows
+<lib>/libexerpackpub.a|unix
+!<lib>/exerpackleaf.lib|windows
+!<lib>/libexerpackleaf.a|unix
+
 # file-decompress
 # no prefix artifacts (unpack under the fixture binary dir)
 

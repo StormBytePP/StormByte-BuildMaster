@@ -32,6 +32,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/archive/helpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/rename/variants.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/pkgconfig/helpers.cmake")
 
+# Install oficios (rename / outputs / strip_res / pc) before backends/stages.
+include("${CMAKE_CURRENT_LIST_DIR}/install_rules/helpers.cmake")
+
 # Deferred materialize + fragment emit + finalize.
 include("${CMAKE_CURRENT_LIST_DIR}/materialize.cmake")
 

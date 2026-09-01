@@ -11,20 +11,32 @@
 ##       `BUILDMASTER_COMPONENT_<id>_INDENT`; the backend reads that
 ##       *after* this function. OPTSTR `INDENT=` is create-time (usually 0)
 ##       and must not overwrite the walk depth.
-## @note NOINSTALL uses the component BUILDDIR as the library root; otherwise
-##       `BUILDMASTER_INSTALL_LIBDIR`. Headers mode emits a stamp path, not libs.
+## @note NOINSTALL uses the component BUILDDIR as the artifact root.
+##       Otherwise libraries use `BUILDMASTER_INSTALL_LIBDIR` and
+##       `executable` uses `BUILDMASTER_INSTALL_BINDIR`. Headers mode
+##       emits a stamp path, not libs.
 ## @note Extra `buildmaster_link` dests that are library specs (`<name>` or
 ##       `<subdir>/<name>`, not a component, meta, CMake target, or existing
 ##       file) are appended to the produced name/file lists so the fragment
-##       can create IMPORTED targets. They are *not* added to stage `OUTPUT`:
+##       can create IMPORTED targets. Skipped for `executable` (those dests
+##       are not archives). They are *not* added to stage `OUTPUT`:
 ##       `_bm_tools_*_stages` uses only the declared produced specs.
 ##       `write_fragment` attaches a Ninja file rule
 ##       (`OUTPUT <file>` `DEPENDS` `<id>_install`) for each extra.
+## @note Seals GLOBAL `BUILDMASTER_COMPONENT_<id>_NAMES` and `_FILES`
+##       from this collect (REPACK / meta read them).
+## @note `_BM_RENAME_ENABLED` prefers sealed GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_RENAME` (create default ON). Fallback:
+##       re-parse optstr. Headers force `0` (stamp is not an archive).
 ## @note `_BM_STRIPRES_ENABLED` is `1` only for static mode when STRIPRES is on
-##       (default ON). Shared/headers never strip; install_exec is a no-op there.
+##       (default ON; prefers sealed `…_STRIPRES`). Shared/headers/executable
+##       never strip.
 ## @note `_BM_PC_*` comes from `_bm_component_pkgconfig_fill_vars`
-##       (`component/pkgconfig`). ENABLED is `1` only when `PC={…}` is on and
-##       not NOINSTALL (already FATAL at `_bm_graph_create`).
+##       (`component/pkgconfig`). That call also seals GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_PC_*` for the pc oficio. ENABLED is
+##       `1` only when `PC={…}` is on and not NOINSTALL (already FATAL at
+##       `_bm_graph_create`). `executable` + PC is FATAL at create.
+## @note `_BM_BUILDONLY` is the NOINSTALL token (`1`/`0`). Not renamed.
 function(_bm_materialize_collect_outputs _component)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_collect_outputs")
 	get_property(_library_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_MODE)
@@ -37,9 +49,21 @@ function(_bm_materialize_collect_outputs _component)
 		_indent_ignored _toolchain _rename_on _noinstall_ignored _whole_ignored _stripres_on
 		"${_options_string}")
 
+	get_property(_rename_set GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_RENAME SET)
+	if(_rename_set)
+		get_property(_rename_on GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_RENAME)
+	endif()
+	get_property(_strip_set GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_STRIPRES SET)
+	if(_strip_set)
+		get_property(_stripres_on GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_STRIPRES)
+	endif()
+
 	if(_noinstall)
 		set(_BM_BUILDONLY "1")
 		set(_base_libdir "${_builddir}")
+	elseif(_library_mode STREQUAL "executable")
+		set(_BM_BUILDONLY "0")
+		set(_base_libdir "${BUILDMASTER_INSTALL_BINDIR}")
 	else()
 		set(_BM_BUILDONLY "0")
 		set(_base_libdir "${BUILDMASTER_INSTALL_LIBDIR}")
@@ -86,7 +110,7 @@ function(_bm_materialize_collect_outputs _component)
 				_LIBRARY_COMPONENT_DLL_FILES)
 		endforeach()
 
-		if(NOT _noinstall)
+		if(NOT _noinstall AND NOT _library_mode STREQUAL "executable")
 			get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
 			get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
 			if(_lsrcs)
@@ -148,7 +172,8 @@ endfunction()
 ##       generates `component_<id>.cmake` under
 ##       `BUILDMASTER_SCRIPTS_COMPONENTDIR` and `include()`s it.
 ##       `<id>` is already an INTERFACE from `_bm_graph_create`; the fragment
-##       attaches includes, IMPORTED archives, WHOLE and LINK.
+##       attaches includes, IMPORTED archives (libraries) or only install
+##       deps (`executable`), WHOLE and LINK.
 ##       LINKFLAGS is **not** applied here: `_bm_materialize_inject_linkflags`
 ##       already folded them into OPTIONS before stages ran.
 ## @note `_BM_LINK_ITEMS` is the CMake list stored on
@@ -159,9 +184,9 @@ endfunction()
 ##       not call `target_link_options`. An unused `@ONLY` substitution
 ##       is harmless if a leftover `@ _BM_LINKFLAGS_ITEMS @` remains.
 ## @note Library-spec `buildmaster_link` dests are folded into FILES by
-##       `collect_outputs`. Stage `OUTPUT` is the declared produced specs
-##       from `_bm_tools_*_stages`. After `include()`, each extra file
-##       that is not in that list gets:
+##       `collect_outputs` except in `executable` mode. Stage `OUTPUT` is
+##       the declared produced specs from `_bm_tools_*_stages`. After
+##       `include()`, each extra file that is not in that list gets:
 ##         add_custom_command(OUTPUT <file> DEPENDS <id>_install
 ##                            COMMAND ${CMAKE_COMMAND} -E true)
 ##       The command does not write the file. `<id>_install` writes it as
@@ -170,6 +195,10 @@ endfunction()
 ##       location. Do not drop this because Make passed locally.
 ## @note STRIPRES / WHOLE ignored on a non-static mode are INFO. STRIPRES
 ##       INFO only when the user wrote the key (default is ON).
+## @note Template pick: headers / shared / executable / else static.
+##       Dependant variants use `*_dependant.cmake.in`.
+## @note After include, seals GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_NAMES` and `_FILES` for REPACK/meta.
 function(_bm_materialize_write_fragment _component _deferred)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_write_fragment")
 	_bm_materialize_collect_outputs("${_component}")
@@ -247,6 +276,8 @@ function(_bm_materialize_write_fragment _component _deferred)
 			set(_tpl "component_headers_dependant.cmake.in")
 		elseif(_library_mode STREQUAL "shared")
 			set(_tpl "component_shared_dependant.cmake.in")
+		elseif(_library_mode STREQUAL "executable")
+			set(_tpl "component_executable_dependant.cmake.in")
 		else()
 			set(_tpl "component_static_dependant.cmake.in")
 		endif()
@@ -255,6 +286,8 @@ function(_bm_materialize_write_fragment _component _deferred)
 			set(_tpl "component_headers.cmake.in")
 		elseif(_library_mode STREQUAL "shared")
 			set(_tpl "component_shared.cmake.in")
+		elseif(_library_mode STREQUAL "executable")
+			set(_tpl "component_executable.cmake.in")
 		else()
 			set(_tpl "component_static.cmake.in")
 		endif()
@@ -273,9 +306,12 @@ function(_bm_materialize_write_fragment _component _deferred)
 
 	if(NOT _library_mode STREQUAL "headers" AND TARGET "${_component}_install")
 		set(_declared "")
-		set(_base_libdir "${BUILDMASTER_INSTALL_LIBDIR}")
 		if(_noinstall)
 			get_property(_base_libdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_BUILDDIR)
+		elseif(_library_mode STREQUAL "executable")
+			set(_base_libdir "${BUILDMASTER_INSTALL_BINDIR}")
+		else()
+			set(_base_libdir "${BUILDMASTER_INSTALL_LIBDIR}")
 		endif()
 		foreach(_spec IN LISTS _produced)
 			if(_spec STREQUAL "")

@@ -115,3 +115,13 @@ add_subdirectory(git-reset-patch)
 # PRIVATE headers (no backend) + configure -I
 # ---------------------------------------------------------------------------
 add_subdirectory(private-headers)
+
+# ---------------------------------------------------------------------------
+# executable mode
+# ---------------------------------------------------------------------------
+add_subdirectory(exe/cmake)
+add_subdirectory(exe/meson)
+add_subdirectory(exe-link)
+add_subdirectory(exe-rename)
+add_subdirectory(exe-noinstall)
+add_subdirectory(exe-repack-meta)

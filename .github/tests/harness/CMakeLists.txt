@@ -97,6 +97,16 @@ add_custom_target(run_buildmaster_smoke
 		base_install dep_install first_install link-a_install link-b_install
 		payload-lib_install sdk-headers_install
 		sdkloader_install second_install
+		# Executable
+		exe-plain-cmake_install
+		exe-plain-meson_install
+		exe-leaf_install
+		exe-link_install
+		exe-rename_install
+		exe-noinstall_install
+		exe-rpleaf_install
+		exe-rpexe_install
+		exe-rppub_install
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run

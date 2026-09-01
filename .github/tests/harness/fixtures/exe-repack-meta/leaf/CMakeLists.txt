@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(exerpackleaf LANGUAGES C)
+include(GNUInstallDirs)
+add_library(exerpackleaf STATIC leaf.c)
+install(TARGETS exerpackleaf ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})

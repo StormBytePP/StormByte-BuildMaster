@@ -15,7 +15,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ## @brief First-level depend/link dests of `id` that may be REPACK members.
 ## @param[in]  id      Publishing component with REPACK.
 ## @param[out] out_var Parent-scope list of member ids (NOINSTALL static).
-## @note Publishing dest → FATAL. Shared/headers dest → FATAL.
+## @note `executable` dest is skipped (INFO). It is not a static archive
+##       and must not FATAL as a “publishing member”.
+## @note Publishing dest (not executable) → FATAL. Shared/headers dest → FATAL.
 ##       Unregistered dest is ignored (system LINK names).
 function(_bm_repack_component_members id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_component_members")
@@ -54,8 +56,13 @@ function(_bm_repack_component_members id out_var)
 		if(NOT _is_c)
 			continue()
 		endif()
-		_bm_graph_is_noinstall("${_d}" _ni)
 		get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_d}_MODE)
+		if(_mode STREQUAL "executable")
+			_bm_log_message(COMPONENT INFO
+				"buildmaster_component('${id}'): REPACK ignores dest '${_d}' (executable)")
+			continue()
+		endif()
+		_bm_graph_is_noinstall("${_d}" _ni)
 		if(NOT _ni)
 			_bm_log_message(COMPONENT FATAL
 				"buildmaster_component('${id}'): REPACK member '${_d}' publishes to the prefix — members must be NOINSTALL")
@@ -174,7 +181,7 @@ endfunction()
 ## @param[out] out_deps  Parent-scope wait targets (`_build` or `_install`).
 ## @note NOINSTALL → files under the component BUILDDIR, wait `_build`.
 ##       Otherwise → files under BUILDMASTER_INSTALL_LIBDIR, wait `_install`.
-##       Shared / headers contribute no files (wire already warned / linked).
+##       Shared / headers / executable contribute no files.
 function(_bm_repack_resolve_input token out_files out_deps)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_resolve_input")
 	set(_files "")
@@ -191,13 +198,9 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	get_property(_builddir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${token}_BUILDDIR)
 	_bm_graph_is_noinstall("${token}" _ni)
 
-	if(_mode STREQUAL "headers")
-		set(${out_files} "" PARENT_SCOPE)
-		set(${out_deps} "" PARENT_SCOPE)
-		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
-		return()
-	endif()
-	if(_mode STREQUAL "shared")
+	if(_mode STREQUAL "headers"
+			OR _mode STREQUAL "shared"
+			OR _mode STREQUAL "executable")
 		set(${out_files} "" PARENT_SCOPE)
 		set(${out_deps} "" PARENT_SCOPE)
 		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")

@@ -1,0 +1,13 @@
+include(@_LIBRARY_CONFIGURE_FILE@)
+include(@_LIBRARY_BUILD_FILE@)
+include(@_LIBRARY_INSTALL_FILE@)
+
+add_dependencies(@_LIBRARY_NAME@ @_LIBRARY_STAGE_INSTALL@)
+
+# Executable: no IMPORTED archive. LINK names stay on the INTERFACE stub
+# so a host that target_link_libraries the id still sees raw system libs
+# used when *building* the nested exe (documentation only for consumers).
+set(_bm_link "@_BM_LINK_ITEMS@")
+if(NOT _bm_link STREQUAL "")
+	target_link_libraries(@_LIBRARY_NAME@ INTERFACE ${_bm_link})
+endif()

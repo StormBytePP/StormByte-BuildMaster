@@ -75,18 +75,26 @@ endfunction()
 ##            under the deferred `<id>_configure` custom target (suppress
 ##            hierarchical STATUS). `"0"` or empty otherwise.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
-##       defaults to `"1"`. Substituted into `install_exec.cmake.in`.
+##       defaults to `"1"`. The rename oficio is selected by
+##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
+##       `_bm_install_rules_write`, not by an `if` in the wrapper.
 ## @note Reads `_BM_BUILDONLY` from the caller (`"1"` / `"0"`). If unset,
-##       defaults to `"0"`. When `"1"`, install_exec skips `meson install`
-##       and only renames/checks outputs under the component BUILDDIR.
+##       defaults to `"0"`. When `"1"`, `install_library.cmake.in` skips
+##       `meson install` and still `include()`s the rules (RENAME /
+##       outputs under BUILDDIR). Token name is unchanged.
 ## @note Reads `_BM_STRIPRES_ENABLED` from the caller (`"1"` / `"0"`). If
-##       unset, defaults to `"1"`. After RENAME and the output contract,
-##       `install_exec.cmake.in` strips `*.res` members from produced
-##       `.lib` archives (MSVC / clang-cl only; other archivers no-op).
+##       unset, defaults to `"1"`. The strip oficio is emitted only for
+##       static + STRIPRES. Other archivers no-op inside the strip script.
 ## @note Reads `_BM_PC_ENABLED` and `_BM_PC_*` from the caller. If
-##       `_BM_PC_ENABLED` is unset, defaults to `"0"`. When `"1"`,
-##       `install_exec.cmake.in` writes a helper `.pc` after RENAME +
-##       STRIPRES (FATAL if the output path already exists).
+##       `_BM_PC_ENABLED` is unset, defaults to `"0"`.
+##       `_bm_install_rules_write` calls `_bm_component_pkgconfig_fill_vars`
+##       before configuring `pc` so GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_PC_*` are sealed. Empty `-DPC_NAME=`
+##       is FATAL in `write_pc`.
+## @note After sanitize, calls `_bm_install_rules_write` and sets
+##       `_BM_INSTALL_RULES`. FATAL if that path is empty or missing.
+##       Wrapper template is `install_library.cmake.in` →
+##       `<safe>_install_library.cmake`. `install_exec.cmake.in` is gone.
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_* (outer deferred -P uses
 ##       cmake) and BM_COMPONENT_ENV_MESON_* in the parent scope so library
 ##       fragments and stage scripts share the same runners.
@@ -197,8 +205,10 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	elseif(${_library_mode} STREQUAL "headers")
 		set(_MESON_LIBRARY_TYPE "static")
 		list(APPEND _meson_options "-Db_staticpic=true")
+	elseif(${_library_mode} STREQUAL "executable")
+		set(_MESON_LIBRARY_TYPE "static")
 	else()
-		_bm_log_message(MESON FATAL "Unknown library mode '${_library_mode}' in _bm_tools_meson_stages (expected static, shared, or headers)")
+		_bm_log_message(MESON FATAL "Unknown mode '${_library_mode}' in _bm_tools_meson_stages (expected static, shared, headers, or executable)")
 	endif()
 
 	set(_MESON_COMPONENT "${_component}")
@@ -503,6 +513,18 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		_bm_tools_git_marker(_MESON_GIT_POST_INSTALL_RESET "${_srcdir}")
 	endif()
 
+	_bm_install_rules_write(
+		"${_component}"
+		"MESON"
+		"${_component_title}"
+		"${_MESON_COMPONENT_SAFE}"
+		"${_MESON_OUTPUT_LIBRARIES}"
+		_BM_INSTALL_RULES)
+	if("${_BM_INSTALL_RULES}" STREQUAL "" OR NOT EXISTS "${_BM_INSTALL_RULES}")
+		_bm_log_message(MESON FATAL
+			"_bm_tools_meson_stages('${_component}'): install rules missing")
+	endif()
+
 	set(_MESON_SETUP_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
 	)
@@ -515,8 +537,8 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	set(_MESON_COMPILE_EXEC_SCRIPT
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_compile_exec.cmake"
 	)
-	set(_MESON_INSTALL_EXEC_SCRIPT
-		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install_exec.cmake"
+	set(_MESON_INSTALL_LIBRARY_SCRIPT
+		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_install_library.cmake"
 	)
 
 	configure_file(
@@ -530,8 +552,8 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/install_exec.cmake.in"
-		"${_MESON_INSTALL_EXEC_SCRIPT}"
+		"${BUILDMASTER_TOOLS_MESON_SRCDIR}/templates/install_library.cmake.in"
+		"${_MESON_INSTALL_LIBRARY_SCRIPT}"
 		@ONLY
 	)
 	configure_file(

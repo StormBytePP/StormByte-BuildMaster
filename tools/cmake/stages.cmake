@@ -34,20 +34,26 @@
 ##            (suppress hierarchical STATUS; the target COMMENT is enough).
 ##            `"0"` or empty otherwise.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
-##       defaults to `"1"` (variant → canonical rename). Used by
-##       `install_exec.cmake.in` as `@_BM_RENAME_ENABLED@`.
+##       defaults to `"1"`. The rename oficio is selected by
+##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
+##       `_bm_install_rules_write`, not by an `if` in the wrapper.
 ## @note Reads `_BM_BUILDONLY` from the caller (`"1"` / `"0"`). If unset,
-##       defaults to `"0"`. When `"1"`, install_exec skips `cmake --install`
-##       and only renames/checks outputs under the component BUILDDIR.
+##       defaults to `"0"`. When `"1"`, `install_library.cmake.in` skips
+##       `cmake --install` and still `include()`s the rules (RENAME /
+##       outputs under BUILDDIR). Token name is unchanged.
 ## @note Reads `_BM_STRIPRES_ENABLED` from the caller (`"1"` / `"0"`). If
-##       unset, defaults to `"1"`. After RENAME and the output contract,
-##       `install_exec.cmake.in` strips `*.res` members from produced
-##       `.lib` archives (MSVC / clang-cl `lib` / `llvm-lib` only; other
-##       archivers are a no-op inside the strip script).
+##       unset, defaults to `"1"`. The strip oficio is emitted only for
+##       static + STRIPRES. Other archivers no-op inside the strip script.
 ## @note Reads `_BM_PC_ENABLED` and `_BM_PC_*` from the caller. If
-##       `_BM_PC_ENABLED` is unset, defaults to `"0"`. When `"1"`,
-##       `install_exec.cmake.in` writes a helper `.pc` after RENAME +
-##       STRIPRES (FATAL if the output path already exists).
+##       `_BM_PC_ENABLED` is unset, defaults to `"0"`.
+##       `_bm_install_rules_write` calls `_bm_component_pkgconfig_fill_vars`
+##       before configuring `pc` so GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_PC_*` are sealed. Empty `-DPC_NAME=`
+##       is FATAL in `write_pc`.
+## @note After sanitize, calls `_bm_install_rules_write` and sets
+##       `_BM_INSTALL_RULES`. FATAL if that path is empty or missing.
+##       Wrapper template is `install_library.cmake.in` →
+##       `<safe>_install_library.cmake`. `install_exec.cmake.in` is gone.
 ## @note Always exports BM_COMPONENT_ENV_CMAKE_COMMAND,
 ##       BM_COMPONENT_ENV_CMAKE_SILENT_COMMAND and
 ##       BM_COMPONENT_ENV_CMAKE_COMPILE_COMMAND in the parent scope so
@@ -379,8 +385,10 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		set(_CMAKE_SHARED_MODE "ON")
 	elseif(${_library_mode} STREQUAL "headers")
 		set(_CMAKE_SHARED_MODE "OFF")
+	elseif(${_library_mode} STREQUAL "executable")
+		set(_CMAKE_SHARED_MODE "OFF")
 	else()
-		_bm_log_message(CMAKE FATAL "Unknown library mode '${_library_mode}' in _bm_tools_cmake_stages (expected static, shared, or headers)")
+		_bm_log_message(CMAKE FATAL "Unknown mode '${_library_mode}' in _bm_tools_cmake_stages (expected static, shared, headers, or executable)")
 	endif()
 
 	set(_CMAKE_COMPONENT_TITLE "${_component_title}")
@@ -404,6 +412,18 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		_bm_tools_git_marker(_CMAKE_GIT_POST_INSTALL_RESET "${_srcdir}")
 	endif()
 
+	_bm_install_rules_write(
+		"${_component}"
+		"CMAKE"
+		"${_component_title}"
+		"${_CMAKE_COMPONENT_SAFE}"
+		"${_CMAKE_OUTPUT_LIBRARIES}"
+		_BM_INSTALL_RULES)
+	if("${_BM_INSTALL_RULES}" STREQUAL "" OR NOT EXISTS "${_BM_INSTALL_RULES}")
+		_bm_log_message(CMAKE FATAL
+			"_bm_tools_cmake_stages('${_component}'): install rules missing")
+	endif()
+
 	set(_CMAKE_CONFIGURE_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_configure.cmake"
 	)
@@ -416,8 +436,8 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 	set(_CMAKE_BUILD_EXEC_SCRIPT
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_build_exec.cmake"
 	)
-	set(_CMAKE_INSTALL_EXEC_SCRIPT
-		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install_exec.cmake"
+	set(_CMAKE_INSTALL_LIBRARY_SCRIPT
+		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_install_library.cmake"
 	)
 
 	configure_file(
@@ -431,8 +451,8 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		@ONLY
 	)
 	configure_file(
-		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/templates/install_exec.cmake.in"
-		"${_CMAKE_INSTALL_EXEC_SCRIPT}"
+		"${BUILDMASTER_TOOLS_CMAKE_SRCDIR}/templates/install_library.cmake.in"
+		"${_CMAKE_INSTALL_LIBRARY_SCRIPT}"
 		@ONLY
 	)
 	configure_file(

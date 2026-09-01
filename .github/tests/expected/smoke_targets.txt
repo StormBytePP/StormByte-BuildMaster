@@ -15,6 +15,25 @@ dep_install
 dup-a_install
 dup-b_install
 
+# exe
+exe-plain-cmake_install
+exe-plain-meson_install
+
+# exe-link
+exe-leaf_install
+exe-link_install
+
+# exe-rename
+exe-rename_install
+
+# exe-noinstall
+exe-noinstall_install
+
+# exe-repack-meta
+exe-rpleaf_install
+exe-rpexe_install
+exe-rppub_install
+
 # file-decompress
 buildmaster_decompress_check
 

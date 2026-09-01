@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(exerpackexe LANGUAGES C)
+include(GNUInstallDirs)
+add_executable(exerpackexe main.c)
+install(TARGETS exerpackexe RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

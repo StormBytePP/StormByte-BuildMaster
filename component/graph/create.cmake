@@ -11,13 +11,15 @@
 ##            supplies the tree (by design); the positional value is stored
 ##            only until apply rewrites SRCDIR.
 ## @param[in] _options Options forwarded to internal stage generators.
-## @param[in] _library_mode `static`, `shared`, or `headers`.
+## @param[in] _library_mode `static`, `shared`, `headers`, or `executable`.
 ## @param[in] _build_system `cmake`, `meson`, `none`, or `pending`.
 ##            `pending` means FILES SOURCE will unpack the tree and
 ##            autodetect runs after apply. `none` is valid for `headers`,
 ##            or for any mode when `NOINSTALL` is set (no nested generate).
-## @param[in] _produced Primary library specs (`<name>` or `<subdir>/<name>`).
-##            Empty for headers mode. Names are canonical (post-RENAME).
+## @param[in] _produced Primary specs (`<name>` or `<subdir>/<name>`).
+##            Empty for headers mode. Libraries: archive/soname stems.
+##            `executable`: binary stems (Unix `bin/<stem>`, Windows
+##            `bin/<stem>.exe`). Names are canonical (post-RENAME).
 ## @param[in] options_string Optional trailing "KEY=value;…" string.
 ##            Keys: INDENT / INDENT_LEVEL, TOOLCHAIN, RENAME (flag),
 ##            NOINSTALL (flag; do not publish to the shared prefix),
@@ -66,10 +68,23 @@
 ## @note Headers mode: `LINK` is INFO and ignored. `LINKFLAGS` is WARNING
 ##       and ignored (no nested link step).
 ## @note `STRIPRES` default is ON. INFO only when the user wrote the key and
-##       mode is not static (shared/headers have nothing to strip).
+##       mode is not static (shared/headers/executable have nothing to strip).
+## @note `RENAME` default is ON (`_bm_opt_parse`). Sealed as GLOBAL
+##       `BUILDMASTER_COMPONENT_<id>_RENAME`. Unset at later stages is
+##       treated ON. Headers never register a rename oficio: stamps
+##       `.bm_*_headers.stamp` are not archives. `executable` uses
+##       `rename_executable` (worker `normalize_install_executables.cmake`).
+##       Libraries use `rename_library` (`normalize_install_outputs.cmake`).
+## @note `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` is the ordered list
+##       of post-install oficios (`rename_library`, `rename_executable`,
+##       `outputs`, `strip_res`, `pc`). `_bm_install_rules_write` emits
+##       only those. The generated rules file has no `if(@_BM_*_ENABLED@)`.
+##       `_BM_BUILDONLY` remains the NOINSTALL token in wrappers and in
+##       the `outputs` oficio.
 ## @note `PC={…}` with ENABLED=TRUE (default) requires VERSION. ENABLED=FALSE
 ##       skips VERSION and does not write a file. `NOINSTALL` + PC enabled is
-##       FATAL (no shared prefix). `none` + PC enabled is FATAL. An upstream
+##       FATAL (no shared prefix). `none` + PC enabled is FATAL. `executable`
+##       + PC enabled is FATAL (helper `.pc` is for libraries). An upstream
 ##       `.pc` already at the canonical path is FATAL at install time (do not
 ##       clobber). Meta + PC is FATAL in `_bm_meta_impl`.
 ## @note GIT + FILES SOURCE is FATAL (two owners of the same tree).
@@ -79,11 +94,12 @@
 ##       existing TARGET that is not already an ALIAS of `<id>` is FATAL.
 ## @note `BUILDONLY` is removed; the parser FATALs (`use NOINSTALL`).
 ## @note `REPACK` on a component: FATAL with `NOINSTALL` (nothing to publish
-##       into). FATAL in `headers` mode. Shared → stamped then WARNING skip
-##       at finalize. Exactly one produced spec. First-level depend/link
-##       dests that are NOINSTALL static are the members; zero members is
-##       FATAL at finalize. Publishing+depend(NOINSTALL) is allowed only
-##       when this source has REPACK (`_bm_graph_dep_targets`).
+##       into). FATAL in `headers` and `executable` modes. Shared → stamped
+##       then WARNING skip at finalize. Exactly one produced spec.
+##       First-level depend/link dests that are NOINSTALL static are the
+##       members; zero members is FATAL at finalize. Publishing+depend
+##       (NOINSTALL) is allowed only when this source has REPACK
+##       (`_bm_graph_dep_targets`).
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_create")
@@ -160,9 +176,10 @@ function(_bm_graph_create _component _component_title _srcdir
 
 	if(NOT _library_mode STREQUAL "static"
 			AND NOT _library_mode STREQUAL "shared"
-			AND NOT _library_mode STREQUAL "headers")
+			AND NOT _library_mode STREQUAL "headers"
+			AND NOT _library_mode STREQUAL "executable")
 		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create: unknown library mode '${_library_mode}' (expected static, shared, or headers)")
+			"_bm_graph_create: unknown mode '${_library_mode}' (expected static, shared, headers, or executable)")
 	endif()
 
 	if(NOT _build_system STREQUAL "cmake"
@@ -190,7 +207,7 @@ function(_bm_graph_create _component _component_title _srcdir
 		endforeach()
 		if(NOT _has_prod)
 			_bm_log_message(COMPONENT FATAL
-				"_bm_graph_create '${_component}': static/shared mode requires at least one produced library spec")
+				"_bm_graph_create '${_component}': ${_library_mode} mode requires at least one produced spec")
 		endif()
 	endif()
 
@@ -198,9 +215,10 @@ function(_bm_graph_create _component _component_title _srcdir
 		_bm_log_message(COMPONENT FATAL
 			"_bm_graph_create('${_component}'): REPACK cannot be combined with NOINSTALL (REPACK rewrites the prefix archive this id publishes)")
 	endif()
-	if(_reg_repack AND _library_mode STREQUAL "headers")
+	if(_reg_repack AND (_library_mode STREQUAL "headers"
+			OR _library_mode STREQUAL "executable"))
 		_bm_log_message(COMPONENT FATAL
-			"_bm_graph_create('${_component}'): REPACK is not valid in headers mode")
+			"_bm_graph_create('${_component}'): REPACK is not valid in ${_library_mode} mode")
 	endif()
 	if(_reg_repack AND _library_mode STREQUAL "static")
 		set(_nprod 0)
@@ -236,6 +254,10 @@ function(_bm_graph_create _component _component_title _srcdir
 		_bm_log_message(COMPONENT FATAL
 			"_bm_graph_create('${_component}'): PC={…} cannot be used with NOINSTALL or a headers tree that does not install (helper .pc files are for internal consumers of the shared BM prefix)")
 	endif()
+	if(_pc_enabled AND _library_mode STREQUAL "executable")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_graph_create('${_component}'): PC={…} cannot be used with executable mode (helper .pc files are for libraries)")
+	endif()
 
 	if(_pc_name STREQUAL "")
 		set(_first_spec "")
@@ -256,9 +278,11 @@ function(_bm_graph_create _component _component_title _srcdir
 	endif()
 
 	if("${_options_string}" MATCHES "[Ww][Hh][Oo][Ll][Ee]"
-			AND (_library_mode STREQUAL "headers" OR _build_system STREQUAL "none"))
+			AND (_library_mode STREQUAL "headers"
+				OR _library_mode STREQUAL "executable"
+				OR _build_system STREQUAL "none"))
 		_bm_log_message(COMPONENT INFO
-			"_bm_graph_create('${_component}'): WHOLE ignored (headers / no backend)")
+			"_bm_graph_create('${_component}'): WHOLE ignored (${_library_mode} / no backend)")
 		set(_reg_whole FALSE)
 	endif()
 
@@ -283,6 +307,7 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_reg_link}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_LINKFLAGS
 		"${_reg_linkflags}")
+
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_URLS
 		"${_files_urls}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_FILES_NAMES
@@ -335,6 +360,34 @@ function(_bm_graph_create _component _component_title _srcdir
 	else()
 		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_REPACK FALSE)
 	endif()
+	if(_reg_rename)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_RENAME TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_RENAME FALSE)
+	endif()
+
+	set(_install_oficios "")
+	if(_library_mode STREQUAL "headers")
+		list(APPEND _install_oficios "outputs")
+	elseif(_library_mode STREQUAL "executable")
+		if(_reg_rename)
+			list(APPEND _install_oficios "rename_executable")
+		endif()
+		list(APPEND _install_oficios "outputs")
+	else()
+		if(_reg_rename)
+			list(APPEND _install_oficios "rename_library")
+		endif()
+		list(APPEND _install_oficios "outputs")
+		if(_reg_stripres AND _library_mode STREQUAL "static")
+			list(APPEND _install_oficios "strip_res")
+		endif()
+		if(_pc_enabled)
+			list(APPEND _install_oficios "pc")
+		endif()
+	endif()
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_INSTALL_OFICIOS
+		"${_install_oficios}")
 
 	add_library("${_component}" INTERFACE)
 	_bm_alias_apply("${_component}" "${_reg_aliases}")

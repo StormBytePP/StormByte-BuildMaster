@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(exeni LANGUAGES C)
+include(GNUInstallDirs)
+add_executable(exeni main.c)
+install(TARGETS exeni RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

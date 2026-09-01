@@ -1,0 +1,18 @@
+# Oficio rename_library.
+# Variant archives / shared stems → canonical produced names.
+# Emitted only when RENAME is active. No feature-flag ifs.
+# Worker: component/rename/normalize_install_libraries.cmake
+# Headers stamps must not reach this oficio.
+
+execute_process(
+	COMMAND "${CMAKE_COMMAND}"
+		"-DOUTPUTS=@_BM_OUTPUTS@"
+		"-DBINDIR=@BUILDMASTER_INSTALL_BINDIR@"
+		"-DBUILDMASTER_SRCDIR=@BUILDMASTER_SRCDIR@"
+		-P "@BUILDMASTER_SRCDIR@/component/rename/normalize_install_libraries.cmake"
+	RESULT_VARIABLE _BM_RENAME_RC
+)
+if(NOT _BM_RENAME_RC EQUAL 0)
+	_bm_log_message(@_BM_LOG_CHANNEL@ FATAL
+		"Install rename/normalize libraries failed for @_BM_COMPONENT_TITLE@ (exit ${_BM_RENAME_RC})")
+endif()

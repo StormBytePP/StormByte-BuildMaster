@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(exerpackpub LANGUAGES C)
+include(GNUInstallDirs)
+add_library(exerpackpub STATIC pub.c)
+install(TARGETS exerpackpub ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
