@@ -54,6 +54,9 @@ add_custom_target(run_buildmaster_checks
 
 # Isolated consumer project (Logger pattern: lib/ first, then thirdparty/BM).
 # Own CMAKE_SOURCE_DIR on purpose. Host binary lives under lib/.
+# Bindir is this harness's consumer_nested. Do not cmake -S it twice
+# in the same tree (links/ dump + ALIAS). GHA consumer job uses a
+# different bindir; run_buildmaster_main does that after smoke.
 set(_BM_CONSUMER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../consumer")
 set(_BM_CONSUMER_BIN "${CMAKE_CURRENT_BINARY_DIR}/consumer_nested")
 set(_BM_CONSUMER_EXE "${_BM_CONSUMER_BIN}/lib/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
@@ -162,3 +165,27 @@ add_custom_target(run_buildmaster_negative
 	VERBATIM
 )
 add_dependencies(run_buildmaster_smoke run_buildmaster_negative)
+
+# ---------------------------------------------------------------------------
+# One local entry: same coverage as GHA harness + consumer jobs.
+# ---------------------------------------------------------------------------
+# smoke already DEPENDS consumer_nested (once) and negative.
+# Then a wiped sibling bindir (GHA: build/tests/consumer), never
+# a second cmake -S of consumer_nested.
+set(_BM_CONSUMER_CI_BIN "${CMAKE_CURRENT_BINARY_DIR}/consumer_ci")
+set(_BM_CONSUMER_CI_EXE
+	"${_BM_CONSUMER_CI_BIN}/lib/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
+
+add_custom_target(run_buildmaster_main
+	COMMAND ${CMAKE_COMMAND} -E rm -rf "${_BM_CONSUMER_CI_BIN}"
+	COMMAND ${CMAKE_COMMAND}
+		-S "${_BM_CONSUMER_SRC}"
+		-B "${_BM_CONSUMER_CI_BIN}"
+		-G "${CMAKE_GENERATOR}"
+		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+	COMMAND ${CMAKE_COMMAND} --build "${_BM_CONSUMER_CI_BIN}" --target consumer_host
+	COMMAND "${_BM_CONSUMER_CI_EXE}"
+	DEPENDS run_buildmaster_smoke
+	COMMENT "[BuildMaster/Core     ]: main — smoke + negative + consumer_nested + consumer_ci"
+	VERBATIM
+)

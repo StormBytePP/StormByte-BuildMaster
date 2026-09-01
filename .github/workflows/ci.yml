@@ -13,7 +13,7 @@ on:
 
 jobs:
   ###########################################################################
-  # Harness (contract + smoke)
+  # Harness (contract + smoke + negative + consumer)
   ###########################################################################
   harness:
     strategy:
@@ -50,49 +50,14 @@ jobs:
         with:
           packages: gcc
 
-      - name: Configure + smoke
+      - name: Configure + main
         uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
           source-dir: .github/tests/harness
           build-dir: build/harness
           build-type: Release
-          target: run_buildmaster_smoke
+          target: run_buildmaster_main
           run-tests: false
           ccache-key: v1-harness
-          cache-scope: ${{ matrix.os }}-${{ matrix.toolchain }}
-
-  ###########################################################################
-  # Consumer (sibling add_subdirectory layout)
-  ###########################################################################
-  consumer:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            toolchain: gcc
-          - os: windows-latest
-            toolchain: msvc
-          - os: macos-latest
-            toolchain: clang
-    runs-on: ${{ matrix.os }}
-    steps:
-      - name: Checkout
-        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
-        with:
-          fetch-depth: 0
-          submodules: false
-          enable-symlinks: true
-
-      - name: Configure + link host
-        uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          source-dir: .github/tests/consumer
-          build-dir: build/tests/consumer
-          build-type: Release
-          target: consumer_host
-          run-tests: false
-          ccache-key: v1-consumer
           cache-scope: ${{ matrix.os }}-${{ matrix.toolchain }}
