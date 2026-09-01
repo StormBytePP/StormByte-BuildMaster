@@ -26,10 +26,7 @@ set(libs "@_LIBRARY_COMPONENT_NAMES@")
 set(lib_files "@_LIBRARY_COMPONENT_FILES@")
 
 foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-	set(_bm_imp "${lib}")
-	if(TARGET "${_bm_imp}")
-		set(_bm_imp "${lib}__bm_imported")
-	endif()
+	set(_bm_imp "@_LIBRARY_NAME@__bm__${lib}")
 	add_library(${_bm_imp} STATIC IMPORTED GLOBAL)
 
 	set_target_properties(${_bm_imp} PROPERTIES

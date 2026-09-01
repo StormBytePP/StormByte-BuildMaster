@@ -15,10 +15,7 @@ endif()
 
 if(MSVC)
 	foreach(lib lib_file lib_dll_file IN ZIP_LISTS libs lib_files lib_dll_files)
-		set(_bm_imp "${lib}")
-		if(TARGET "${_bm_imp}")
-			set(_bm_imp "${lib}__bm_imported")
-		endif()
+		set(_bm_imp "@_LIBRARY_NAME@__bm__${lib}")
 		add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
 		set_target_properties(${_bm_imp} PROPERTIES
@@ -42,10 +39,7 @@ if(MSVC)
 	endforeach()
 else()
 	foreach(lib lib_file IN ZIP_LISTS libs lib_files)
-		set(_bm_imp "${lib}")
-		if(TARGET "${_bm_imp}")
-			set(_bm_imp "${lib}__bm_imported")
-		endif()
+		set(_bm_imp "@_LIBRARY_NAME@__bm__${lib}")
 		add_library(${_bm_imp} SHARED IMPORTED GLOBAL)
 
 		set_target_properties(${_bm_imp} PROPERTIES
