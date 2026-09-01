@@ -13,6 +13,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### ToDo
+
+- [ ] Extract post-install oficios into `component/install_rules/*.cmake.in` (rename, outputs, strip_res, pc).
+- [ ] Oficio templates are unconditional: no `if(@_BM_PC_ENABLED@)` / rename / strip feature flags. Data-only checks stay (`EXISTS`, “is this a `.lib`?”).
+- [ ] Share those templates between CMake and Meson; placeholders for log channel (`CMAKE` / `MESON`), title, and outputs.
+- [ ] Mini writers `_bm_install_rule_<oficio>()` live in `component/install_rules/` (not in the body of `stages`): `configure_file` their `.in` and return the path.
+- [ ] Per-id list `BUILDMASTER_COMPONENT_${id}_INSTALL_OFICIOS`: each optstr registers its own (`pc` from `options/pc.cmake`); library kind registers `outputs`; rename/strip are registered by whoever currently sets `_BM_*_ENABLED`.
+- [ ] `stages` only walks that list, calls the minis, and writes `scripts/{cmake,meson}/<id>_install_rules.cmake` (not a `.in`) with `include(...)` of the emitted oficios.
+- [ ] Rename `install_exec.cmake.in` → `install_library.cmake.in` and the generated `<id>_install_exec.cmake` → `<id>_install_library.cmake`.
+- [ ] Library wrapper: fail-marker, log, `cmake --install` / `meson install` (skip on NOINSTALL), then `include(rules)` or `@_BM_INSTALL_INCLUDES@`. FATAL if the rules path is empty or missing.
+- [ ] Update `install.cmake.in` and grep out `install_exec` (stages, harness expected).
+- [ ] Drop the `_BM_PC_ENABLED` / `_BM_RENAME_ENABLED` / `_BM_STRIPRES_ENABLED` generate-time sack from `graph/create`; replace it with the oficio list.
+- [ ] Smoke + negative harness must keep the current contract. Do not rename the internal `_BM_BUILDONLY` token in this step.
+- [ ] `validate/{component,meta,group,tool}` plus `validate/helpers.cmake`; move *contract* FATALs there (factory / options / meta / group / demand). *Operation* FATALs stay put (`-P` templates, merge, download, git reset, missing ninja).
+- [ ] Allow BuildMaster anywhere on disk, not only as a sibling of `thirdparty`. Sole rule: `add_subdirectory(BM)` before first use.
+
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
 ## [2.0.0] - 2026-08-31
