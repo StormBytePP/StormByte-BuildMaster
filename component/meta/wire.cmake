@@ -5,6 +5,12 @@
 ## @brief After real components exist: wire `<meta>_install` and INTERFACE.
 ## @note Wait edge: leaf `_install` unless the leaf is NOINSTALL, then
 ##       `_build` (end of that component's phase).
+## @note Nested meta members: also wait on `<member>_install`. A REPACK
+##       child publishes via `<child>_merge` → `<child>_install`. Without
+##       this edge a parent meta (ffmpeg-plugins) only waits on the
+##       child's leaves and the merge archive is never a prerequisite of
+##       consumers (ffmpeg_configure). Cycles between metas are already
+##       FATAL in `_bm_meta_collect_leaves`.
 ## @note `REPACK` metas do not INTERFACE-link static leaves (the merge
 ##       publishes one archive). Shared/headers leaves stay INTERFACE;
 ##       shared also emits WARNING (cannot fold a .so/.dll into the pack).
@@ -20,6 +26,7 @@ function(_bm_meta_wire)
 
 	foreach(_id IN LISTS _metas)
 		get_property(_leaves GLOBAL PROPERTY BUILDMASTER_META_${_id}_LEAVES)
+		get_property(_members GLOBAL PROPERTY BUILDMASTER_META_${_id}_MEMBERS)
 		get_property(_whole GLOBAL PROPERTY BUILDMASTER_META_${_id}_WHOLE)
 		get_property(_repack GLOBAL PROPERTY BUILDMASTER_META_${_id}_REPACK)
 
@@ -36,12 +43,24 @@ function(_bm_meta_wire)
 			endif()
 		endforeach()
 
+		foreach(_mem IN LISTS _members)
+			if("${_mem}" STREQUAL "" OR "${_mem}" STREQUAL "${_id}")
+				continue()
+			endif()
+			_bm_meta_is("${_mem}" _mem_meta)
+			if(_mem_meta AND TARGET "${_mem}_install")
+				add_dependencies(${_id}_install ${_mem}_install)
+				_bm_log_message(COMPONENT DEBUG
+					"${_id}_install waits on nested meta ${_mem}_install")
+			endif()
+		endforeach()
+
 		if(_repack)
 			foreach(_leaf IN LISTS _leaves)
 				get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
 				if(_lmode STREQUAL "shared")
 					_bm_log_message(COMPONENT WARNING
-						"meta '${_id}': REPACK cannot fold shared '${_leaf}' into one archive; the .so/.dll stays a separate INTERFACE link (the pack is not a single shared library)")
+						"meta '${_id}': REPACK cannot fold shared '${_leaf}' into the pack; the .so/.dll stays a separate INTERFACE link")
 					if(TARGET "${_leaf}")
 						target_link_libraries(${_id} INTERFACE ${_leaf})
 					endif()
