@@ -2,6 +2,49 @@
 # tools/meson/stages.cmake — _bm_tools_meson_stages
 # =============================================================================
 
+## @brief Append the shared install prefix to Meson link args.
+## @param[in,out] _args_var Name of the string variable holding `_MESON_LINK_ARGS`.
+## @note Runner already exports LIBRARY_PATH / LDFLAGS / LIB, and the native
+##       file already lists the same `-L`/`/LIBPATH:` under `[built-in options]`.
+##       That is not enough for nested Meson:
+##         1. `meson setup -Dc_link_args=…` is command-line and **replaces**
+##            native-file `c_link_args` / `cpp_link_args` (Meson precedence:
+##            CLI > machine file > env). An empty or fuse-ld-only `-D`
+##            therefore wipes the prefix that the .ini already had.
+##         2. `cc.find_library()` / codec probes (mp3lame, gsm, …) use the
+##            compiler's link line (`c_link_args`), not only `LIBRARY_PATH`.
+##            Env search can still pick a system `.so` when both exist.
+##         3. The final ninja link of ffmpeg does not reliably inherit the
+##            runner's LIBRARY_PATH order; `-L` on `c_link_args` does.
+##       So the prefix must live in `_MESON_LINK_ARGS` even though runner
+##       and native already carry it. Duplicate tokens are skipped.
+function(_bm_tools_meson_append_prefix_link_args _args_var)
+	if(NOT DEFINED BUILDMASTER_INSTALL_DIR OR BUILDMASTER_INSTALL_DIR STREQUAL "")
+		return()
+	endif()
+	if(NOT DEFINED CMAKE_INSTALL_LIBDIR OR CMAKE_INSTALL_LIBDIR STREQUAL "")
+		set(_libdir "lib")
+	else()
+		set(_libdir "${CMAKE_INSTALL_LIBDIR}")
+	endif()
+	set(_prefix_lib "${BUILDMASTER_INSTALL_DIR}/${_libdir}")
+	_bm_path_normalize(_prefix_lib "${_prefix_lib}")
+	if(MSVC OR CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
+		set(_tok "/LIBPATH:${_prefix_lib}")
+	else()
+		set(_tok "-L${_prefix_lib}")
+	endif()
+	set(_cur "${${_args_var}}")
+	if(_cur MATCHES "(^| )${_tok}( |$)")
+		return()
+	endif()
+	if(_cur STREQUAL "")
+		set(${_args_var} "${_tok}" PARENT_SCOPE)
+	else()
+		set(${_args_var} "${_cur} ${_tok}" PARENT_SCOPE)
+	endif()
+endfunction()
+
 ## @brief Create setup/compile/install scripts for a Meson-built component.
 ## @param[out] _file_setup Name of the variable to set in parent scope
 ##            with the generated Meson `*_configure.cmake` script path.
@@ -54,6 +97,11 @@
 ##       `_MESON_CXX_ARGS` / `_MESON_LINK_ARGS` include the shared prefix
 ##       (`-I`/`-L` or `/I`/`/LIBPATH:`). Per-component runners also get
 ##       Windows `INCLUDE`/`LIB` when TOOLCHAIN= is set.
+## @note After fuse-ld and the last `_bm_env_apply_install_search_paths()`,
+##       `_bm_tools_meson_append_prefix_link_args(_MESON_LINK_ARGS)` puts
+##       the prefix `-L`/`/LIBPATH:` on the CLI `-Dc_link_args` /
+##       `-Dcpp_link_args` line. Required because those `-D` values
+##       override `[built-in options]` in the native file (see helper).
 ## @note `MESON_BUILD_TYPE` is derived from `CMAKE_BUILD_TYPE` (`Debug` →
 ##       `debug`, `RelWithDebInfo` → `debugoptimized`, `MinSizeRel` →
 ##       `minsize`, `Release` or empty/multi-config → `release`). Meson
@@ -344,6 +392,13 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	if(COMMAND _bm_env_apply_install_search_paths)
 		_bm_env_apply_install_search_paths()
 	endif()
+
+	# CLI -Dc_link_args replaces native-file c_link_args. Keep prefix -L
+	# here so probes (mp3lame) and the ffmpeg ninja link prefer BM libs
+	# over a same-named system .so even when the runner and .ini already
+	# advertise the prefix.
+	_bm_tools_meson_append_prefix_link_args(_MESON_LINK_ARGS)
+	string(STRIP "${_MESON_LINK_ARGS}" _MESON_LINK_ARGS)
 
 	_bm_env_quote_cmd_list(_MESON_CMD_PREFIX ${ENV_MESON_COMMAND})
 	_bm_env_quote_cmd_list(_MESON_SILENT_CMD_PREFIX ${ENV_MESON_SILENT_COMMAND})
