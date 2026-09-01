@@ -2,12 +2,20 @@
 # toolchain/export.cmake — toolchain file registry (parent + component dumps)
 # =============================================================================
 
+## @brief Clear the in-memory toolchain dump line list.
+## @note Next `_bm_tc_export` / `_bm_tc_export_raw` start a new file body.
+##       Called when the parent toolchain file is rebuilt from scratch.
 function(_bm_tc_reset)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_reset")
 	set_property(GLOBAL PROPERTY BUILDMASTER_TOOLCHAIN_LINES "")
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_reset")
 endfunction()
 
+## @brief Append `set(<name> "<value>")` to the parent toolchain dump.
+## @param[in] name  CMake variable name (FATAL if empty).
+## @param[in] value Raw value; backslashes become `/`, quotes are escaped.
+## @note Used for the host dump (`BUILDMASTER_TOOLCHAIN_FILE`). Component
+##       overlays are written later by `_bm_tc_write_component`.
 function(_bm_tc_export name value)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export")
 	if("${name}" STREQUAL "")
@@ -20,6 +28,9 @@ function(_bm_tc_export name value)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export")
 endfunction()
 
+## @brief Append a raw line to the parent toolchain dump.
+## @param[in] line Full CMake line (empty is a no-op).
+## @note For comments or statements that are not a simple `set()`.
 function(_bm_tc_export_raw line)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_export_raw")
 	if("${line}" STREQUAL "")
@@ -30,6 +41,9 @@ function(_bm_tc_export_raw line)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_export_raw")
 endfunction()
 
+## @brief Write `BUILDMASTER_TOOLCHAIN_LINES` to @p path.
+## @param[in] path Destination toolchain file (FATAL if empty).
+## @note Creates the parent directory. Overwrites the file.
 function(_bm_tc_write path)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write")
 	if("${path}" STREQUAL "")
@@ -52,6 +66,42 @@ function(_bm_tc_write path)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_write")
 endfunction()
 
+## @brief Remove parent compiler / binutils / IPO `set()` lines from a dump.
+## @param[in,out] body_var Name of the variable holding the file text.
+## @note Keeps prefix, include dirs and other host settings. TOOLCHAIN=msvc
+##       must not inherit `clang-cl` / `llvm-lib` / `lld-link` from a
+##       clang-cl parent; the component overlay writes `cl` / `lib` / `link`.
+## @note IPO lines are dropped so the nested project decides IPO from its
+##       own compiler id. This is not “IPO=OFF”.
+function(_bm_tc_strip_parent_binutils body_var)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_strip_parent_binutils")
+	set(_in "${${body_var}}")
+	string(REPLACE "\r\n" "\n" _in "${_in}")
+	string(REPLACE "\n" ";" _lines "${_in}")
+	set(_out "")
+	foreach(_l IN LISTS _lines)
+		if(_l MATCHES "CMAKE_(C|CXX)_COMPILER(_AR|_LINKER|_RANLIB)?"
+				OR _l MATCHES "CMAKE_(AR|LINKER|LINKER_TYPE|RANLIB|NM)"
+				OR _l MATCHES "CMAKE_INTERPROCEDURAL_OPTIMIZATION")
+			continue()
+		endif()
+		string(APPEND _out "${_l}\n")
+	endforeach()
+	set(${body_var} "${_out}" PARENT_SCOPE)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_strip_parent_binutils")
+endfunction()
+
+## @brief Write the per-component toolchain file (parent dump + overlay).
+## @param[in] path           Destination `toolchain_<id>_<name>.cmake`.
+## @param[in] toolchain_name Profile name (`msvc`, `clang-cl`, `gcc`, …).
+## @note Copies the parent dump first (unified install prefix). For
+##       `TOOLCHAIN=msvc` the copy is stripped of compiler / AR / linker /
+##       IPO lines so a clang-cl host cannot pin `llvm-lib`.
+## @note `msvc` resolves `cl` / `lib` / `link` with
+##       `_bm_tc_resolve_msvc_tool` (vswhere). It must not `find_program`
+##       `llvm-ar`. Other profiles keep the existing `find_program` list.
+## @note Overlay `FORCE`s the profile compilers and binutils. `clang-cl`
+##       still uses LLVM tools; this macro does not change that profile.
 macro(_bm_tc_write_component path toolchain_name)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_component")
 	_bm_path_normalize(_bm_tc_self "${path}")
@@ -61,6 +111,9 @@ macro(_bm_tc_write_component path toolchain_name)
 			AND EXISTS "${_bm_tc_parent}"
 			AND NOT _bm_tc_self STREQUAL "${_bm_tc_parent}")
 		file(READ "${_bm_tc_parent}" _bm_tc_body)
+		if("${toolchain_name}" STREQUAL "msvc")
+			_bm_tc_strip_parent_binutils(_bm_tc_body)
+		endif()
 		get_filename_component(_bm_tc_dir "${_bm_tc_self}" DIRECTORY)
 		if(NOT _bm_tc_dir STREQUAL "")
 			file(MAKE_DIRECTORY "${_bm_tc_dir}")
@@ -71,15 +124,21 @@ macro(_bm_tc_write_component path toolchain_name)
 	endif()
 
 	if(DEFINED BM_TC_LINKER AND NOT BM_TC_LINKER STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_LINKER}")
-		find_program(_bm_tc_link_abs NAMES "${BM_TC_LINKER}")
-		if(_bm_tc_link_abs)
-			set(BM_TC_LINKER "${_bm_tc_link_abs}")
+		if("${toolchain_name}" STREQUAL "msvc")
+			_bm_tc_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")
+		else()
+			find_program(_bm_tc_link_abs NAMES "${BM_TC_LINKER}")
+			if(_bm_tc_link_abs)
+				set(BM_TC_LINKER "${_bm_tc_link_abs}")
+			endif()
+			unset(_bm_tc_link_abs)
 		endif()
-		unset(_bm_tc_link_abs)
 	endif()
 
 	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_AR}")
-		if(BUILDMASTER_TOOLS_ARCHIVER AND BUILDMASTER_TOOLS_ARCHIVER_STYLE STREQUAL "gnu_ar")
+		if("${toolchain_name}" STREQUAL "msvc")
+			_bm_tc_resolve_msvc_tool(BM_TC_AR "${BM_TC_AR}")
+		elseif(BUILDMASTER_TOOLS_ARCHIVER AND BUILDMASTER_TOOLS_ARCHIVER_STYLE STREQUAL "gnu_ar")
 			set(BM_TC_AR "${BUILDMASTER_TOOLS_ARCHIVER}")
 		else()
 			find_program(_bm_tc_ar_abs NAMES "${BM_TC_AR}" llvm-ar gcc-ar ar)
@@ -91,21 +150,40 @@ macro(_bm_tc_write_component path toolchain_name)
 	endif()
 
 	if(DEFINED BM_TC_RANLIB AND NOT BM_TC_RANLIB STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_RANLIB}")
-		find_program(_bm_tc_ranlib_abs NAMES llvm-ranlib gcc-ranlib ranlib)
-		if(_bm_tc_ranlib_abs)
-			set(BM_TC_RANLIB "${_bm_tc_ranlib_abs}")
-		else()
-			set(BM_TC_RANLIB "")
+		if(NOT "${toolchain_name}" STREQUAL "msvc")
+			find_program(_bm_tc_ranlib_abs NAMES llvm-ranlib gcc-ranlib ranlib)
+			if(_bm_tc_ranlib_abs)
+				set(BM_TC_RANLIB "${_bm_tc_ranlib_abs}")
+			else()
+				set(BM_TC_RANLIB "")
+			endif()
+			unset(_bm_tc_ranlib_abs)
 		endif()
-		unset(_bm_tc_ranlib_abs)
 	endif()
 
 	if(DEFINED BM_TC_NM AND NOT BM_TC_NM STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_NM}")
-		find_program(_bm_tc_nm_abs NAMES llvm-nm gcc-nm nm)
-		if(_bm_tc_nm_abs)
-			set(BM_TC_NM "${_bm_tc_nm_abs}")
+		if(NOT "${toolchain_name}" STREQUAL "msvc")
+			find_program(_bm_tc_nm_abs NAMES llvm-nm gcc-nm nm)
+			if(_bm_tc_nm_abs)
+				set(BM_TC_NM "${_bm_tc_nm_abs}")
+			endif()
+			unset(_bm_tc_nm_abs)
 		endif()
-		unset(_bm_tc_nm_abs)
+	endif()
+
+	if("${toolchain_name}" STREQUAL "msvc")
+		if(NOT BM_TC_C_COMPILER STREQUAL "")
+			_bm_tc_resolve_msvc_tool(BM_TC_C_COMPILER "${BM_TC_C_COMPILER}")
+		endif()
+		if(NOT BM_TC_CXX_COMPILER STREQUAL "")
+			_bm_tc_resolve_msvc_tool(BM_TC_CXX_COMPILER "${BM_TC_CXX_COMPILER}")
+		endif()
+		if(NOT BM_TC_AR STREQUAL "")
+			_bm_tc_resolve_msvc_tool(BM_TC_AR "${BM_TC_AR}")
+		endif()
+		if(NOT BM_TC_LINKER STREQUAL "")
+			_bm_tc_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")
+		endif()
 	endif()
 
 	set(_bm_tc_overlay "")
