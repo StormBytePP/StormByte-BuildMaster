@@ -13,20 +13,47 @@ on:
 
 jobs:
   ###########################################################################
-  # Harness (contract + smoke + negative + consumer)
+  # 0a. Warm submodule cache (one save per OS — Actions cache is OS-scoped)
   ###########################################################################
-  harness:
+  checkout-bootstrap:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            toolchain: gcc
-          - os: windows-latest
-            toolchain: msvc
-          - os: macos-latest
-            toolchain: clang
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    name: checkout-bootstrap (${{ matrix.os }})
+    steps:
+      - name: Warm repository + submodule cache
+        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
+        with:
+          fetch-depth: 0
+          submodules: true
+          enable-symlinks: true
+
+  ###########################################################################
+  # 0b. Warm APT lists (Linux only)
+  ###########################################################################
+  apt-bootstrap:
+    runs-on: ubuntu-latest
+    name: apt-bootstrap
+    steps:
+      - name: Warm APT package indexes
+        uses: stormbytepp/githubactions/.github/actions/update-apt-cached@master
+        with:
+          cache-key: apt-lists
+          rotate-weekly: true
+
+  ###########################################################################
+  # LINUX — gcc + clang
+  ###########################################################################
+  harness-linux:
+    needs: [checkout-bootstrap, apt-bootstrap]
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [gcc, clang]
+    runs-on: ubuntu-latest
+    name: linux-${{ matrix.toolchain }}
     steps:
       - name: Checkout
         uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
@@ -35,8 +62,7 @@ jobs:
           submodules: true
           enable-symlinks: true
 
-      - name: Install alternate toolchain tools (Linux)
-        if: runner.os == 'Linux'
+      - name: Install alternate toolchain tools
         uses: stormbytepp/githubactions/.github/actions/install-cached@master
         with:
           packages: clang lld llvm
@@ -44,8 +70,38 @@ jobs:
           lists-cache-key: apt-lists
           rotate-weekly: true
 
-      - name: Install GNU gcc (macOS)
-        if: runner.os == 'macOS'
+      - name: Configure + main
+        uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          source-dir: .github/tests/harness
+          build-dir: build/harness
+          build-type: Release
+          target: run_buildmaster_main
+          run-tests: false
+          ccache-key: v1-harness
+          cache-scope: ubuntu-latest-${{ matrix.toolchain }}
+
+  ###########################################################################
+  # macOS — clang + gcc
+  ###########################################################################
+  harness-macos:
+    needs: [checkout-bootstrap]
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [clang, gcc]
+    runs-on: macos-latest
+    name: macos-${{ matrix.toolchain }}
+    steps:
+      - name: Checkout
+        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
+        with:
+          fetch-depth: 0
+          submodules: true
+          enable-symlinks: true
+
+      - name: Install GNU gcc
         uses: stormbytepp/githubactions/.github/actions/install-cached@master
         with:
           packages: gcc
@@ -60,4 +116,35 @@ jobs:
           target: run_buildmaster_main
           run-tests: false
           ccache-key: v1-harness
-          cache-scope: ${{ matrix.os }}-${{ matrix.toolchain }}
+          cache-scope: macos-latest-${{ matrix.toolchain }}
+
+  ###########################################################################
+  # WINDOWS — msvc + clang-cl
+  ###########################################################################
+  harness-windows:
+    needs: [checkout-bootstrap]
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [msvc, clang-cl]
+    runs-on: windows-latest
+    name: windows-${{ matrix.toolchain }}
+    steps:
+      - name: Checkout
+        uses: stormbytepp/githubactions/.github/actions/checkout-cached@master
+        with:
+          fetch-depth: 0
+          submodules: true
+          enable-symlinks: true
+
+      - name: Configure + main
+        uses: stormbytepp/githubactions/.github/actions/build-with-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+          source-dir: .github/tests/harness
+          build-dir: build/harness
+          build-type: Release
+          target: run_buildmaster_main
+          run-tests: false
+          ccache-key: v1-harness
+          cache-scope: windows-latest-${{ matrix.toolchain }}
