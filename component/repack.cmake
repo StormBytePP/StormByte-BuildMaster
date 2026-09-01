@@ -1,11 +1,75 @@
 # =============================================================================
-# component/repack.cmake — meta REPACK merge into the install prefix
+# component/repack.cmake — REPACK merge into the install prefix
 # =============================================================================
 # Included from component/helpers.cmake after the component registry exists.
-# Public buildmaster_repack() is gone. Optstr REPACK on buildmaster_meta()
-# registers a merge of that meta's member leaves.
+# Public buildmaster_repack() is gone.
+# Optstr REPACK on buildmaster_meta() merges that meta's member leaves
+# into one prefix archive named after the meta id (OUTPUT of that path).
+# Optstr REPACK on buildmaster_component() merges first-level depend/link
+# dests that are NOINSTALL static into this component's already-installed
+# prefix archive (POST_BUILD on <id>_install — never a second OUTPUT on
+# the GNU .a; that collides with the install_exec rule).
 
 include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
+
+## @brief First-level depend/link dests of `id` that may be REPACK members.
+## @param[in]  id      Publishing component with REPACK.
+## @param[out] out_var Parent-scope list of member ids (NOINSTALL static).
+## @note Publishing dest → FATAL. Shared/headers dest → FATAL.
+##       Unregistered dest is ignored (system LINK names).
+function(_bm_repack_component_members id out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_component_members")
+	set(_mem "")
+	get_property(_dsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
+	get_property(_ddsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
+	get_property(_lsrcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_SOURCES)
+	get_property(_ldsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_LINK_DESTS)
+
+	set(_pairs "")
+	set(_i 0)
+	foreach(_s IN LISTS _dsrcs)
+		list(GET _ddsts ${_i} _d)
+		math(EXPR _i "${_i} + 1")
+		if(_s STREQUAL "${id}")
+			list(APPEND _pairs "${_d}")
+		endif()
+	endforeach()
+	set(_i 0)
+	foreach(_s IN LISTS _lsrcs)
+		list(GET _ldsts ${_i} _d)
+		math(EXPR _i "${_i} + 1")
+		if(_s STREQUAL "${id}")
+			list(APPEND _pairs "${_d}")
+		endif()
+	endforeach()
+	if(_pairs)
+		list(REMOVE_DUPLICATES _pairs)
+	endif()
+
+	foreach(_d IN LISTS _pairs)
+		if(_d STREQUAL "" OR _d STREQUAL "${id}")
+			continue()
+		endif()
+		_bm_graph_is_registered("${_d}" _is_c)
+		if(NOT _is_c)
+			continue()
+		endif()
+		_bm_graph_is_noinstall("${_d}" _ni)
+		get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_d}_MODE)
+		if(NOT _ni)
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_component('${id}'): REPACK member '${_d}' publishes to the prefix — members must be NOINSTALL")
+		endif()
+		if(NOT _mode STREQUAL "static")
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_component('${id}'): REPACK member '${_d}' is '${_mode}' (only static NOINSTALL)")
+		endif()
+		list(APPEND _mem "${_d}")
+	endforeach()
+
+	set(${out_var} "${_mem}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_component_members")
+endfunction()
 
 ## @brief Register merges for every meta that has REPACK.
 ## @note OUTPUT stem is the meta id. INPUTS are the flattened member leaves.
@@ -37,10 +101,71 @@ function(_bm_repack_register_metas)
 		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_REPACK_IDS "${_id}")
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_OUTPUT "${_id}")
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS "${_leaves}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_KIND "meta")
 		_bm_log_message(COMPONENT DEBUG
 			"REPACK meta ${_id} leaves=${_leaves}")
 	endforeach()
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_register_metas")
+endfunction()
+
+## @brief Register REPACK merges for components that opted in.
+## @note Shared + REPACK → WARNING, skip. Zero members → FATAL.
+##       OUTPUT stem is the first produced basename (prefix archive).
+##       INPUTS are the publisher plus the NOINSTALL members (publisher
+##       first so the merge rewrites the installed .a).
+## @note KIND=component → POST_BUILD on `<id>_install`. Do not declare
+##       OUTPUT of that GNU path (install_exec already owns it).
+function(_bm_repack_register_components)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_register_components")
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	foreach(_id IN LISTS _ids)
+		if("${_id}" STREQUAL "")
+			continue()
+		endif()
+		get_property(_repack GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_REPACK)
+		if(NOT _repack)
+			continue()
+		endif()
+		get_property(_mode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_MODE)
+		if(NOT _mode STREQUAL "static")
+			_bm_log_message(COMPONENT WARNING
+				"buildmaster_component('${_id}'): REPACK ignored (mode '${_mode}'; static only)")
+			continue()
+		endif()
+		_bm_repack_component_members("${_id}" _mem)
+		if(NOT _mem)
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_component('${_id}'): REPACK requires at least one first-level depend/link to a NOINSTALL static component")
+		endif()
+		get_property(_produced GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_PRODUCED)
+		set(_out_name "")
+		foreach(_spec IN LISTS _produced)
+			if(NOT _spec STREQUAL "")
+				_bm_opt_parse_spec("${_spec}" _ign_t _out_name _ign_d)
+				break()
+			endif()
+		endforeach()
+		if(_out_name STREQUAL "")
+			set(_out_name "${_id}")
+		endif()
+		get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
+		set(_hit -1)
+		if(_rids)
+			list(FIND _rids "${_id}" _hit)
+		endif()
+		if(NOT _hit EQUAL -1)
+			continue()
+		endif()
+		set(_inputs "${_id}")
+		list(APPEND _inputs ${_mem})
+		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_REPACK_IDS "${_id}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_OUTPUT "${_out_name}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS "${_inputs}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_KIND "component")
+		_bm_log_message(COMPONENT DEBUG
+			"REPACK component ${_id} out=${_out_name} inputs=${_inputs}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_register_components")
 endfunction()
 
 ## @brief Resolve one leaf id into archives and a wait target.
@@ -109,17 +234,20 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
 endfunction()
 
-## @brief Create merge commands and attach the archive to each REPACK meta.
+## @brief Create merge commands and attach the archive to each REPACK id.
 ## @note Called from `_bm_materialize_finalize` after real components exist.
 ## @note Zero static inputs: WARNING, no merge (shared members already
 ##       INTERFACE-linked by `_bm_meta_wire`).
-## @note `<id>_install` already exists from `_bm_meta_materialize`. The
-##       merge file is a custom command OUTPUT; a `<id>_merge` target
-##       depends on that file and `<id>_install` depends on `<id>_merge`.
-##       `add_dependencies` cannot take a filesystem path.
+## @note Meta KIND: `<id>_install` already exists from `_bm_meta_materialize`.
+##       The merge file is a custom command OUTPUT; `<id>_merge` depends
+##       on that file and `<id>_install` depends on `<id>_merge`.
+## @note Component KIND: POST_BUILD on the existing `<id>_install`.
+##       Consumers already wait on `<id>_install`, so they see the merged
+##       archive. No extra OUTPUT on the GNU path.
 function(_bm_repack_materialize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_materialize")
 	_bm_repack_register_metas()
+	_bm_repack_register_components()
 
 	get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
 	if(NOT _rids)
@@ -136,6 +264,10 @@ function(_bm_repack_materialize)
 	foreach(_id IN LISTS _rids)
 		get_property(_out_name GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_OUTPUT)
 		get_property(_inputs GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS)
+		get_property(_kind GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_KIND)
+		if(_kind STREQUAL "")
+			set(_kind "meta")
+		endif()
 
 		set(_all_files "")
 		set(_all_deps "")
@@ -158,7 +290,7 @@ function(_bm_repack_materialize)
 
 		if(_all_files STREQUAL "")
 			_bm_log_message(COMPONENT WARNING
-				"meta '${_id}': REPACK produced no static archive to merge (members are shared/headers only); consumers will link those members separately")
+				"REPACK '${_id}': produced no static archive to merge (members are shared/headers only); consumers will link those members separately")
 			continue()
 		endif()
 
@@ -173,53 +305,74 @@ function(_bm_repack_materialize)
 			set(_ar_arg "-DCMAKE_AR=${CMAKE_AR}")
 		endif()
 
-		add_custom_command(
-			OUTPUT "${_out_path}"
-			COMMAND ${CMAKE_COMMAND}
-				"-DOUTPUT=${_out_path}"
-				"-DINPUTS=${_inputs_joined}"
-				"-DBUILDMASTER_SRCDIR=${BUILDMASTER_SRCDIR}"
-				${_ar_arg}
-				-P "${_merge_script}"
-			DEPENDS ${_all_files}
-			COMMENT "[BuildMaster/Component]: Repacking ${_id} → ${_out_name}"
-			VERBATIM
-		)
-
-		if(NOT TARGET ${_id}_merge)
-			add_custom_target(${_id}_merge DEPENDS "${_out_path}")
-		endif()
-		if(NOT TARGET ${_id}_install)
-			add_custom_target(${_id}_install)
-		endif()
-		add_dependencies(${_id}_install ${_id}_merge)
-		if(_all_deps)
-			add_dependencies(${_id}_install ${_all_deps})
-			add_dependencies(${_id}_merge ${_all_deps})
-		endif()
-		if(TARGET buildmaster_build_init)
-			add_dependencies(${_id}_install buildmaster_build_init)
-		endif()
-
-		if(NOT TARGET ${_id})
-			add_library(${_id} INTERFACE)
-			target_include_directories(${_id} SYSTEM INTERFACE
-				"${BUILDMASTER_INSTALL_INCLUDEDIR}")
-		endif()
-		add_dependencies(${_id} ${_id}_install)
-
-		set(_imp "${_id}_merged")
-		if(NOT TARGET ${_imp})
-			add_library(${_imp} STATIC IMPORTED GLOBAL)
-			set_target_properties(${_imp} PROPERTIES
-				IMPORTED_LOCATION "${_out_path}"
-				IMPORTED_LOCATION_DEBUG "${_out_path}"
-				IMPORTED_LOCATION_RELEASE "${_out_path}"
-				IMPORTED_LOCATION_MINSIZEREL "${_out_path}"
-				IMPORTED_LOCATION_RELWITHDEBINFO "${_out_path}"
+		if(_kind STREQUAL "component")
+			if(NOT TARGET ${_id}_install)
+				_bm_log_message(COMPONENT FATAL
+					"REPACK component '${_id}': missing ${_id}_install")
+			endif()
+			add_custom_command(
+				TARGET ${_id}_install POST_BUILD
+				COMMAND ${CMAKE_COMMAND}
+					"-DOUTPUT=${_out_path}"
+					"-DINPUTS=${_inputs_joined}"
+					"-DBUILDMASTER_SRCDIR=${BUILDMASTER_SRCDIR}"
+					${_ar_arg}
+					-P "${_merge_script}"
+				COMMENT "[BuildMaster/Component]: Repacking ${_id} → ${_out_name}"
+				VERBATIM
 			)
-			add_dependencies(${_imp} ${_id}_install)
-			target_link_libraries(${_id} INTERFACE ${_imp})
+			if(_all_deps)
+				add_dependencies(${_id}_install ${_all_deps})
+			endif()
+		else()
+			add_custom_command(
+				OUTPUT "${_out_path}"
+				COMMAND ${CMAKE_COMMAND}
+					"-DOUTPUT=${_out_path}"
+					"-DINPUTS=${_inputs_joined}"
+					"-DBUILDMASTER_SRCDIR=${BUILDMASTER_SRCDIR}"
+					${_ar_arg}
+					-P "${_merge_script}"
+				DEPENDS ${_all_files}
+				COMMENT "[BuildMaster/Component]: Repacking ${_id} → ${_out_name}"
+				VERBATIM
+			)
+
+			if(NOT TARGET ${_id}_merge)
+				add_custom_target(${_id}_merge DEPENDS "${_out_path}")
+			endif()
+			if(NOT TARGET ${_id}_install)
+				add_custom_target(${_id}_install)
+			endif()
+			add_dependencies(${_id}_install ${_id}_merge)
+			if(_all_deps)
+				add_dependencies(${_id}_install ${_all_deps})
+				add_dependencies(${_id}_merge ${_all_deps})
+			endif()
+			if(TARGET buildmaster_build_init)
+				add_dependencies(${_id}_install buildmaster_build_init)
+			endif()
+
+			if(NOT TARGET ${_id})
+				add_library(${_id} INTERFACE)
+				target_include_directories(${_id} SYSTEM INTERFACE
+					"${BUILDMASTER_INSTALL_INCLUDEDIR}")
+			endif()
+			add_dependencies(${_id} ${_id}_install)
+
+			set(_imp "${_id}_merged")
+			if(NOT TARGET ${_imp})
+				add_library(${_imp} STATIC IMPORTED GLOBAL)
+				set_target_properties(${_imp} PROPERTIES
+					IMPORTED_LOCATION "${_out_path}"
+					IMPORTED_LOCATION_DEBUG "${_out_path}"
+					IMPORTED_LOCATION_RELEASE "${_out_path}"
+					IMPORTED_LOCATION_MINSIZEREL "${_out_path}"
+					IMPORTED_LOCATION_RELWITHDEBINFO "${_out_path}"
+				)
+				add_dependencies(${_imp} ${_id}_install)
+				target_link_libraries(${_id} INTERFACE ${_imp})
+			endif()
 		endif()
 
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_FILE "${_out_path}")

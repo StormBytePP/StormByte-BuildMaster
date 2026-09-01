@@ -7,7 +7,20 @@ if(CMAKE_GENERATOR)
 	list(APPEND _gen_args -G "${CMAKE_GENERATOR}")
 endif()
 
-set(_cfg_cases missing-hook bad-linkflags files-on-meta hash-mismatch buildonly-removed noinstall-off backend-ambiguous backend-pick-cmake)
+set(_cfg_cases
+	missing-hook
+	bad-linkflags
+	files-on-meta
+	hash-mismatch
+	buildonly-removed
+	noinstall-off
+	backend-ambiguous
+	backend-pick-cmake
+	repack-plus-noinstall
+	repack-headers
+	repack-two-produced
+	repack-on-component-empty
+)
 set(_ins_cases pc-clobber)
 set(_failed 0)
 
@@ -52,6 +65,42 @@ foreach(_c IN LISTS _cfg_cases)
 			string(FIND "${_blob}" "NOINSTALL cannot be turned off" _hit)
 			if(_hit LESS 0)
 				message(STATUS "negative/${_c} configure failed but not with NOINSTALL-off text:\n${_blob}")
+				math(EXPR _failed "${_failed} + 1")
+			else()
+				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")
+			endif()
+		elseif(_c STREQUAL "repack-plus-noinstall")
+			string(JOIN "\n" _blob "${_out}" "${_err}")
+			string(FIND "${_blob}" "REPACK cannot be combined with NOINSTALL" _hit)
+			if(_hit LESS 0)
+				message(STATUS "negative/${_c} configure failed but not with REPACK+NOINSTALL text:\n${_blob}")
+				math(EXPR _failed "${_failed} + 1")
+			else()
+				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")
+			endif()
+		elseif(_c STREQUAL "repack-headers")
+			string(JOIN "\n" _blob "${_out}" "${_err}")
+			string(FIND "${_blob}" "REPACK is not valid in headers mode" _hit)
+			if(_hit LESS 0)
+				message(STATUS "negative/${_c} configure failed but not with REPACK-headers text:\n${_blob}")
+				math(EXPR _failed "${_failed} + 1")
+			else()
+				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")
+			endif()
+		elseif(_c STREQUAL "repack-two-produced")
+			string(JOIN "\n" _blob "${_out}" "${_err}")
+			string(FIND "${_blob}" "REPACK requires exactly one produced spec" _hit)
+			if(_hit LESS 0)
+				message(STATUS "negative/${_c} configure failed but not with two-produced text:\n${_blob}")
+				math(EXPR _failed "${_failed} + 1")
+			else()
+				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")
+			endif()
+		elseif(_c STREQUAL "repack-on-component-empty")
+			string(JOIN "\n" _blob "${_out}" "${_err}")
+			string(FIND "${_blob}" "REPACK requires at least one" _hit)
+			if(_hit LESS 0)
+				message(STATUS "negative/${_c} configure failed but not with empty-members text:\n${_blob}")
 				math(EXPR _failed "${_failed} + 1")
 			else()
 				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")

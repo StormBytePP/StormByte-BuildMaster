@@ -19,10 +19,14 @@
 ## @note `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING
 ##       and ignored (`Use REQUIRE_TOOL=pkgconfig or REQUIRE_TOOL={…}`).
 ##       Unknown extra ids are FATAL in `_bm_tools_demand_extra`.
-## @note `REPACK` is a meta-only flag. On `buildmaster_component` it is FATAL.
-##       On `buildmaster_meta` it merges every produced static archive of
-##       the meta's member leaves into one prefix archive named after the
-##       meta id.
+## @note `REPACK` is a flag on meta **and** on a static publishing component.
+##       Meta: merges every produced static archive of the member leaves
+##       into one prefix archive named after the meta id.
+##       Component: merges first-level depend/link dests that are
+##       NOINSTALL static into this id's prefix archive (POST_BUILD on
+##       `<id>_install`). FATAL with NOINSTALL or headers. Shared →
+##       WARNING skip. Zero members → FATAL at finalize. Exactly one
+##       produced spec.
 ## @note `PC={…}` is forbidden on meta components (no sources, no single
 ##       library contract). Membership can drag an unbounded set of leaves;
 ##       generating one `.pc` from that would pull Requires the author did

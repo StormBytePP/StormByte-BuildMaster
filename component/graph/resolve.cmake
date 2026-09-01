@@ -137,14 +137,16 @@ endfunction()
 ##            (empty if this component has no recorded dests).
 ## @note FATAL if dest cannot be resolved, unless the same pair is also a
 ##       `buildmaster_link` (spec or on-disk archive: link-only, no wait target).
-##       FATAL if a publishing `id` depends on a `NOINSTALL` dest that is
-##       not `PRIVATE_HEADERS`.
+## @note FATAL if a publishing `id` depends on a `NOINSTALL` dest that is
+##       not `PRIVATE_HEADERS`, unless `id` itself has REPACK (first-level
+##       NOINSTALL static members are merged into this id's prefix archive).
 function(_bm_graph_dep_targets id out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_dep_targets")
 	set(_dep_targets "")
 	get_property(_srcs GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_SOURCES)
 	get_property(_dsts GLOBAL PROPERTY BUILDMASTER_COMPONENT_DEP_DESTS)
 	_bm_graph_is_noinstall("${id}" _src_ni)
+	get_property(_src_repack GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_REPACK)
 
 	set(_i 0)
 	foreach(_src IN LISTS _srcs)
@@ -159,9 +161,9 @@ function(_bm_graph_dep_targets id out_var)
 			_bm_graph_is_noinstall("${_dst}" _dst_ni)
 			get_property(_dst_priv GLOBAL PROPERTY
 				BUILDMASTER_COMPONENT_${_dst}_PRIVATE_HEADERS)
-			if(_dst_ni AND NOT _src_ni AND NOT _dst_priv)
+			if(_dst_ni AND NOT _src_ni AND NOT _dst_priv AND NOT _src_repack)
 				_bm_log_message(COMPONENT FATAL
-					"buildmaster_depend('${id}', '${_dst}'): a publishing component cannot depend on NOINSTALL '${_dst}' (publish it with a REPACK meta, or put NOINSTALL on '${id}' too)")
+					"buildmaster_depend('${id}', '${_dst}'): a publishing component cannot depend on NOINSTALL '${_dst}' (put REPACK on '${id}', or put NOINSTALL on '${id}' too)")
 			endif()
 		endif()
 

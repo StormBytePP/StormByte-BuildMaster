@@ -35,7 +35,10 @@
 ##            REQUIRE_TOOL=… / REQUIRE_TOOL={…},
 ##            ALIAS=<name> / ALIAS={name;name2} (`add_library(name ALIAS <id>)`
 ##            after the INTERFACE stub; `buildmaster_link` / `depend` resolve
-##            alias → id before recording the pair).
+##            alias → id before recording the pair),
+##            REPACK (flag; static publisher only — merge first-level
+##            NOINSTALL static depend/link dests into this id's prefix
+##            archive after install).
 ## @note Build directory is `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>`
 ##       (`_bm_path_component_builddir`). Created with `file(MAKE_DIRECTORY)`.
 ## @note `PRIVATE_HEADERS` is TRUE when `_build_system` is `none`, or when
@@ -75,6 +78,12 @@
 ## @note `ALIAS=` / `ALIAS={…}` empty is FATAL. Alias equal to `<id>` or an
 ##       existing TARGET that is not already an ALIAS of `<id>` is FATAL.
 ## @note `BUILDONLY` is removed; the parser FATALs (`use NOINSTALL`).
+## @note `REPACK` on a component: FATAL with `NOINSTALL` (nothing to publish
+##       into). FATAL in `headers` mode. Shared → stamped then WARNING skip
+##       at finalize. Exactly one produced spec. First-level depend/link
+##       dests that are NOINSTALL static are the members; zero members is
+##       FATAL at finalize. Publishing+depend(NOINSTALL) is allowed only
+##       when this source has REPACK (`_bm_graph_dep_targets`).
 function(_bm_graph_create _component _component_title _srcdir
 						_options _library_mode _build_system _produced)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_graph_create")
@@ -132,10 +141,6 @@ function(_bm_graph_create _component _component_title _srcdir
 		_files_unpacks _files_forces _files_sources _files_titles)
 	_bm_opt_parse_require_tool("${_options_string}")
 	_bm_opt_parse_alias("${_options_string}" _reg_aliases)
-	if(_reg_repack)
-		_bm_log_message(COMPONENT FATAL
-			"REPACK is only valid on buildmaster_meta(). A component publishes its own artifacts; to merge several components into one archive, put REPACK on the meta and buildmaster_meta_add those ids.")
-	endif()
 
 	set(_files_has_source FALSE)
 	foreach(_so IN LISTS _files_sources)
@@ -186,6 +191,27 @@ function(_bm_graph_create _component _component_title _srcdir
 		if(NOT _has_prod)
 			_bm_log_message(COMPONENT FATAL
 				"_bm_graph_create '${_component}': static/shared mode requires at least one produced library spec")
+		endif()
+	endif()
+
+	if(_reg_repack AND _reg_noinstall)
+		_bm_log_message(COMPONENT FATAL
+			"_bm_graph_create('${_component}'): REPACK cannot be combined with NOINSTALL (REPACK rewrites the prefix archive this id publishes)")
+	endif()
+	if(_reg_repack AND _library_mode STREQUAL "headers")
+		_bm_log_message(COMPONENT FATAL
+			"_bm_graph_create('${_component}'): REPACK is not valid in headers mode")
+	endif()
+	if(_reg_repack AND _library_mode STREQUAL "static")
+		set(_nprod 0)
+		foreach(_spec IN LISTS _produced)
+			if(NOT _spec STREQUAL "")
+				math(EXPR _nprod "${_nprod} + 1")
+			endif()
+		endforeach()
+		if(_nprod GREATER 1)
+			_bm_log_message(COMPONENT FATAL
+				"_bm_graph_create('${_component}'): REPACK requires exactly one produced spec (got ${_nprod})")
 		endif()
 	endif()
 
@@ -304,6 +330,11 @@ function(_bm_graph_create _component _component_title _srcdir
 		"${_pc_version}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_PC_DESCRIPTION
 		"${_pc_description}")
+	if(_reg_repack)
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_REPACK TRUE)
+	else()
+		set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_REPACK FALSE)
+	endif()
 
 	add_library("${_component}" INTERFACE)
 	_bm_alias_apply("${_component}" "${_reg_aliases}")
