@@ -14,9 +14,17 @@
 ##       `CMAKE_NM` or `ENV{AR,RANLIB,NM}` when the variables are unset, then
 ##       normalizes them with `_bm_path_normalize` so Windows paths are safe
 ##       inside the generated runner and toolchain dump.
+## @note Re-applies `_bm_env_apply_install_search_paths()` in *this* scope
+##       before `configure_file`. Callers inside a function (pkgconfig
+##       demand) otherwise write empty `@CFLAGS@` / `@LDFLAGS@` and wipe
+##       the prefix `-I`/`-L` that env/ wrote first.
 ## @note Does not rewrite per-component runners; those are produced by
 ##       `_bm_env_create_runners` after a profile load.
 function(_bm_env_update_runner)
+	if(COMMAND _bm_env_apply_install_search_paths)
+		_bm_env_apply_install_search_paths()
+	endif()
+
 	if(NOT DEFINED CMAKE_C_COMPILER_LAUNCHER)
 		set(CMAKE_C_COMPILER_LAUNCHER "")
 	endif()
@@ -31,6 +39,9 @@ function(_bm_env_update_runner)
 	endif()
 	if(NOT DEFINED BUILDMASTER_FAIL_MARKER)
 		set(BUILDMASTER_FAIL_MARKER "")
+	endif()
+	if(NOT DEFINED LIBRARY_PATH)
+		set(LIBRARY_PATH "")
 	endif()
 
 	if(NOT DEFINED AR OR AR STREQUAL "")

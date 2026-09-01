@@ -11,6 +11,7 @@ update_sccache_dir="@SCCACHE_DIR@"
 update_cflags="@CFLAGS@"
 update_cxxflags="@CXXFLAGS@"
 update_ldflags="@LDFLAGS@"
+update_library_path="@LIBRARY_PATH@"
 update_path="@PATH@"
 update_nproc="@NPROC@"
 update_ar="@AR@"
@@ -73,6 +74,14 @@ if [ -n "$update_ldflags" ]; then
 		export LDFLAGS="$update_ldflags $LDFLAGS"
 	else
 		export LDFLAGS="$update_ldflags"
+	fi
+fi
+
+if [ -n "$update_library_path" ]; then
+	if [ -n "$LIBRARY_PATH" ]; then
+		export LIBRARY_PATH="$update_library_path:$LIBRARY_PATH"
+	else
+		export LIBRARY_PATH="$update_library_path"
 	fi
 fi
 

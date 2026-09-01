@@ -57,17 +57,16 @@ endfunction()
 ## @note Unix / MinGW: `-I${BUILDMASTER_INSTALL_INCLUDEDIR}` on `CFLAGS`,
 ##       `CXXFLAGS`, `CMAKE_C_FLAGS`, `CMAKE_CXX_FLAGS`; `-L${…LIBDIR}` on
 ##       `LDFLAGS`, `CMAKE_EXE_LINKER_FLAGS`, `CMAKE_SHARED_LINKER_FLAGS`,
-##       `CMAKE_MODULE_LINKER_FLAGS`.
+##       `CMAKE_MODULE_LINKER_FLAGS`. Also sets `LIBRARY_PATH` to `LIBDIR`
+##       so `cc.find_library` / `-lfoo` sees the prefix (Meson ignores
+##       `LDFLAGS` on compiler probes).
 ## @note Windows MSVC / clang-cl: `/I` and `/LIBPATH:` on the same flag
-##       variables, **and** native paths prepended to `INCLUDE` and `LIB`
-##       (`cl.exe` / `link.exe` honour the env vars even when CMake flags
-##       are empty). Existing `ENV{INCLUDE}` / `ENV{LIB}` from vcvars stay
-##       after the BuildMaster dirs.
+##       variables, **and** native paths prepended to `INCLUDE` and `LIB`.
+## @note Must be called from the same scope that will `configure_file` the
+##       runner (`_bm_env_update_runner`). A later refresh inside another
+##       function without this call writes empty `@CFLAGS@` / `@LDFLAGS@`.
 ## @note Idempotent. No-op when `BUILDMASTER_INSTALL_INCLUDEDIR` or
 ##       `BUILDMASTER_INSTALL_LIBDIR` is unset.
-## @note Writes `CMAKE_C_FLAGS`, `CMAKE_CXX_FLAGS`, `CMAKE_EXE_LINKER_FLAGS`,
-##       `CMAKE_SHARED_LINKER_FLAGS`, `CMAKE_MODULE_LINKER_FLAGS`, `CFLAGS`,
-##       `CXXFLAGS`, `LDFLAGS`, `INCLUDE`, `LIB` to the parent scope.
 function(_bm_env_apply_install_search_paths)
 	_bm_log_message(ENV LOWLEVEL "Entering _bm_env_apply_install_search_paths")
 
@@ -113,6 +112,9 @@ function(_bm_env_apply_install_search_paths)
 	if(NOT DEFINED LIB)
 		set(LIB "")
 	endif()
+	if(NOT DEFINED LIBRARY_PATH)
+		set(LIBRARY_PATH "")
+	endif()
 
 	set(_msvc_like OFF)
 	if(MSVC)
@@ -141,6 +143,15 @@ function(_bm_env_apply_install_search_paths)
 	if(WIN32)
 		_bm_env_prefix_prepend_win(INCLUDE "${_inc}")
 		_bm_env_prefix_prepend_win(LIB "${_lib}")
+	else()
+		if(LIBRARY_PATH STREQUAL "")
+			set(LIBRARY_PATH "${_lib}")
+		else()
+			string(FIND "${LIBRARY_PATH}" "${_lib}" _lp)
+			if(_lp EQUAL -1)
+				set(LIBRARY_PATH "${_lib}:${LIBRARY_PATH}")
+			endif()
+		endif()
 	endif()
 
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}" PARENT_SCOPE)
@@ -153,6 +164,7 @@ function(_bm_env_apply_install_search_paths)
 	set(LDFLAGS "${LDFLAGS}" PARENT_SCOPE)
 	set(INCLUDE "${INCLUDE}" PARENT_SCOPE)
 	set(LIB "${LIB}" PARENT_SCOPE)
+	set(LIBRARY_PATH "${LIBRARY_PATH}" PARENT_SCOPE)
 
 	_bm_log_message(ENV DEBUG
 		"prefix search: inc=${_inc} lib=${_lib} msvc_like=${_msvc_like}")
