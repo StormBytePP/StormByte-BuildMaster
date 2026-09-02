@@ -1,6 +1,7 @@
 # Configure-time only. Calls _bm_tc_translate_flags; no compile.
 # Meson clang-cl sanity: <c_args> /link <ld_args>
-# gcc/clang Unix: -fuse-ld= only on LD (Meson -c -Werror=unused-…).
+# gcc / Linux clang: -fuse-ld= only on LD.
+# Darwin clang: no -fuse-ld (ld64).
 
 function(_bm_tc_tr_must_match hay needle label)
 	if(NOT hay MATCHES "${needle}")
@@ -121,7 +122,11 @@ set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang c IPO on")
 _bm_tc_tr_must_not("${_c}" "-fuse-ld" "clang c no fuse-ld")
-_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang ld IPO on lld")
+if(APPLE)
+	_bm_tc_tr_must_not("${_ld}" "-fuse-ld" "clang ld apple no fuse-ld")
+else()
+	_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang ld IPO on lld")
+endif()
 
 set(_c "-O2")
 set(_cxx "-O2")

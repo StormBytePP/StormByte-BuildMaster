@@ -407,20 +407,19 @@ and the declaration shape changed.
   listed/removed members with the parent's `llvm-lib` (or the reverse)
   and warned `no such file or directory` for a name `/LIST` had just
   printed.
-- **toolchain triples are mandatory.** `gcc` is binutils
-  `ar` + `-fuse-ld=bfd`; `clang` / `clang-cl` are `llvm-ar` /
-  `llvm-lib` + `-fuse-ld=lld`; `msvc` is `lib.exe` + `link.exe`.
-  A missing tool is FATAL. The translator strips a foreign
-  `-fuse-ld=` / IPO dialect and writes the profile's linker flag
-  on every call (needed so `clang-cl -flto` can pass Meson sanity).
-- **Fixed — `-fuse-ld=` placement.** `clang-cl` Meson sanity is
-  `clang-cl <c_args> /link <c_link_args>`; the driver ignores
-  `-fuse-ld=` after `/link` (`LTO requires -fuse-ld=lld`). That
-  profile gets `-fuse-ld=lld` on C/CXX *and* LD. `gcc` / `clang`
-  get it on LD only: the same flag on C breaks Meson
-  `cc -c -Werror=unused-command-line-argument` (dav1d reported
-  “Atomics not supported”). Harness checks both rules and the
-  clang-cl `/link` order.
+- **Fixed — toolchain triples are mandatory.** `gcc` is binutils
+  `ar` + `-fuse-ld=bfd`. `clang` on Linux is `llvm-ar` +
+  `-fuse-ld=lld`. `clang` on Darwin is cctools `ar` + `ld`
+  (AppleClang; no `llvm-ar`, no lld unless that LLVM sits next
+  to the compiler). `clang-cl` is `llvm-lib` + `lld-link` +
+  `-fuse-ld=lld`. `msvc` is `lib.exe` + `link.exe`. A missing
+  tool of *that* triple is FATAL.
+- **Fixed — `-fuse-ld=` placement.** `clang-cl`: on C/CXX and LD
+  (Meson sanity is `clang-cl <c_args> /link <c_link_args>`; the
+  driver ignores the flag after `/link`). `gcc` and Linux `clang`:
+  LD only (`cc -c -Werror=unused-command-line-argument` + fuse-ld
+  on C made dav1d report “Atomics not supported”). Darwin `clang`:
+  no `-fuse-ld` (ld64). Harness checks all three.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

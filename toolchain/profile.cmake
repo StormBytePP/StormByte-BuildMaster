@@ -48,9 +48,9 @@ endfunction()
 ## @note Includes `toolchain/profiles/<name>.cmake`. Then resolves
 ##       compiler / archiver / linker to absolute paths. Missing tool
 ##       is FATAL — no silent fallback to the parent job.
-## @note Triple is fixed:
+## @note Triple:
 ##       gcc      → bfd + binutils `ar`
-##       clang    → lld + `llvm-ar`
+##       clang    → lld + `llvm-ar` (Darwin: cctools `ld` + `ar`)
 ##       clang-cl → lld-link + `llvm-lib`
 ##       msvc     → link.exe + lib.exe
 ## @note Empty `name` or a missing profile file is FATAL.
@@ -80,8 +80,13 @@ function(_bm_tc_load_profile name)
 		_bm_tc_require_program("linker" "${name}"
 			"ld.bfd;ld" BM_TC_LINKER)
 	elseif(name STREQUAL "clang")
-		_bm_tc_require_program("linker" "${name}"
-			"ld.lld;lld" BM_TC_LINKER)
+		if(APPLE)
+			_bm_tc_require_program("linker" "${name}"
+				"ld;ld64" BM_TC_LINKER)
+		else()
+			_bm_tc_require_program("linker" "${name}"
+				"ld.lld;lld" BM_TC_LINKER)
+		endif()
 	elseif(name STREQUAL "clang-cl")
 		if(COMMAND _bm_tc_resolve_msvc_tool)
 			_bm_tc_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")
