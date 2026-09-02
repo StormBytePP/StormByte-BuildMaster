@@ -8,17 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Summary]
 
 BuildMaster is a small CMake DSL for a **graph of other people’s builds**.
-You name each dependency once, say how it is produced and what it needs,
-and the parent project gets a shared prefix instead of a pile of
-one-off `ExternalProject` / FetchContent glue — CMake and Meson trees
-included.
+You name each dependency once, say how it is produced and what it waits
+on, and the parent gets one shared prefix instead of a pile of
+`ExternalProject` / FetchContent glue — CMake and Meson trees included.
 
 Add the submodule, `add_subdirectory`, declare, `depend` / `link`.
-Order of declaration does not matter. The public surface stays small on
-purpose.
+Order of declaration does not matter. The public surface is ten
+commands on purpose.
 
-How a component is written, every optstr key, and what 2.x broke versus
-1.x: [README.md](README.md).
+How to write a component, every optstr key, and the contract:
+[README.md](https://github.com/StormBytePP/StormByte-BuildMaster/blob/master/README.md).
+
+The ten names, and nothing else:
+[public_functions.md](https://github.com/StormBytePP/StormByte-BuildMaster/blob/master/public_functions.md).
+
+Porting an older caller:
+[MIGRATE.md](https://github.com/StormBytePP/StormByte-BuildMaster/blob/master/MIGRATE.md).
 
 ## [Unreleased]
 
