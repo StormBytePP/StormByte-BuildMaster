@@ -45,7 +45,8 @@ if(WIN32)
 	_bm_tc_sanity_slurp("${_meson_dir}/native_clang-cl.ini" _cl_n)
 	_bm_tc_sanity_must_match("${_cl_n}" "llvm-lib" "native_clang-cl.ini ar")
 	_bm_tc_sanity_must_match("${_cl_n}" "lld-link" "native_clang-cl.ini ld")
-	_bm_tc_sanity_must_not("${_cl_n}" "lib\\.exe" "native_clang-cl.ini")
+	# Not lib\\.exe: that is a substring of llvm-lib.exe.
+	_bm_tc_sanity_must_not("${_cl_n}" "[/\\\\]lib\\.exe" "native_clang-cl.ini")
 
 	_bm_tc_sanity_slurp("${_prof_dir}/clang-cl.cmake" _cl_p)
 	_bm_tc_sanity_must_match("${_cl_p}" "BM_TC_AR \"llvm-lib\"" "profile clang-cl AR")
