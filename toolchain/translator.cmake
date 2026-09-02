@@ -7,6 +7,9 @@
 # Pass 2: IPO tokens of this profile (or nothing).
 # Pass 3: -fuse-ld= of this profile only (gcc=bfd, clang/clang-cl=lld,
 #         msvc=none). Always, not only when IPO is on.
+#         clang-cl Meson sanity puts link_args after /link; the driver
+#         only honors -fuse-ld= on the compiler command. Put it on
+#         C/CXX as well as LD.
 
 function(_bm_tc_flag_has hay needle)
 	string(FIND " ${hay} " " ${needle} " _pos)
@@ -119,8 +122,9 @@ endfunction()
 ## @param[in]     profile gcc|clang|clang-cl|msvc
 ## @note Linker dialect is forced on every call:
 ##       gcc `-fuse-ld=bfd`, clang/clang-cl `-fuse-ld=lld`, msvc none.
-##       clang-cl IPO is `-flto` and needs `-fuse-ld=lld` or Meson
-##       sanity dies with `LTO requires -fuse-ld=lld`.
+##       clang / clang-cl also get `-fuse-ld=` on C/CXX: Meson
+##       clang-cl sanity puts `c_link_args` after `/link` and the
+##       driver then ignores them (`LTO requires -fuse-ld=lld`).
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Entering _bm_tc_translate_flags(${profile})")
@@ -146,8 +150,12 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	endif()
 
 	if(profile STREQUAL "gcc")
+		_bm_tc_flag_append(_c "-fuse-ld=bfd")
+		_bm_tc_flag_append(_cxx "-fuse-ld=bfd")
 		_bm_tc_flag_append(_ld "-fuse-ld=bfd")
 	elseif(profile STREQUAL "clang" OR profile STREQUAL "clang-cl")
+		_bm_tc_flag_append(_c "-fuse-ld=lld")
+		_bm_tc_flag_append(_cxx "-fuse-ld=lld")
 		_bm_tc_flag_append(_ld "-fuse-ld=lld")
 	endif()
 

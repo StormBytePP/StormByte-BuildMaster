@@ -1,6 +1,8 @@
 # Configure-time only. Calls _bm_tc_translate_flags; no compile.
+# Also builds a Meson-style clang-cl sanity line:
+#   <c_args> /link <ld_args>
+# so -fuse-ld= / -flto cannot hide behind /link.
 
-## @brief FATAL unless `hay` matches `needle`.
 function(_bm_tc_tr_must_match hay needle label)
 	if(NOT hay MATCHES "${needle}")
 		_bm_log_message(CORE FATAL
@@ -8,11 +10,35 @@ function(_bm_tc_tr_must_match hay needle label)
 	endif()
 endfunction()
 
-## @brief FATAL if `hay` matches `needle`.
 function(_bm_tc_tr_must_not hay needle label)
 	if(hay MATCHES "${needle}")
 		_bm_log_message(CORE FATAL
 			"translator ${label}: must not match /${needle}/ in '${hay}'")
+	endif()
+endfunction()
+
+## @brief Meson clang-cl sanity: compile flags, then /link, then link flags.
+function(_bm_tc_tr_cl_sanity c_str ld_str out_var)
+	string(STRIP "${c_str}" _c)
+	string(STRIP "${ld_str}" _ld)
+	if(_ld STREQUAL "")
+		set(${out_var} "${_c}" PARENT_SCOPE)
+	else()
+		set(${out_var} "${_c} /link ${_ld}" PARENT_SCOPE)
+	endif()
+endfunction()
+
+## @brief Token must appear in hay before /link (compiler driver sees it).
+function(_bm_tc_tr_before_link hay needle label)
+	string(FIND "${hay}" "/link" _lp)
+	string(FIND "${hay}" "${needle}" _np)
+	if(_np EQUAL -1)
+		_bm_log_message(CORE FATAL
+			"translator ${label}: '${needle}' missing in '${hay}'")
+	endif()
+	if(_lp GREATER -1 AND _np GREATER _lp)
+		_bm_log_message(CORE FATAL
+			"translator ${label}: '${needle}' is after /link in '${hay}'")
 	endif()
 endfunction()
 
@@ -41,11 +67,12 @@ _bm_tc_tr_must_not("${_c}" "-fPIC" "msvc c -fPIC")
 _bm_tc_tr_must_not("${_c}" "-Wall" "msvc c -Wall")
 _bm_tc_tr_must_match("${_c}" "/I/opt/inc" "msvc c /I")
 _bm_tc_tr_must_not("${_ld}" "-fuse-ld" "msvc ld fuse-ld")
+_bm_tc_tr_must_not("${_c}" "-fuse-ld" "msvc c fuse-ld")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "msvc ld IPO off")
 _bm_tc_tr_must_not("${_c}" "/GL" "msvc c IPO off")
 _bm_tc_tr_must_match("${_ld}" "/LIBPATH:/opt/lib" "msvc ld /LIBPATH")
 
-# ----- gcc, IPO off: forced -fuse-ld=bfd, never lld; keep -fPIC -----
+# ----- gcc, IPO off -----
 set(_c "/O2 /I/opt/inc -fPIC")
 set(_cxx "-O2")
 set(_ld "/LIBPATH:/opt/lib -fuse-ld=lld")
@@ -53,21 +80,26 @@ _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_not("${_c}" "/O2" "gcc c /O2")
 _bm_tc_tr_must_match("${_c}" "-I/opt/inc" "gcc c -I")
 _bm_tc_tr_must_match("${_c}" "-fPIC" "gcc c -fPIC")
+_bm_tc_tr_must_match("${_c}" "-fuse-ld=bfd" "gcc c fuse-ld=bfd")
 _bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld fuse-ld=bfd")
+_bm_tc_tr_must_not("${_c}" "-fuse-ld=lld" "gcc c no lld")
 _bm_tc_tr_must_not("${_ld}" "-fuse-ld=lld" "gcc ld no lld")
 _bm_tc_tr_must_match("${_ld}" "-L/opt/lib" "gcc ld -L")
 _bm_tc_tr_must_not("${_c}" "-flto" "gcc c IPO off")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "gcc ld IPO off")
 
-# ----- clang-cl, IPO off: forced -fuse-ld=lld -----
+# ----- clang-cl, IPO off: fuse-ld on C so Meson sanity sees it -----
 set(_c "-I/opt/inc")
 set(_cxx "")
 set(_ld "-fuse-ld=link")
 _bm_tc_translate_flags(_c _cxx _ld "clang-cl")
 _bm_tc_tr_must_not("${_c}" "/GL" "clang-cl c /GL")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "clang-cl ld /LTCG")
+_bm_tc_tr_must_match("${_c}" "-fuse-ld=lld" "clang-cl c fuse-ld=lld")
 _bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang-cl ld fuse-ld=lld")
 _bm_tc_tr_must_not("${_ld}" "-fuse-ld=link" "clang-cl ld no link")
+_bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
+_bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl sanity fuse-ld before /link")
 
 # ----- IPO on via CMake var -----
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
@@ -77,6 +109,9 @@ set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "msvc")
 _bm_tc_tr_must_match("${_c}" "/GL" "msvc c IPO on")
 _bm_tc_tr_must_match("${_ld}" "/LTCG" "msvc ld IPO on")
+_bm_tc_tr_must_not("${_c}" "/LTCG" "msvc c no /LTCG")
+_bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
+_bm_tc_tr_before_link("${_sane}" "/GL" "msvc sanity /GL before /link")
 
 set(_c "-O2")
 set(_cxx "-O2")
@@ -84,7 +119,7 @@ set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_match("${_c}" "-flto" "gcc c IPO on")
 _bm_tc_tr_must_match("${_ld}" "-flto" "gcc ld IPO on")
-_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld IPO on bfd")
+_bm_tc_tr_must_match("${_c}" "-fuse-ld=bfd" "gcc c IPO on bfd")
 _bm_tc_tr_must_not("${_c}" "/GL" "gcc c IPO on no /GL")
 
 set(_c "-O2")
@@ -92,6 +127,7 @@ set(_cxx "-O2")
 set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang c IPO on")
+_bm_tc_tr_must_match("${_c}" "-fuse-ld=lld" "clang c IPO on lld")
 _bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang ld IPO on lld")
 
 set(_c "-O2")
@@ -99,8 +135,11 @@ set(_cxx "-O2")
 set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang-cl")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang-cl c IPO on")
-_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang-cl ld IPO on lld")
+_bm_tc_tr_must_match("${_c}" "-fuse-ld=lld" "clang-cl c IPO on lld")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "clang-cl ld IPO on no /LTCG")
+_bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
+_bm_tc_tr_before_link("${_sane}" "-flto" "clang-cl sanity -flto before /link")
+_bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl sanity lld before /link")
 
 # ----- IPO on via input token, CMake var off -----
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
@@ -113,10 +152,18 @@ _bm_tc_tr_must_not("${_c}" "-flto" "msvc from -flto")
 _bm_tc_tr_must_match("${_c}" "/GL" "msvc from -flto /GL")
 _bm_tc_tr_must_match("${_ld}" "/LTCG" "msvc from -flto /LTCG")
 
+set(_c "-flto -fuse-ld=lld")
+set(_cxx "")
+set(_ld "-flto")
+_bm_tc_translate_flags(_c _cxx _ld "clang-cl")
+_bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
+_bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl from tokens lld before /link")
+_bm_tc_tr_before_link("${_sane}" "-flto" "clang-cl from tokens flto before /link")
+
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION "${_bm_ipo_save}")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE "${_bm_ipo_rel_save}")
 
-_bm_log_message(CORE STATUS "translator: dialect + IPO + fuse-ld contracts OK")
+_bm_log_message(CORE STATUS "translator: dialect + IPO + /link-order contracts OK")
 
 add_custom_target(tc-translate
 	COMMAND ${CMAKE_COMMAND} -E echo "translator fixture already ran at configure"
