@@ -244,7 +244,7 @@ end of `CMAKE_SOURCE_DIR`.
 | `<id>` | `INTERFACE`. Depends on `<id>_install`. **This is what you link.** |
 | `<id>_configure` | Nested CMake or Meson setup |
 | `<id>_build` | Compile |
-| `<id>_install` | Install into the shared prefix (the script is a no-op under `NOINSTALL`) |
+| `<id>_install` | Publish into the shared prefix when the id is not `NOINSTALL`. Always runs oficios (`RENAME`, outputs, `STRIPRES`, `PC`) on the artifact that exists (prefix or BUILDDIR). Does **not** call `cmake --install` / `meson install` under `NOINSTALL` |
 | produced libs | `STATIC` / `SHARED` **IMPORTED** files under the prefix (or the build dir) |
 | produced exe | File under `BINDIR` (or the build dir). No `IMPORTED` executable on `<id>` |
 
@@ -261,9 +261,11 @@ target is FATAL.
 BuildMaster assigns `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and creates it.
 There is no public builddir argument and no `ensure_build_dir`.
 
-`ninja` and the archiver come up with the tools tree. `cmake`, `meson`,
-`git`, and `file` start the first time a component actually needs them.
-Extra tools (`pkgconfig`, …) start only from `REQUIRE_TOOL`.
+`ninja` comes up with the tools tree. The archiver is the active
+`TOOLCHAIN=` profile (`CMAKE_AR`, Meson `[binaries] ar` / `ld`), not a
+tool. `cmake`, `meson`, `git`, and `file` start the first time a
+component actually needs them. Extra tools (`pkgconfig`, …) start only
+from `REQUIRE_TOOL`.
 
 ---
 
@@ -273,7 +275,8 @@ Extra tools (`pkgconfig`, …) start only from `REQUIRE_TOOL`.
 
 Order-only edge. At materialize time `dest` resolves as the first match:
 
-1. Registered component id → `<id>_install` (or `<id>_build` when that dest is `NOINSTALL`)
+1. Registered component id → `<id>_install` (publishing **and**
+   `NOINSTALL`: oficios on the produced stem)
 2. Registered **meta** id → `<id>_install`
 3. Name matching `*_install` / `*_configure` / `*_build`
 4. Existing CMake target
@@ -557,8 +560,11 @@ have no generator.
 ## No-install components and repack
 
 `NOINSTALL` keeps artifacts under the component build dir. They never
-land in the shared prefix. The `<id>_install` target still exists; the
-script does not run `cmake --install`.
+land in the shared prefix. The `<id>_install` target still exists: it
+does not run `cmake --install` / `meson install`, but it **does** run
+oficios (`RENAME` included) so the BUILDDIR stem is the produced name
+(`foo.lib`, not `foo-static.lib`). REPACK and `buildmaster_depend`
+wait on that `_install`, not on `_build`.
 
 `buildmaster_meta(id title "REPACK")` plus `buildmaster_meta_add`
 merges every produced **static** archive of the member leaves into one
@@ -732,9 +738,12 @@ links that library archive only.
 install use that profile. A meta `TOOLCHAIN` copies onto members that
 did not pin one.
 
-Binutils in the profile (`ar`, `ranlib`) are resolved to absolute
-paths before the component toolchain file is written. Nested CMake
-must not run `ar` relative to the component bindir.
+The profile owns compilers **and** binutils. `CMAKE_AR` and Meson
+`[binaries] ar` / `ld` follow the profile (`msvc` → `lib.exe` +
+`link.exe`, `clang-cl` → `llvm-lib` + `lld-link`, `clang` on Linux →
+`llvm-ar` + `ld.lld`, `gcc` → binutils `ar` and the driver linker).
+A clang-cl parent does not leave `llvm-lib` on an `msvc` leaf.
+Paths are absolute before the component toolchain file is written.
 
 ---
 

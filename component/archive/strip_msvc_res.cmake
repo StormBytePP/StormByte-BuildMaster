@@ -10,11 +10,11 @@
 # Missing archive, non-msvc_lib archiver, empty list, or already-stripped
 # members are not fatal.
 #
-# This file is also included from component/archive/helpers.cmake so install_exec
-# and other -P scripts can call the function. Script-mode body MUST only run
+# This file is also included from component/archive/helpers.cmake so install
+# -P scripts can call the function. Script-mode body MUST only run
 # when *this* file is the -P entry point. CMAKE_SCRIPT_MODE_FILE is set for
-# *any* cmake -P (e.g. merge_static_archives.cmake); comparing against
-# CMAKE_CURRENT_LIST_FILE is the include-safe guard.
+# *any* cmake -P; comparing against CMAKE_CURRENT_LIST_FILE is the
+# include-safe guard.
 
 if(NOT COMMAND buildmaster_message)
 	if(DEFINED BUILDMASTER_SRCDIR AND EXISTS "${BUILDMASTER_SRCDIR}/log.cmake")
@@ -27,19 +27,26 @@ if(NOT COMMAND buildmaster_message)
 	endif()
 endif()
 
-if(NOT COMMAND _bm_tools_archiver_find)
-	include("${BUILDMASTER_SRCDIR}/tools/bootstrap/archiver/helpers.cmake")
-endif()
+## @brief Classify CMAKE_AR (`msvc_lib` vs `gnu_ar`).
+## @param[in]  path      Archiver path.
+## @param[out] out_style Parent-scope `msvc_lib` or `gnu_ar`.
+function(_bm_component_archive_ar_style path out_style)
+	get_filename_component(_name "${path}" NAME)
+	string(TOLOWER "${_name}" _name_l)
+	set(_style "gnu_ar")
+	if(_name_l MATCHES "llvm-lib" OR _name_l STREQUAL "lib"
+			OR _name_l MATCHES "lib\\.exe$")
+		set(_style "msvc_lib")
+	endif()
+	set(${out_style} "${_style}" PARENT_SCOPE)
+endfunction()
 
 ## @brief Strip `*.res` members from one MSVC/clang-cl static archive.
 ## @param[in] lib Absolute path to the `.lib` (canonical name, post-RENAME).
-## @note Resolves the archiver via `_bm_tools_archiver_find`. If the style
-##       is not `msvc_lib` (Unix `ar` / `llvm-ar`), this is a silent no-op.
+## @note Uses `-DCMAKE_AR=` / `CMAKE_AR` of the leaf toolchain overlay.
+##       Does not search PATH. Style other than `msvc_lib` → silent no-op.
 ## @note Lists members with `/LIST`. A member is removed only when its
-##       basename matches `*.res` / `*.RES` (case-insensitive). Paths such
-##       as `foo.dir\bar.res` are accepted; `.obj`, `.pdb`, and names that
-##       merely contain `res` are not.
-## @note `/REMOVE` uses the member string exactly as `/LIST` printed it.
+##       basename matches `*.res` / `*.RES`. `/REMOVE` uses the `/LIST` string.
 ## @note Missing `lib`, failed `/LIST`, or failed `/REMOVE` of one member
 ##       do not abort the parent install (`WARNING` / `DEBUG` only).
 function(_bm_component_archive_strip_msvc_res lib)
@@ -54,11 +61,13 @@ function(_bm_component_archive_strip_msvc_res lib)
 		return()
 	endif()
 
-	set(_hint "")
-	if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
-		set(_hint "${CMAKE_AR}")
+	if(NOT DEFINED CMAKE_AR OR CMAKE_AR STREQUAL "")
+		_bm_log_message(ARCHIVE DEBUG "strip_msvc_res: CMAKE_AR unset (skip)")
+		_bm_log_message(ARCHIVE LOWLEVEL "Exiting _bm_component_archive_strip_msvc_res")
+		return()
 	endif()
-	_bm_tools_archiver_find(_bm_ar _bm_style "${_hint}")
+
+	_bm_component_archive_ar_style("${CMAKE_AR}" _bm_style)
 	if(NOT _bm_style STREQUAL "msvc_lib")
 		_bm_log_message(ARCHIVE DEBUG
 			"strip_msvc_res: archiver style '${_bm_style}' is not msvc_lib (skip)")
@@ -67,7 +76,7 @@ function(_bm_component_archive_strip_msvc_res lib)
 	endif()
 
 	execute_process(
-		COMMAND "${_bm_ar}" /NOLOGO /LIST "${lib}"
+		COMMAND "${CMAKE_AR}" /NOLOGO /LIST "${lib}"
 		OUTPUT_VARIABLE _list
 		ERROR_VARIABLE _err
 		RESULT_VARIABLE _rc
@@ -97,7 +106,7 @@ function(_bm_component_archive_strip_msvc_res lib)
 
 		_bm_log_message(ARCHIVE INFO "strip_msvc_res: removing '${_mem}' from ${lib}")
 		execute_process(
-			COMMAND "${_bm_ar}" /NOLOGO "/REMOVE:${_mem}" "${lib}"
+			COMMAND "${CMAKE_AR}" /NOLOGO "/REMOVE:${_mem}" "${lib}"
 			RESULT_VARIABLE _rc2
 			OUTPUT_VARIABLE _out2
 			ERROR_VARIABLE _err2

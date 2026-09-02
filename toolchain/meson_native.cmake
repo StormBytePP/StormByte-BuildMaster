@@ -1,9 +1,6 @@
 # =============================================================================
-# Meson native files (one per toolchain profile)
-# -----------------------------------------------------------------------------
-# Written under ${BUILDMASTER_SCRIPTSDIR}/meson/native_<profile>.ini so nested
-# Meson setups can use --native-file and pick up ccache/sccache + the profile
-# compilers the same way CMake uses CMAKE_*_COMPILER_LAUNCHER.
+# toolchain/meson_native.cmake — Meson native files per toolchain profile
+# =============================================================================
 #
 # Variables set (and exported into the toolchain dump):
 #   BUILDMASTER_MESON_NATIVE_FILE           - parent / default job compilers
@@ -16,8 +13,6 @@ include("${CMAKE_CURRENT_LIST_DIR}/../log.cmake")
 ## @brief Quote a filesystem path for a Meson native-file string list entry.
 ## @param[out] out_var Parent-scope variable receiving a single-quoted path.
 ## @param[in]  path    Path to quote (backslashes become `/`).
-## @note Escapes embedded single quotes as `\'`. Result looks like
-##       `'C:/Program Files/ccache/ccache'`. Used inside `[binaries]` lists.
 function(_bm_tc_meson_native_quote out_var path)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_quote")
 	string(REPLACE "\\" "/" path "${path}")
@@ -27,11 +22,10 @@ function(_bm_tc_meson_native_quote out_var path)
 endfunction()
 
 ## @brief Build one Meson [binaries] assignment line.
-## @param[out] out_var Parent-scope variable receiving e.g.
-##            `c = ['sccache', 'cl']` or `c = ['cl']`.
-## @param[in] name Binary key (`c`, `cpp`, …).
-## @param[in] compiler Compiler path or short name (must not be empty).
-## @param[in] launcher Optional ccache/sccache path or name; empty = no launcher.
+## @param[out] out_var Parent-scope `c = ['sccache', 'cl']` or `c = ['cl']`.
+## @param[in] name Binary key (`c`, `cpp`, `ar`, `ld`, …).
+## @param[in] compiler Path or short name (empty → no line).
+## @param[in] launcher Optional ccache/sccache; empty = none. Never used for ar/ld.
 function(_bm_tc_meson_native_bin_line out_var name compiler launcher)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_bin_line")
 	if(compiler STREQUAL "")
@@ -50,16 +44,14 @@ function(_bm_tc_meson_native_bin_line out_var name compiler launcher)
 endfunction()
 
 ## @brief Resolve the active compiler launcher (ccache or sccache).
-## @param[out] out_var Parent-scope variable; empty when no launcher is set.
-## @note Prefers CMAKE_C_COMPILER_LAUNCHER, then CMAKE_CXX_COMPILER_LAUNCHER,
-##       then the matching ENV values. Uses the first list element when set.
+## @param[out] out_var Parent-scope; empty when no launcher is set.
 function(_bm_tc_meson_native_resolve_launcher out_var)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_resolve_launcher")
 	set(_l "")
-	if(NOT "${CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
-		list(GET CMAKE_C_COMPILER_LAUNCHER 0 _l)
-	elseif(NOT "${CMAKE_CXX_COMPILER_LAUNCHER}" STREQUAL "")
-		list(GET CMAKE_CXX_COMPILER_LAUNCHER 0 _l)
+	if(DEFINED CMAKE_C_COMPILER_LAUNCHER AND NOT CMAKE_C_COMPILER_LAUNCHER STREQUAL "")
+		set(_l "${CMAKE_C_COMPILER_LAUNCHER}")
+	elseif(DEFINED CMAKE_CXX_COMPILER_LAUNCHER AND NOT CMAKE_CXX_COMPILER_LAUNCHER STREQUAL "")
+		set(_l "${CMAKE_CXX_COMPILER_LAUNCHER}")
 	elseif(DEFINED ENV{CMAKE_C_COMPILER_LAUNCHER} AND NOT "$ENV{CMAKE_C_COMPILER_LAUNCHER}" STREQUAL "")
 		set(_l "$ENV{CMAKE_C_COMPILER_LAUNCHER}")
 	elseif(DEFINED ENV{CMAKE_CXX_COMPILER_LAUNCHER} AND NOT "$ENV{CMAKE_CXX_COMPILER_LAUNCHER}" STREQUAL "")
@@ -72,16 +64,8 @@ endfunction()
 ## @brief Meson [built-in options] lines for the shared BM prefix.
 ## @param[out] out_block Parent-scope text (may be empty).
 ## @param[in]  profile_key `default` / `gcc` / `clang` / `clang-cl` / `msvc`.
-## @note Meson `cc.find_library` / compile probes ignore env `LDFLAGS`.
-##       The `-I`/`-L` (or `/I`/`/LIBPATH:`) of the unique install prefix
-##       must live in the native file or FFmpeg picks system `.so`
-##       (`libmp3lame.so.0`) even when `libmp3lame.a` is in the prefix.
-## @note Do **not** put component `LINKFLAGS=` here. Those stay on
-##       `-Dc_link_args` of that component's setup.
-## @note MSVC / clang-cl use `/I` and `/LIBPATH:`. Unix uses `-I` / `-L`.
 function(_bm_tc_meson_native_prefix_options out_block profile_key)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_prefix_options")
-	set(_block "")
 	if(NOT DEFINED BUILDMASTER_INSTALL_DIR OR BUILDMASTER_INSTALL_DIR STREQUAL "")
 		set(${out_block} "" PARENT_SCOPE)
 		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_meson_native_prefix_options")
@@ -125,15 +109,70 @@ function(_bm_tc_meson_native_prefix_options out_block profile_key)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_meson_native_prefix_options")
 endfunction()
 
+## @brief Archiver path for a Meson native file.
+## @param[in]  profile_key `default` or a known profile name.
+## @param[out] out_ar      Parent-scope path; empty if none.
+function(_bm_tc_meson_native_ar profile_key out_ar)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_ar")
+	set(_ar "")
+	string(TOLOWER "${profile_key}" _pk)
+	if(_pk STREQUAL "" OR _pk STREQUAL "default")
+		if(CMAKE_AR AND NOT CMAKE_AR STREQUAL "" AND EXISTS "${CMAKE_AR}")
+			set(_ar "${CMAKE_AR}")
+		endif()
+	elseif(COMMAND _bm_tc_archiver_resolve)
+		_bm_tc_archiver_resolve("${_pk}" _ar _style)
+		unset(_style)
+	endif()
+	set(${out_ar} "${_ar}" PARENT_SCOPE)
+	_bm_log_message(TOOLCHAIN DEBUG "Meson native ar (${profile_key}) → ${_ar}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_meson_native_ar")
+endfunction()
+
+## @brief Linker path for a Meson native file (`[binaries] ld`).
+## @param[in]  profile_key `default` or a known profile name.
+## @param[out] out_ld      Parent-scope path; empty if the profile has no linker.
+## @note `gcc` leaves BM_TC_LINKER empty (bfd via the driver). `msvc` /
+##       `clang-cl` link through `cl`/`clang-cl`; `ld` is still written
+##       when BM_TC_LINKER is set so the file documents link.exe / lld-link.
+function(_bm_tc_meson_native_ld profile_key out_ld)
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_ld")
+	set(_ld "")
+	string(TOLOWER "${profile_key}" _pk)
+	if(_pk STREQUAL "" OR _pk STREQUAL "default")
+		if(CMAKE_LINKER AND NOT CMAKE_LINKER STREQUAL "" AND EXISTS "${CMAKE_LINKER}")
+			set(_ld "${CMAKE_LINKER}")
+		endif()
+	else()
+		_bm_tc_load_profile("${_pk}")
+		if(NOT BM_TC_LINKER STREQUAL "")
+			if(_pk STREQUAL "msvc")
+				_bm_tc_resolve_msvc_tool(_ld "${BM_TC_LINKER}")
+			elseif(IS_ABSOLUTE "${BM_TC_LINKER}" AND EXISTS "${BM_TC_LINKER}")
+				set(_ld "${BM_TC_LINKER}")
+			else()
+				find_program(_bm_tc_ld NAMES "${BM_TC_LINKER}" "${BM_TC_LINKER}.exe")
+				if(_bm_tc_ld)
+					_bm_path_normalize(_ld "${_bm_tc_ld}")
+				else()
+					_bm_log_message(TOOLCHAIN FATAL
+						"toolchain profile '${_pk}': linker '${BM_TC_LINKER}' not found")
+				endif()
+				unset(_bm_tc_ld CACHE)
+			endif()
+		endif()
+	endif()
+	set(${out_ld} "${_ld}" PARENT_SCOPE)
+	_bm_log_message(TOOLCHAIN DEBUG "Meson native ld (${profile_key}) → ${_ld}")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_meson_native_ld")
+endfunction()
+
 ## @brief Write (or overwrite) one Meson native file for a profile key.
 ## @param[in] profile_key `default` or a known toolchain name (`msvc`, …).
 ## @param[in] c_compiler C compiler path or short name.
 ## @param[in] cxx_compiler C++ compiler path or short name (falls back to C).
 ## @param[in] ARGN Optional `LAUNCHER <name-or-path>` override.
-## @note Sets BUILDMASTER_MESON_NATIVE_FILE or BUILDMASTER_MESON_NATIVE_FILE_<key>
-##       in the parent scope and registers them in the toolchain export registry.
-## @note Also writes `[built-in options]` with the shared prefix search
-##       paths so Meson probes see bundled static libs.
+## @note `[binaries] ar` / `ld` come from the profile. Launcher is only on c/cpp.
 function(_bm_tc_write_meson_native_file profile_key c_compiler cxx_compiler)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_meson_native_file")
 	cmake_parse_arguments(ARG "" "LAUNCHER" "" ${ARGN})
@@ -177,6 +216,10 @@ function(_bm_tc_write_meson_native_file profile_key c_compiler cxx_compiler)
 
 	_bm_tc_meson_native_bin_line(_line_c   "c"   "${c_compiler}"   "${_launcher}")
 	_bm_tc_meson_native_bin_line(_line_cpp "cpp" "${cxx_compiler}" "${_launcher}")
+	_bm_tc_meson_native_ar("${_label}" _ar)
+	_bm_tc_meson_native_bin_line(_line_ar "ar" "${_ar}" "")
+	_bm_tc_meson_native_ld("${_label}" _ld)
+	_bm_tc_meson_native_bin_line(_line_ld "ld" "${_ld}" "")
 	_bm_tc_meson_native_prefix_options(_prefix_block "${_label}")
 
 	set(_content "# Auto-generated by StormByte-BuildMaster (toolchain) — do not edit\n")
@@ -187,6 +230,12 @@ function(_bm_tc_write_meson_native_file profile_key c_compiler cxx_compiler)
 	endif()
 	if(NOT _line_cpp STREQUAL "")
 		string(APPEND _content "${_line_cpp}\n")
+	endif()
+	if(NOT _line_ar STREQUAL "")
+		string(APPEND _content "${_line_ar}\n")
+	endif()
+	if(NOT _line_ld STREQUAL "")
+		string(APPEND _content "${_line_ld}\n")
 	endif()
 	if(NOT _prefix_block STREQUAL "")
 		string(APPEND _content "\n${_prefix_block}")
@@ -202,9 +251,8 @@ function(_bm_tc_write_meson_native_file profile_key c_compiler cxx_compiler)
 endfunction()
 
 ## @brief Resolve which native-file path a Meson component should use.
-## @param[out] out_var Parent-scope variable receiving the path (may be empty).
-## @param[in] ARGN Optional `TOOLCHAIN <name>`. Empty = this process's compiler
-##            family (`CMAKE_C_COMPILER_ID` / clang-cl), then the default file.
+## @param[out] out_var Parent-scope path (may be empty).
+## @param[in] ARGN Optional `TOOLCHAIN <name>`.
 function(_bm_tc_get_meson_native_file out_var)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_get_meson_native_file")
 	cmake_parse_arguments(ARG "" "TOOLCHAIN" "" ${ARGN})
@@ -246,11 +294,6 @@ function(_bm_tc_get_meson_native_file out_var)
 endfunction()
 
 ## @brief Generate native files for the parent job and every known profile.
-## @note Called once when the toolchain module finishes initializing (primary
-##       bootstrap). Profile compilers use short names from profiles/*.cmake;
-##       MSVC-style tools are resolved to absolute paths when possible so Ninja
-##       and Meson do not treat bare `cl` as relative to the build dir.
-##       Safe to call again; files are overwritten.
 function(_bm_tc_init_meson_native_files)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_init_meson_native_files")
 	if(NOT DEFINED BUILDMASTER_SCRIPTSDIR OR BUILDMASTER_SCRIPTSDIR STREQUAL "")
@@ -261,7 +304,6 @@ function(_bm_tc_init_meson_native_files)
 
 	_bm_tc_meson_native_resolve_launcher(_launch)
 
-	# Parent / default: whatever the host project is already using
 	set(_c "${CMAKE_C_COMPILER}")
 	set(_cxx "${CMAKE_CXX_COMPILER}")
 	if(_c STREQUAL "" AND NOT _cxx STREQUAL "")
@@ -278,7 +320,6 @@ function(_bm_tc_init_meson_native_files)
 		_bm_log_message(TOOLCHAIN DEBUG "Skipping default Meson native file (compilers not set yet)")
 	endif()
 
-	# One file per known profile (platform-filtered)
 	if(NOT DEFINED BUILDMASTER_KNOWN_TOOLCHAINS)
 		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_init_meson_native_files")
 		return()
@@ -301,7 +342,6 @@ function(_bm_tc_init_meson_native_files)
 			continue()
 		endif()
 
-		# Load profile into this function scope only
 		include("${_profile_file}")
 
 		set(_pc "${BM_TC_C_COMPILER}")
@@ -310,7 +350,6 @@ function(_bm_tc_init_meson_native_files)
 			set(_px "${_pc}")
 		endif()
 
-		# Prefer absolute paths for MSVC driver tools
 		if(_prof STREQUAL "msvc" OR _prof STREQUAL "clang-cl")
 			if(COMMAND _bm_tc_resolve_msvc_tool)
 				_bm_tc_resolve_msvc_tool(_pc_res "${_pc}")
@@ -319,7 +358,6 @@ function(_bm_tc_init_meson_native_files)
 				set(_px "${_px_res}")
 			endif()
 		else()
-			# Unix: resolve via find_program when not absolute
 			if(NOT IS_ABSOLUTE "${_pc}")
 				find_program(_bm_nc NAMES "${_pc}" "${_pc}.exe")
 				if(_bm_nc)

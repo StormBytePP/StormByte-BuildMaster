@@ -97,11 +97,8 @@ endfunction()
 ## @note Copies the parent dump first (unified install prefix). For
 ##       `TOOLCHAIN=msvc` the copy is stripped of compiler / AR / linker /
 ##       IPO lines so a clang-cl host cannot pin `llvm-lib`.
-## @note `msvc` resolves `cl` / `lib` / `link` with
-##       `_bm_tc_resolve_msvc_tool` (vswhere). It must not `find_program`
-##       `llvm-ar`. Other profiles keep the existing `find_program` list.
-## @note Overlay `FORCE`s the profile compilers and binutils. `clang-cl`
-##       still uses LLVM tools; this macro does not change that profile.
+## @note AR comes from `_bm_tc_archiver_resolve` (profile BM_TC_AR).
+##       There is no tools/archiver override.
 macro(_bm_tc_write_component path toolchain_name)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_write_component")
 	_bm_path_normalize(_bm_tc_self "${path}")
@@ -135,18 +132,9 @@ macro(_bm_tc_write_component path toolchain_name)
 		endif()
 	endif()
 
-	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_AR}")
-		if("${toolchain_name}" STREQUAL "msvc")
-			_bm_tc_resolve_msvc_tool(BM_TC_AR "${BM_TC_AR}")
-		elseif(BUILDMASTER_TOOLS_ARCHIVER AND BUILDMASTER_TOOLS_ARCHIVER_STYLE STREQUAL "gnu_ar")
-			set(BM_TC_AR "${BUILDMASTER_TOOLS_ARCHIVER}")
-		else()
-			find_program(_bm_tc_ar_abs NAMES "${BM_TC_AR}" llvm-ar gcc-ar ar)
-			if(_bm_tc_ar_abs)
-				set(BM_TC_AR "${_bm_tc_ar_abs}")
-			endif()
-			unset(_bm_tc_ar_abs)
-		endif()
+	if(DEFINED BM_TC_AR AND NOT BM_TC_AR STREQUAL "")
+		_bm_tc_archiver_resolve("${toolchain_name}" BM_TC_AR _bm_tc_ar_style)
+		unset(_bm_tc_ar_style)
 	endif()
 
 	if(DEFINED BM_TC_RANLIB AND NOT BM_TC_RANLIB STREQUAL "" AND NOT IS_ABSOLUTE "${BM_TC_RANLIB}")
@@ -177,9 +165,6 @@ macro(_bm_tc_write_component path toolchain_name)
 		endif()
 		if(NOT BM_TC_CXX_COMPILER STREQUAL "")
 			_bm_tc_resolve_msvc_tool(BM_TC_CXX_COMPILER "${BM_TC_CXX_COMPILER}")
-		endif()
-		if(NOT BM_TC_AR STREQUAL "")
-			_bm_tc_resolve_msvc_tool(BM_TC_AR "${BM_TC_AR}")
 		endif()
 		if(NOT BM_TC_LINKER STREQUAL "")
 			_bm_tc_resolve_msvc_tool(BM_TC_LINKER "${BM_TC_LINKER}")

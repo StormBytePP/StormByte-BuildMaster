@@ -93,6 +93,7 @@ add_subdirectory(slow-configure)
 # TOOLCHAIN swap
 # ---------------------------------------------------------------------------
 add_subdirectory(toolchain)
+add_subdirectory(toolchain-sanity)
 add_subdirectory(tc-prefix)
 
 # ---------------------------------------------------------------------------

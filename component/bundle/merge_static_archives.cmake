@@ -1,5 +1,6 @@
-# cmake -DOUTPUT=... -DINPUTS=a.a,b.a -DBUILDMASTER_SRCDIR=... [-DCMAKE_AR=...] -P merge_static_archives.cmake
+# cmake -DOUTPUT=... -DINPUTS=a.a,b.a -DBUILDMASTER_SRCDIR=... -DCMAKE_AR=... -P
 # INPUTS is comma-separated.
+# CMAKE_AR is the publisher profile archiver (lib.exe when TOOLCHAIN=msvc).
 
 if(NOT BUILDMASTER_SRCDIR)
 	get_filename_component(_here "${CMAKE_CURRENT_LIST_DIR}" DIRECTORY)
@@ -29,10 +30,22 @@ endforeach()
 get_filename_component(_out_dir "${OUTPUT}" DIRECTORY)
 file(MAKE_DIRECTORY "${_out_dir}")
 
-include("${BUILDMASTER_SRCDIR}/tools/bootstrap/archiver/helpers.cmake")
-_bm_tools_archiver_find(_ar _style)
+if(NOT CMAKE_AR OR CMAKE_AR STREQUAL "")
+	_bm_log_message(BUNDLE FATAL
+		"merge_static_archives: -DCMAKE_AR= is required (toolchain profile AR)")
+endif()
+if(NOT EXISTS "${CMAKE_AR}")
+	_bm_log_message(BUNDLE FATAL
+		"merge_static_archives: CMAKE_AR missing: ${CMAKE_AR}")
+endif()
 
-# Apple ar has no MRI (-M). Prefer libtool -static.
+get_filename_component(_ar_name "${CMAKE_AR}" NAME)
+string(TOLOWER "${_ar_name}" _ar_l)
+set(_style "gnu_ar")
+if(_ar_l MATCHES "llvm-lib" OR _ar_l STREQUAL "lib" OR _ar_l MATCHES "lib\\.exe$")
+	set(_style "msvc_lib")
+endif()
+
 if(APPLE)
 	find_program(_libtool NAMES libtool)
 	if(NOT _libtool)
@@ -47,25 +60,24 @@ if(APPLE)
 	if(NOT _rc EQUAL 0)
 		_bm_log_message(BUNDLE FATAL "merge_static_archives: libtool -static failed (${_rc}): ${_err}")
 	endif()
-	_bm_log_message(BUNDLE INFO "merged ${OUTPUT} (${_inputs}) with libtool -static")
+	_bm_log_message(BUNDLE INFO "merged ${OUTPUT} with libtool -static")
 	return()
 endif()
 
 if(_style STREQUAL "msvc_lib")
 	execute_process(
-		COMMAND "${_ar}" /NOLOGO "/OUT:${OUTPUT}" ${_inputs}
+		COMMAND "${CMAKE_AR}" /NOLOGO "/OUT:${OUTPUT}" ${_inputs}
 		RESULT_VARIABLE _rc
 		OUTPUT_VARIABLE _out
 		ERROR_VARIABLE _err
 	)
 	if(NOT _rc EQUAL 0)
-		_bm_log_message(BUNDLE FATAL "merge_static_archives: ${_ar} /OUT failed (${_rc}): ${_err}")
+		_bm_log_message(BUNDLE FATAL "merge_static_archives: ${CMAKE_AR} /OUT failed (${_rc}): ${_err}")
 	endif()
-	_bm_log_message(BUNDLE INFO "merged ${OUTPUT} with ${_ar} (msvc_lib)")
+	_bm_log_message(BUNDLE INFO "merged ${OUTPUT} with ${CMAKE_AR} (msvc_lib)")
 	return()
 endif()
 
-# GNU / LLVM ar MRI
 set(_mri "${OUTPUT}.mri")
 set(_mri_txt "CREATE ${OUTPUT}\n")
 foreach(_in IN LISTS _inputs)
@@ -75,7 +87,7 @@ string(APPEND _mri_txt "SAVE\nEND\n")
 file(WRITE "${_mri}" "${_mri_txt}")
 
 execute_process(
-	COMMAND "${_ar}" -M
+	COMMAND "${CMAKE_AR}" -M
 	INPUT_FILE "${_mri}"
 	RESULT_VARIABLE _rc
 	OUTPUT_VARIABLE _out
@@ -85,4 +97,4 @@ file(REMOVE "${_mri}")
 if(NOT _rc EQUAL 0)
 	_bm_log_message(BUNDLE FATAL "merge_static_archives: ar -M failed (${_rc}): ${_err}")
 endif()
-_bm_log_message(BUNDLE INFO "merged ${OUTPUT} with ${_ar} (gnu_ar)")
+_bm_log_message(BUNDLE INFO "merged ${OUTPUT} with ${CMAKE_AR} (gnu_ar)")

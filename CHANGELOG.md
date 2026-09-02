@@ -30,19 +30,33 @@ How a component is written, every optstr key, and what 2.x broke versus
 
 ### ToDo
 
-- [ ] Extract post-install oficios into `component/install_rules/*.cmake.in` (rename, outputs, strip_res, pc).
-- [ ] Oficio templates are unconditional: no `if(@_BM_PC_ENABLED@)` / rename / strip feature flags. Data-only checks stay (`EXISTS`, “is this a `.lib`?”).
-- [ ] Share those templates between CMake and Meson; placeholders for log channel (`CMAKE` / `MESON`), title, and outputs.
-- [ ] Mini writers `_bm_install_rule_<oficio>()` live in `component/install_rules/` (not in the body of `stages`): `configure_file` their `.in` and return the path.
-- [ ] Per-id list `BUILDMASTER_COMPONENT_${id}_INSTALL_OFICIOS`: each optstr registers its own (`pc` from `options/pc.cmake`); library kind registers `outputs`; rename/strip are registered by whoever currently sets `_BM_*_ENABLED`.
-- [ ] `stages` only walks that list, calls the minis, and writes `scripts/{cmake,meson}/<id>_install_rules.cmake` (not a `.in`) with `include(...)` of the emitted oficios.
-- [ ] Rename `install_exec.cmake.in` → `install_library.cmake.in` and the generated `<id>_install_exec.cmake` → `<id>_install_library.cmake`.
-- [ ] Library wrapper: fail-marker, log, `cmake --install` / `meson install` (skip on NOINSTALL), then `include(rules)` or `@_BM_INSTALL_INCLUDES@`. FATAL if the rules path is empty or missing.
-- [ ] Update `install.cmake.in` and grep out `install_exec` (stages, harness expected).
-- [ ] Drop the `_BM_PC_ENABLED` / `_BM_RENAME_ENABLED` / `_BM_STRIPRES_ENABLED` generate-time sack from `graph/create`; replace it with the oficio list.
-- [ ] Smoke + negative harness must keep the current contract. Do not rename the internal `_BM_BUILDONLY` token in this step.
-- [ ] `validate/{component,meta,group,tool}` plus `validate/helpers.cmake`; move *contract* FATALs there (factory / options / meta / group / demand). *Operation* FATALs stay put (`-P` templates, merge, download, git reset, missing ninja).
-- [ ] Allow BuildMaster anywhere on disk, not only as a sibling of `thirdparty`. Sole rule: `add_subdirectory(BM)` before first use.
+- [ ] Split today’s `<id>_install` into explicit phases. `_install` =
+      `cmake --install` / `meson install` only (absent when
+      `NOINSTALL`). `_post_install` = oficios on the artifact that
+      actually exists (prefix after `--install`, BUILDDIR when
+      `NOINSTALL`) plus optional git reset. Never rename-then-install:
+      `install(FILES)` still sees upstream names. REPACK /
+      `buildmaster_depend` that need the produced stem wait
+      `_post_install`. Do not retarget in a drive-by patch.
+- [ ] `BUILDMASTER_JOBS` (not `-j` / `NPROC`): ninja job pool for BM
+      oficios. Default `1` = current serial behaviour. Drop
+      `USES_TERMINAL` on those custom commands so the pool can run.
+      STATUS lines go through `_bm_log_message` with
+      `file(LOCK)` so parallel jobs do not interleave. COMMENT empty
+      or one short label; the silent runner must not swallow the log.
+      Optional wrapper macro `_bm_custom_command` / `_bm_custom_target`
+      (pool + no `USES_TERMINAL`). Pair with ninja `-l` when JOBS is
+      high so the machine does not melt.
+- [ ] `validate/{component,meta,group,tool}` plus
+      `validate/helpers.cmake`; move *contract* FATALs there
+      (factory / options / meta / group / demand). *Operation*
+      FATALs stay put (`-P` templates, merge, download, git reset,
+      missing ninja).
+- [ ] Allow BuildMaster anywhere on disk, not only as a sibling of
+      `thirdparty`. Sole rule: `add_subdirectory(BM)` before first use.
+- [ ] Smoke + negative harness must keep the current contract when
+      any of the items above land. Do not rename the internal
+      `_BM_BUILDONLY` token as a side effect.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
@@ -195,7 +209,10 @@ and the declaration shape changed.
   `buildmaster_meta(id title "REPACK")` plus `buildmaster_meta_add`
   merges every produced *static* archive of the member leaves into
   one prefix archive named after the meta id. Wait edge is `_install`
-  for a publishing leaf and `_build` for `NOINSTALL`. Shared members
+  for every static member, including `NOINSTALL`. That target does
+  not call `cmake --install` / `meson install` when `NOINSTALL`; it
+  only runs oficios (rename, outputs, strip) on the BUILDDIR so
+  REPACK sees the produced stem, not `foo-static.lib`. Shared members
   that install stay INTERFACE (WARNING: they are not folded into the
   pack). `NOINSTALL` + shared as a `REPACK` member is FATAL (the
   `.so`/`.dll` is not in the prefix and the builddir is not public).
@@ -230,11 +247,30 @@ and the declaration shape changed.
 - **`BUILDMASTER_LOG_NOCOLOR`.** Truthy env or `-D` (`1` / `ON` / `TRUE` / `YES`) stores `ON` and turns ANSI off; anything else is `OFF` (color on). Same pattern as `BUILDMASTER_VERBOSE`. Default `OFF`. Written into `propagate_vars` and the toolchain dump so nested `-P` scripts see the same switch.
 - **Silent env runner** replays nested `[BuildMaster/…]` lines live; the full child log is dumped on failure.
 - Prefix search injection so nested compiles see the shared install tree.
-- Harness + consumer tests for recursive cmake/meson, helper `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta ignore), hooks, late link, raw `LINK=`, duplicate edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL), `REPACK` meta and component, private-headers `-I`, `FILES=` unpack / SOURCE, FILES-on-meta FATAL, outline groups (CMake + Meson leaves), `NOINSTALL` (build without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path, `BUILDONLY` removed / `NOINSTALL=OFF` FATAL, mode `executable` (plain CMake/Meson, link a BM static, rename stem, NOINSTALL, REPACK publisher that ignores an executable dest), negatives `exe-pc` / `exe-repack` / `exe-empty-produced`.
+- Harness + consumer tests for recursive cmake/meson, helper `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE leak; meta ignore), hooks, late link, raw `LINK=`, duplicate edges, `GIT={RESET;PATCH=…}`, reset-then-patch, PC clobber (install FATAL), `REPACK` meta and component (including NOINSTALL members that emit `*-static` until `_install` rename), private-headers `-I`, `FILES=` unpack / SOURCE, FILES-on-meta FATAL, outline groups (CMake + Meson leaves), `NOINSTALL` (build without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path, `BUILDONLY` removed / `NOINSTALL=OFF` FATAL, mode `executable` (plain CMake/Meson, link a BM static, rename stem, NOINSTALL, REPACK publisher that ignores an executable dest), negatives `exe-pc` / `exe-repack` / `exe-empty-produced`, toolchain profile `ar`/`ld` text check.
 - **Harness entry `run_buildmaster_main`.** One target: smoke (install stages + artifacts) already depends on `run_buildmaster_negative` and `run_buildmaster_consumer` (`consumer_nested`); then a wiped sibling `consumer_ci` bindir. Local one-liner:
   `rm -rf build/harness && cmake -S .github/tests/harness -B build/harness -G Ninja && cmake --build build/harness --target run_buildmaster_main`.
 - **Configure report (`BUILDMASTER_VERBOSE`).** After graph hooks, the primary bootstrap prints `BuildMaster <version> Configuration:` (module `Report`): parent toolchain paths/flags, then an alphabetical component table (`ID` / `TYPE` / `LINK`) with one-level `NEEDED BY` and explicit overrides only (`CFLAGS`, `CXXFLAGS`, `FILES`, `LINKFLAGS`, `NOINSTALL`). Groups are omitted. Row order is readability, not the graph walk. Nested bootstraps stay silent.
-- **On-demand tools.** Bootstrap always initializes `ninja` and the archiver (`tools/bootstrap/`). `cmake`, `meson`, `git`, and `file` initialize on first use: backend wrappers (`cmake` / `meson`), `GIT={…}` / `FILES={…}` on the optstr, or a pending `FILES SOURCE` after the tree is unpacked. Extra tools live under `tools/extra/<id>/` (`pkgconfig` is the only extra in this release) and start only via `REQUIRE_TOOL=<id>` / `REQUIRE_TOOL={id;id2}` on `buildmaster_component` or `buildmaster_meta`. Empty `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING and ignored. An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN` (or whose directory is missing) is FATAL — BM never silently falls back to a same-named system binary. A second request is a no-op. `PC={…}` only writes a helper `.pc`; it does **not** demand `pkgconfig`. `pkgconfig` still prefers a working system pkg-config/`pkgconf` and builds the bundled tree only when that probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone. Configure prints `Setting up tools: <name>` only when that tool actually starts.
+- **On-demand tools.** Bootstrap always initializes `ninja`. The
+  archiver is **not** a tool: it is a field of the `TOOLCHAIN=`
+  profile (`CMAKE_AR` / Meson `[binaries] ar` and `ld`). `cmake`,
+  `meson`, `git`, and `file` initialize on first use: backend
+  wrappers (`cmake` / `meson`), `GIT={…}` / `FILES={…}` on the
+  optstr, or a pending `FILES SOURCE` after the tree is unpacked.
+  Extra tools live under `tools/extra/<id>/` (`pkgconfig` is the
+  only extra in this release) and start only via
+  `REQUIRE_TOOL=<id>` / `REQUIRE_TOOL={id;id2}` on
+  `buildmaster_component` or `buildmaster_meta`. Empty
+  `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING
+  and ignored. An id that is not in `BUILDMASTER_TOOLS_EXTRA_KNOWN`
+  (or whose directory is missing) is FATAL — BM never silently
+  falls back to a same-named system binary. A second request is a
+  no-op. `PC={…}` only writes a helper `.pc`; it does **not**
+  demand `pkgconfig`. `pkgconfig` still prefers a working system
+  pkg-config/`pkgconf` and builds the bundled tree only when that
+  probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone.
+  Configure prints `Setting up tools: <name>` only when that tool
+  actually starts.
 - **`ALIAS=` / `ALIAS={…}`.** After the INTERFACE stub exists,
   `add_library(<alias> ALIAS <id>)` for each name. Works on
   `buildmaster_component` and `buildmaster_meta`. A second distinct
@@ -267,7 +303,7 @@ and the declaration shape changed.
 
 ### Changed
 
-- **Breaking — public API is `buildmaster_*` only.** Ten commands (see `public_functions.txt`): `buildmaster_component`, `buildmaster_depend`, `buildmaster_link`, `buildmaster_meta`, `buildmaster_meta_add`, `buildmaster_group`, `buildmaster_group_add`, `buildmaster_hook_component`, `buildmaster_hook_graph`, `buildmaster_message`. Internals are `_bm_<craft>_*` and are not a supported API. In particular:
+- **Breaking — public API is `buildmaster_*` only.** Ten commands (see [public_functions.md](public_functions.md)): `buildmaster_component`, `buildmaster_depend`, `buildmaster_link`, `buildmaster_meta`, `buildmaster_meta_add`, `buildmaster_group`, `buildmaster_group_add`, `buildmaster_hook_component`, `buildmaster_hook_graph`, `buildmaster_message`. Internals are `_bm_<craft>_*` and are not a supported API. In particular:
   - `create_cmake_component` / `create_meson_component` / `create_*_headers_component` / `create_component` are gone. Use `buildmaster_component`.
   - `component_link` → `buildmaster_link`.
   - `component_dependency` → `buildmaster_depend`.
@@ -291,11 +327,23 @@ and the declaration shape changed.
 - **Breaking — `BUILDMASTER_DEBUG` is gone.**
 - **Breaking — options string.** Flag keys may omit `=`. Known flags: `RENAME`, `NOINSTALL`, `WHOLE`, `STRIPRES`, `PC`, `GIT`, `REPACK`, `FILES`, `REQUIRE_TOOL`. `BUILDONLY` is accepted by the splitter only so the parser can FATAL. `BACKEND=` and `SOURCE=` require `KEY=value`. `INDENT=` is accepted only to warn. `;` inside `{…}` is not a pair break. Unknown keys warn; extra positionals are fatal.
 - **Breaking — install wrapper.** `install_exec.cmake.in` / `<id>_install_exec.cmake` are gone. Wrapper is `install_library.cmake.in`. Generated rules live under `scripts/install_rules/`. Worker `normalize_install_outputs.cmake` is `normalize_install_libraries.cmake`.
+- **Archiver is toolchain, not a tool.**
+  `CMAKE_AR` and Meson `[binaries] ar` / `ld` come from the component
+  `TOOLCHAIN=` profile (`msvc` → `lib.exe` + `link.exe`, `clang-cl`
+  → `llvm-lib` + `lld-link`, `clang` → `llvm-ar` + `ld.lld` on
+  Linux, `gcc` → binutils `ar` and the driver linker). A clang-cl
+  parent does not force `llvm-lib` onto an `msvc` leaf or onto
+  REPACK merge. Missing AR on a profile is FATAL (incomplete
+  toolchain), not an optional tool miss.
 - **Stage COMMENT: configure stays CMake/Meson; compile and install use `[BuildMaster/Ninja]`.**
 - **Root `CMakeLists.txt` includes helpers before `init_vars`, so `add_subdirectory(buildmaster)` alone bootstraps a consumer.**
 - **Root configure includes `GNUInstallDirs`.**
 - **Post-install git reset + clean runs only after a PATCH, and only in the component work tree (`GIT ROOT=`), never in the host repo.**
-- **Tools no longer all initialize at bootstrap.** Only `ninja` and the archiver are mandatory. `cmake` / `meson` / `git` / `file` start when a component (or a harness that calls internals) requests them. Extra tools start only from `REQUIRE_TOOL`. There is no `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`.
+- **Tools no longer all initialize at bootstrap.** Only `ninja` is
+  mandatory at tools bootstrap. `cmake` / `meson` / `git` / `file`
+  start when a component (or a harness that calls internals) requests
+  them. Extra tools start only from `REQUIRE_TOOL`. There is no
+  `BUILDMASTER_INITIALIZE_EXTRA_TOOLS`.
 
 ### Fixed
 
@@ -312,6 +360,8 @@ and the declaration shape changed.
 - **Component `TOOLCHAIN=` dump is the trunk toolchain plus a compiler overlay.** Nested `add_subdirectory(buildmaster)` keeps `BUILDMASTER_ROOT`, `BUILDMASTER_INSTALL_DIR` and `BUILDMASTER_CONFIGURED`. A component override no longer bootstraps a second install tree under the component build dir. Harness fixture `tc-prefix` locks the dump.
 - **Git operations never run in the host repository.** A work tree equal to `CMAKE_SOURCE_DIR`, or a `ROOT=` / `SOURCE=` path that escapes the component `srcdir`, is FATAL before the tree is probed.
 - **Fragment GLOBAL `BUILDMASTER_COMPONENT_<id>_NAMES` / `_FILES`.** Sealed after `write_fragment` so REPACK / meta merge see the produced archives.
+- **REPACK + `NOINSTALL` members:** wait `<id>_install` (oficios on the BUILDDIR), not `<id>_build`, so variant stems (`*-static`) are renamed before merge.
+- **REPACK merge AR:** uses the publisher `TOOLCHAIN=` archiver, not the parent `CMAKE_AR`.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

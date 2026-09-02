@@ -155,6 +155,9 @@ slow-configure_install
 # toolchain
 nest-tc_install
 
+# toolchain-sanity
+tc-sanity
+
 # whole
 out-lib_install
 plain-lib_install

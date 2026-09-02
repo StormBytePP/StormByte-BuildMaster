@@ -7,5 +7,4 @@ if(COMMAND _bm_log_level_init)
 	_bm_log_level_init()
 endif()
 
-include("${CMAKE_CURRENT_LIST_DIR}/archiver/helpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/ninja/helpers.cmake")
