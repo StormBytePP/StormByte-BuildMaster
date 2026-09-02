@@ -372,6 +372,11 @@ and the declaration shape changed.
 - **Fragment GLOBAL `BUILDMASTER_COMPONENT_<id>_NAMES` / `_FILES`.** Sealed after `write_fragment` so REPACK / meta merge see the produced archives.
 - **REPACK + `NOINSTALL` members:** wait `<id>_install` (oficios on the BUILDDIR), not `<id>_build`, so variant stems (`*-static`) are renamed before merge.
 - **REPACK merge AR:** uses the publisher `TOOLCHAIN=` archiver, not the parent `CMAKE_AR`.
+- **`STRIPRES` uses the component archiver.** `strip_res` was
+  baking the parent `CMAKE_AR`. A `msvc` leaf built with `lib.exe` then
+  listed/removed members with the parent's `llvm-lib` (or the reverse)
+  and warned `no such file or directory` for a name `/LIST` had just
+  printed.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

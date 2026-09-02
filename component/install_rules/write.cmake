@@ -17,11 +17,11 @@
 ##       and GLOBAL PC fields. The template itself has no
 ##       `if(@_BM_*_ENABLED@)` feature flags. Data checks (`EXISTS`,
 ##       `.lib` suffix, headers-stamp name) stay in the oficio.
-## @note `rename_library` worker:
-##       `component/rename/normalize_install_libraries.cmake`.
-##       `rename_executable` worker:
-##       `component/rename/normalize_install_executables.cmake`.
-##       The oficio is emitted only if the list contains it.
+## @note `CMAKE_AR` baked into `strip_res` is the publisher profile
+##       archiver (`_bm_repack_ar_arg`), not the parent job's `CMAKE_AR`.
+##       `llvm-lib /LIST` + `lib.exe` archive (or the reverse) is how
+##       `/REMOVE` reports “no such file or directory” for a name that
+##       `/LIST` just printed.
 function(_bm_install_rule_write_one id chan title safe outs oficio out_var)
 	_bm_log_message(COMPONENT LOWLEVEL
 		"Entering _bm_install_rule_write_one (${id}/${oficio})")
@@ -53,8 +53,13 @@ function(_bm_install_rule_write_one id chan title safe outs oficio out_var)
 		BUILDMASTER_COMPONENT_${id}_PC_CFLAGS)
 	get_property(_BM_PC_OUT GLOBAL PROPERTY
 		BUILDMASTER_COMPONENT_${id}_PC_OUT)
-	if(NOT DEFINED CMAKE_AR)
-		set(CMAKE_AR "")
+
+	set(CMAKE_AR "")
+	if(COMMAND _bm_repack_ar_arg)
+		_bm_repack_ar_arg("${id}" _ar_arg)
+		if(_ar_arg MATCHES "^-DCMAKE_AR=(.+)$")
+			set(CMAKE_AR "${CMAKE_MATCH_1}")
+		endif()
 	endif()
 
 	configure_file("${_in}" "${_out}" @ONLY)
