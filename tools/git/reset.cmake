@@ -2,29 +2,51 @@
 # tools/git/reset.cmake — _bm_tools_git_reset
 # =============================================================================
 
-## @brief Run queued reset scripts then queued patch scripts for one git root.
+## @brief Run queued reset scripts for one git root (once per queue).
 ## @param[in] _git_repo_dir Repository or worktree path.
-## @note Resets always run first. A second flush for the same root is a no-op
-##       so configure does not apply the same patch twice.
-function(_bm_git_flush_repo _git_repo_dir)
+## @note No-op until a new reset script is queued (flag cleared there).
+function(_bm_git_flush_resets _git_repo_dir)
 	_bm_git_toplevel(_root "${_git_repo_dir}")
-	get_property(_done GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root})
+	get_property(_done GLOBAL PROPERTY BUILDMASTER_GIT_RESET_FLUSHED_${_root})
 	if(_done)
 		return()
 	endif()
 	get_property(_resets GLOBAL PROPERTY BUILDMASTER_GIT_RESET_SCRIPTS_${_root})
-	get_property(_patches GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_SCRIPTS_${_root})
 	foreach(_s IN LISTS _resets)
 		if(EXISTS "${_s}")
 			include("${_s}")
 		endif()
 	endforeach()
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_RESET_FLUSHED_${_root} TRUE)
+endfunction()
+
+## @brief Run queued patch scripts for one git root (once per queue).
+## @param[in] _git_repo_dir Repository or worktree path.
+## @note No-op until a new patch script is queued (flag cleared there).
+##       Does not reset.
+function(_bm_git_flush_patches _git_repo_dir)
+	_bm_git_toplevel(_root "${_git_repo_dir}")
+	get_property(_done GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_FLUSHED_${_root})
+	if(_done)
+		return()
+	endif()
+	get_property(_patches GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_SCRIPTS_${_root})
 	foreach(_s IN LISTS _patches)
 		if(EXISTS "${_s}")
 			include("${_s}")
 		endif()
 	endforeach()
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} TRUE)
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_FLUSHED_${_root} TRUE)
+endfunction()
+
+## @brief Run queued resets then queued patches for one git root.
+## @param[in] _git_repo_dir Repository or worktree path.
+## @note Each half is one-shot. Reset already flushed is not repeated
+##       when a later patch batch flushes. A new PATCH queue clears only
+##       the patch flag.
+function(_bm_git_flush_repo _git_repo_dir)
+	_bm_git_flush_resets("${_git_repo_dir}")
+	_bm_git_flush_patches("${_git_repo_dir}")
 endfunction()
 
 ## @brief Flush every git root that queued a reset or patch.
@@ -46,9 +68,10 @@ endfunction()
 ## @param[in] _component_id Component identifier.
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
-## @note Generates the script and queues it. Flush runs every reset for the
-##       repo, then every patch. Call order of `_bm_tools_git_*` does not
-##       matter. Call as: `_bm_tools_git_reset(<id> <title> <repo>)`.
+## @note Generates the script, queues it, and flushes this root immediately:
+##       resets first, then any patches already queued. That is the
+##       git-sandbox / git-reset-patch contract. A later PATCH queue does
+##       not re-run this reset.
 ## @note Does **not** write the post-install reset marker. That is PATCH-only.
 ## @note `_git_repo_dir` must be the component work tree
 ##       (`_bm_git_require_component_root`).
@@ -69,7 +92,7 @@ function(_bm_tools_git_reset _component_id _title _git_repo_dir)
 	list(REMOVE_DUPLICATES _resets)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_RESET_SCRIPTS_${_root} "${_resets}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS "${_root}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_RESET_FLUSHED_${_root} FALSE)
 	_bm_git_register_op("${_component_id}" "${_git_repo_dir}")
 	_bm_git_flush_repo("${_git_repo_dir}")
 	_bm_log_message(GIT DEBUG "Reset git repo for ${_component_id}")

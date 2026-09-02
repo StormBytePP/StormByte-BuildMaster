@@ -3,9 +3,12 @@
 ## @param[in] _title        Human-readable title (script filename).
 ## @param[in] _git_repo_dir Repository working tree.
 ## @param[in] _git_patches  List of patch files (joined with spaces for apply).
-## @note Queues the script and flushes immediately so the tree is patched
-##       before a later nested cmake/meson. If a reset is also queued for
-##       this root, flush runs reset then patch once.
+## @note Queues one script for this list. Does **not** flush and does
+##       **not** reset. Flush is `_bm_git_flush_repo`: resets already
+##       consumed stay consumed; this call only reopens the patch half
+##       (`BUILDMASTER_GIT_PATCH_FLUSHED_<root>` = FALSE).
+## @note Script name includes a hash of the patch list so two PATCH
+##       batches with the same TITLE do not overwrite each other.
 ## @note Post-install reset is registered **here only**. A PATCH dirties
 ##       the srcdir for the compile; install must restore it. FETCH /
 ##       SWITCH / RESET-only do not write that marker.
@@ -39,7 +42,8 @@ function(_bm_tools_git_patch _component_id _title _git_repo_dir _git_patches)
 		endif()
 	endforeach()
 	set(GIT_PATCHES_DISPLAY "${_display}")
-	_bm_path_sanitize(_safe "${_component_id}_${_title}")
+	string(SHA1 _phash "${_patches}")
+	_bm_path_sanitize(_safe "${_component_id}_${_title}_${_phash}")
 	set(_GIT_PATCH_FILE "${BUILDMASTER_SCRIPTS_GIT_DIR}/git_patch_${_safe}.cmake")
 	configure_file(
 		"${BUILDMASTER_TOOLS_GIT_SRCDIR}/templates/patch.cmake.in"
@@ -52,10 +56,9 @@ function(_bm_tools_git_patch _component_id _title _git_repo_dir _git_patches)
 	list(REMOVE_DUPLICATES _plist)
 	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_SCRIPTS_${_root} "${_plist}")
 	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GIT_FLUSH_ROOTS "${_root}")
-	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_FLUSHED_${_root} FALSE)
+	set_property(GLOBAL PROPERTY BUILDMASTER_GIT_PATCH_FLUSHED_${_root} FALSE)
 	_bm_git_register_op("${_component_id}" "${_git_repo_dir}")
 	_bm_git_register_post_install_reset("${_root}")
-	_bm_git_flush_repo("${_git_repo_dir}")
 	cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}"
 		CALL _bm_git_flush_repo "${_git_repo_dir}")
 	_bm_log_message(GIT DEBUG "Queued git patch for ${_component_id}")

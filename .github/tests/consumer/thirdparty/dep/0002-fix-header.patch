@@ -1,0 +1,13 @@
+diff --git a/consumerdep.h b/consumerdep.h
+index 1111111..2222222 100644
+--- a/consumerdep.h
++++ b/consumerdep.h
+@@ -1,6 +1,6 @@
+ #ifndef CONSUMERDEP_H
+ #define CONSUMERDEP_H
+ 
+-int consumerdep_valu(void);
++int consumerdep_value(void);
+ 
+ #endif
+ 

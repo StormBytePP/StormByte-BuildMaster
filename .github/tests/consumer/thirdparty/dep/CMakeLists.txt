@@ -1,5 +1,8 @@
 set(CONSUMERDEP_SRCDIR "${CMAKE_CURRENT_SOURCE_DIR}/lib")
-set(CONSUMERDEP_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/0001-fix-typo.patch")
+set(CONSUMERDEP_PATCHES
+	${CMAKE_CURRENT_SOURCE_DIR}/0001-fix-typo.patch
+	${CMAKE_CURRENT_SOURCE_DIR}/0002-fix-header.patch
+)
 
 # Seed a git worktree so GIT={RESET;PATCH} has something to apply.
 # Not part of the public BM API; the consumer still has to have git on PATH.
@@ -23,7 +26,7 @@ if(NOT EXISTS "${CONSUMERDEP_SRCDIR}/.git")
 	execute_process(COMMAND ${GIT_EXECUTABLE} -C "${CONSUMERDEP_SRCDIR}" config user.name "BuildMaster harness")
 	execute_process(COMMAND ${GIT_EXECUTABLE} -C "${CONSUMERDEP_SRCDIR}" add -A)
 	execute_process(
-		COMMAND ${GIT_EXECUTABLE} -C "${CONSUMERDEP_SRCDIR}" commit --no-gpg-sign -m "upstream with typo"
+		COMMAND ${GIT_EXECUTABLE} -C "${CONSUMERDEP_SRCDIR}" commit --no-gpg-sign -m "upstream with typos"
 		RESULT_VARIABLE _rc
 		ERROR_VARIABLE _err
 	)
@@ -39,5 +42,5 @@ buildmaster_component(
 	""
 	"static"
 	"consumerdep"
-	"INDENT=1;GIT={RESET;PATCH=${CONSUMERDEP_PATCH};TITLE=fix typo}"
+	"INDENT=1;GIT={RESET;PATCH={${CONSUMERDEP_PATCHES}};TITLE=fix typos}"
 )

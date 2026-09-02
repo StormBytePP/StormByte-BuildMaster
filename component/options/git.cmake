@@ -212,10 +212,10 @@ endfunction()
 ##       Missing work tree is FATAL after the escape check.
 ##       The work tree is passed to `_bm_tools_git_*`, which refuse a
 ##       path that is not its own git root or that is the host repo.
-##       Calls `_bm_tools_git_fetch` / `_switch` / `_reset` / `_patch` so
-##       flush order stays FETCH → SWITCH → RESET → PATCH regardless of
-##       declaration order inside the group (RESET/PATCH still flush
-##       reset-then-patch).
+##       FETCH and SWITCH run immediately. RESET and PATCH are queued
+##       and flushed **once** at the end of this function: one reset
+##       (if requested), then every patch in declaration order.
+##       Post-install reset is registered by PATCH, not here.
 function(_bm_comp_apply_git _id _title _srcdir _optstr)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_git")
 	_bm_opt_parse_git("${_optstr}" _present _fetch _switch _reset _patches _gtitle _groot)
@@ -246,6 +246,7 @@ function(_bm_comp_apply_git _id _title _srcdir _optstr)
 		_bm_log_message(COMPONENT DEBUG "GIT RESET ${_id} ${_repo}")
 		_bm_tools_git_reset("${_id}" "${_t}" "${_repo}")
 	endif()
+	set(_abs_patches "")
 	foreach(_p IN LISTS _patches)
 		if(IS_ABSOLUTE "${_p}")
 			set(_abs "${_p}")
@@ -257,9 +258,15 @@ function(_bm_comp_apply_git _id _title _srcdir _optstr)
 			_bm_log_message(COMPONENT FATAL
 				"GIT PATCH='${_p}' not found (${_abs})")
 		endif()
-		_bm_log_message(COMPONENT DEBUG "GIT PATCH ${_id} ${_abs}")
-		_bm_tools_git_patch("${_id}" "${_t}" "${_repo}" "${_abs}")
+		list(APPEND _abs_patches "${_abs}")
 	endforeach()
+	if(NOT _abs_patches STREQUAL "")
+		_bm_log_message(COMPONENT DEBUG "GIT PATCH ${_id} ${_abs_patches}")
+		_bm_tools_git_patch("${_id}" "${_t}" "${_repo}" "${_abs_patches}")
+	endif()
+	if(_reset OR NOT _abs_patches STREQUAL "")
+		_bm_git_flush_repo("${_repo}")
+	endif()
 
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_comp_apply_git")
 endfunction()
