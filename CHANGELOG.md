@@ -71,6 +71,27 @@ Porting an older caller:
 - [ ] Allow BuildMaster anywhere on disk, not only as a sibling of
       `thirdparty`. Sole rule: `add_subdirectory(BM)` before first
       use.
+- [ ] **Install-tree cache (2.1).** Each component may restore its
+      *installed* prefix from a blob cache instead of compile+install.
+      Staging prefix per id, then an atomic copy into
+      `BUILDMASTER_INSTALL_DIR` (same layout as a live install: libs,
+      headers, `*Config.cmake`, `.pc`). Not a builddir cache
+      (ccache/sccache already cover objects).
+      Default cache key: worktree SHA *after* PATCH, hash of the
+      applied patch files, toolchain profile, `CMAKE_BUILD_TYPE`,
+      IPO on/off, `mode`, `produced`, host OS/arch. SHA of the
+      unpatched submodule pin is not enough.
+      Extra key material via optstr (name TBD, e.g. `CACHEKEY=` /
+      `CACHE={…}`): caller-supplied tokens so a leaf like FFmpeg
+      distinguishes `-Dlibx265=enabled` vs disabled without hashing
+      the entire options list by default. Empty extra key = default
+      only. HIT must be a no-op for `_build`/`_install`; MISS writes
+      the staging tree after a successful install. `NOINSTALL` never
+      publishes (no cache write). `REPACK` caches the publisher
+      archive, not each member, unless the member itself is cached.
+      Partial HIT (lib without Config.cmake) is FATAL, not a silent
+      fallback. Needs the 2.0.1 idempotent stamps first or restore
+      and rebuild will race.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
