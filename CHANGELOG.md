@@ -35,33 +35,42 @@ Porting an older caller:
 
 ### ToDo
 
-- [ ] Split today’s `<id>_install` into explicit phases. `_install` =
-      `cmake --install` / `meson install` only (absent when
-      `NOINSTALL`). `_post_install` = oficios on the artifact that
-      actually exists (prefix after `--install`, BUILDDIR when
-      `NOINSTALL`) plus optional git reset. Never rename-then-install:
-      `install(FILES)` still sees upstream names. REPACK /
-      `buildmaster_depend` that need the produced stem wait
-      `_post_install`. Do not retarget in a drive-by patch.
-- [ ] `BUILDMASTER_JOBS` (not `-j` / `NPROC`): ninja job pool for BM
-      oficios. Default `1` = current serial behaviour. Drop
-      `USES_TERMINAL` on those custom commands so the pool can run.
-      STATUS lines go through `_bm_log_message` with
-      `file(LOCK)` so parallel jobs do not interleave. COMMENT empty
-      or one short label; the silent runner must not swallow the log.
-      Optional wrapper macro `_bm_custom_command` / `_bm_custom_target`
-      (pool + no `USES_TERMINAL`). Pair with ninja `-l` when JOBS is
-      high so the machine does not melt.
-- [ ] `validate/{component,meta,group,tool}` plus
-      `validate/helpers.cmake`; move *contract* FATALs there
-      (factory / options / meta / group / demand). *Operation*
-      FATALs stay put (`-P` templates, merge, download, git reset,
-      missing ninja).
+- [ ] **Idempotent stage stamps.** After `ninja <meta>_install` the
+      leaf `_build` / `_install` / `_configure` files must stay
+      current. A later `ninja ffmpeg_install` (or any consumer of the
+      same leaves) must be a no-op for work that already published
+      to the prefix. Today Ninja treats those nodes as dirty and
+      re-enters nested `cmake --build` / `meson compile`.
+- [ ] **Re-apply `GIT={PATCH}` before any rebuild.** Post-install
+      `RESET` restores the work tree (correct: the submodule stays
+      clean). That also removes the patches. A dirty nested
+      `build.ninja` then runs `cmake --regenerate-during-build` on
+      *upstream* sources (`cmake_minimum_required` too old, missing
+      guards, …) and the compile stage dies. Either queue PATCH
+      again as a dependency of `_build` / regenerate, keep a
+      patched worktree until the graph is idle, or turn off
+      regenerate-during-build on BM builddirs. Samplerate on CMake
+      4 is the canary.
+- [ ] **`BUILDMASTER_JOBS`.** Cap concurrent BM stage scripts
+      (configure/build/install) independently of `ninja -jN`.
+      Sync log lines so two oficios do not interleave. Needs a
+      portable lock around `_bm_log_message` (Unix + Windows `.ps1`
+      runners). Empty `COMMENT` on `add_custom_command`; banners
+      go through log only.
+- [ ] **Named install phases.** Split the current `_install` bag
+      into explicit pre-install oficios (`rename` on NOINSTALL
+      BUILDDIR) and post-install oficios (`rename` on prefix,
+      `strip_res`, `pc`, git RESET). Keep `_install` as the public
+      stamp until callers migrate. Document that NOINSTALL still
+      runs the “install” wrapper (it does not `cmake --install`).
+- [ ] **Optstr tokenizer.** One scanner for nested `{…}` lists
+      (`PATCH={a;b}`, `LINK={…}`). Per-option code only interprets
+      tokens. Stops CMake from splitting `PATCH={file1;file2}`.
+- [ ] **`validate/`** for contract FATALs (factory / options / meta /
+      group / demand). Operation FATALs stay in `-P` workers.
 - [ ] Allow BuildMaster anywhere on disk, not only as a sibling of
-      `thirdparty`. Sole rule: `add_subdirectory(BM)` before first use.
-- [ ] Smoke + negative harness must keep the current contract when
-      any of the items above land. Do not rename the internal
-      `_BM_BUILDONLY` token as a side effect.
+      `thirdparty`. Sole rule: `add_subdirectory(BM)` before first
+      use.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
