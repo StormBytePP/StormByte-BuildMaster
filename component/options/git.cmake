@@ -201,7 +201,7 @@ endfunction()
 ## @brief Apply `GIT={…}` on a concrete component srcdir.
 ## @param[in] _id     Component id.
 ## @param[in] _title  Default TITLE when the group omits it.
-## @param[in] _srcdir Component source directory.
+## @param[in] _srcdir Component source directory (or pre-resolved work tree).
 ## @param[in] _optstr Trailing options string (may omit GIT).
 ## @note No-op when GIT is absent. Empty group is already WARNING in parse.
 ##       PATCH paths: absolute unchanged; relative to
@@ -210,12 +210,11 @@ endfunction()
 ##       `ROOT=` is always under `_srcdir` (leading `/` or drive stripped).
 ##       Escape above `_srcdir` is FATAL before any existence check.
 ##       Missing work tree is FATAL after the escape check.
-##       The work tree is passed to `_bm_tools_git_*`, which refuse a
-##       path that is not its own git root or that is the host repo.
+##       Seals `BUILDMASTER_COMPONENT_<id>_GIT_WORKDIR` to the resolved
+##       work tree so post-install marker lookup does not hash the wrapper.
 ##       FETCH and SWITCH run immediately. RESET and PATCH are queued
-##       and flushed **once** at the end of this function: one reset
-##       (if requested), then every patch in declaration order.
-##       Post-install reset is registered by PATCH, not here.
+##       and flushed once at the end: one reset (if requested), then every
+##       patch in declaration order.
 function(_bm_comp_apply_git _id _title _srcdir _optstr)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_comp_apply_git")
 	_bm_opt_parse_git("${_optstr}" _present _fetch _switch _reset _patches _gtitle _groot)
@@ -233,6 +232,7 @@ function(_bm_comp_apply_git _id _title _srcdir _optstr)
 	endif()
 
 	_bm_comp_git_worktree(_repo "${_srcdir}" "${_groot}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_GIT_WORKDIR "${_repo}")
 
 	if(_fetch)
 		_bm_log_message(COMPONENT DEBUG "GIT FETCH ${_id} ${_repo}")

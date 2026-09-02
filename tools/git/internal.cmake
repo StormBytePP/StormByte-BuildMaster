@@ -175,13 +175,41 @@ endfunction()
 
 ## @brief Resolve post-install reset script path for a source directory.
 ## @param[out] _out     Parent-scope path, or empty if no marker was written.
-## @param[in]  _srcdir  Component source directory.
-## @note Marker exists only when a PATCH was registered for that git root.
-##       Used by `_bm_tools_cmake_stages` / `_bm_tools_meson_stages` so
-##       install_exec can reset after install.
+## @param[in]  _srcdir  Component source directory (may be a wrapper).
+## @note The marker file is keyed by the GIT work tree (`ROOT=`), stored as
+##       `BUILDMASTER_COMPONENT_<id>_GIT_WORKDIR` by `_bm_comp_apply_git`.
+##       This function maps `_srcdir` to that work tree via
+##       `BUILDMASTER_COMPONENT_<id>_SRCDIR`, then hashes the work tree.
+##       No GIT_WORKDIR → `_srcdir` (components without `ROOT=`).
+##       Marker exists only when a PATCH was registered for that git root.
 function(_bm_tools_git_marker _out _srcdir)
 	_bm_log_message(GIT LOWLEVEL "Entering _bm_tools_git_marker")
-	_bm_git_toplevel(_git_root "${_srcdir}")
+	get_filename_component(_abs "${_srcdir}" ABSOLUTE)
+	file(TO_CMAKE_PATH "${_abs}" _abs)
+	set(_probe "${_abs}")
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	foreach(_cid IN LISTS _ids)
+		if(_cid STREQUAL "")
+			continue()
+		endif()
+		get_property(_cdir GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_cid}_SRCDIR)
+		if(_cdir STREQUAL "")
+			continue()
+		endif()
+		get_filename_component(_cabs "${_cdir}" ABSOLUTE)
+		file(TO_CMAKE_PATH "${_cabs}" _cabs)
+		if(NOT _cabs STREQUAL "${_abs}")
+			continue()
+		endif()
+		get_property(_wd GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_cid}_GIT_WORKDIR)
+		if(NOT _wd STREQUAL "")
+			get_filename_component(_wd "${_wd}" ABSOLUTE)
+			file(TO_CMAKE_PATH "${_wd}" _wd)
+			set(_probe "${_wd}")
+		endif()
+		break()
+	endforeach()
+	_bm_git_toplevel(_git_root "${_probe}")
 	_bm_git_marker_path(_marker "${_git_root}")
 	if(EXISTS "${_marker}")
 		set(${_out} "${_marker}" PARENT_SCOPE)
