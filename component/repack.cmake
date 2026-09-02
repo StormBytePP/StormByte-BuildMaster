@@ -245,6 +245,47 @@ function(_bm_repack_resolve_input token out_files out_deps)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_resolve_input")
 endfunction()
 
+## @brief Archiver for a REPACK id: profile of that component, not the parent job.
+## @param[in] id REPACK publisher id.
+## @param[out] out_arg `-DCMAKE_AR=<abs>` or empty.
+## @note OPTSTR TOOLCHAIN (including meta inherit) wins. Empty → infer from
+##       this process. `msvc` → `lib.exe` (resolved). Never pass the parent's
+##       `llvm-lib` when the publisher is `msvc`.
+function(_bm_repack_ar_arg id out_arg)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_ar_arg(${id})")
+	set(_arg "")
+	set(_tc "")
+	get_property(_optstr GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_OPTSTR)
+	if(COMMAND _bm_opt_parse)
+		_bm_opt_parse(_il _tc _rn _ni _wh _sr "${_optstr}")
+	endif()
+	if(_tc STREQUAL "" AND COMMAND _bm_tc_infer_profile)
+		_bm_tc_infer_profile(_tc)
+	endif()
+	set(_ar "")
+	if(NOT _tc STREQUAL "" AND COMMAND _bm_tc_load_profile)
+		_bm_tc_load_profile("${_tc}")
+		if(DEFINED BM_TC_AR)
+			set(_ar "${BM_TC_AR}")
+		endif()
+		if((_tc STREQUAL "msvc" OR _tc STREQUAL "clang-cl")
+				AND NOT _ar STREQUAL "" AND NOT IS_ABSOLUTE "${_ar}"
+				AND COMMAND _bm_tc_resolve_msvc_tool)
+			_bm_tc_resolve_msvc_tool(_ar "${_ar}")
+		endif()
+	endif()
+	if(_ar STREQUAL "" AND CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
+		set(_ar "${CMAKE_AR}")
+	endif()
+	if(NOT _ar STREQUAL "")
+		_bm_path_normalize(_ar "${_ar}")
+		set(_arg "-DCMAKE_AR=${_ar}")
+	endif()
+	set(${out_arg} "${_arg}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT DEBUG "REPACK '${id}' AR arg '${_arg}' (profile='${_tc}')")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_ar_arg(${id})")
+endfunction()
+
 ## @brief Create merge commands and attach the archive to each REPACK id.
 ## @note Called from `_bm_materialize_finalize` after real components exist.
 ## @note Zero static inputs: WARNING, no merge (shared members already
@@ -255,6 +296,8 @@ endfunction()
 ## @note Component KIND: POST_BUILD on the existing `<id>_install`.
 ##       Consumers already wait on `<id>_install`, so they see the merged
 ##       archive. No extra OUTPUT on the GNU path.
+## @note `-DCMAKE_AR=` comes from `_bm_repack_ar_arg` (publisher profile),
+##       not from the parent job's `CMAKE_AR`.
 function(_bm_repack_materialize)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_materialize")
 	_bm_repack_register_metas()
@@ -311,10 +354,7 @@ function(_bm_repack_materialize)
 		set(_inputs_joined "${_all_files}")
 		string(REPLACE ";" "," _inputs_joined "${_inputs_joined}")
 
-		set(_ar_arg "")
-		if(CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
-			set(_ar_arg "-DCMAKE_AR=${CMAKE_AR}")
-		endif()
+		_bm_repack_ar_arg("${_id}" _ar_arg)
 
 		if(_kind STREQUAL "component")
 			if(NOT TARGET ${_id}_install)
