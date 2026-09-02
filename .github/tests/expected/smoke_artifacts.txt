@@ -238,6 +238,18 @@ bin/exerpackexe.exe|windows
 <lib>/libmergedlib.a|unix
 <lib>/mergedlib.lib|windows
 
+# repack-static
+!<lib>/librshi.a|unix
+!<lib>/librshi-static.a|unix
+!<lib>/librslo.a|unix
+!<lib>/librslo-static.a|unix
+!<lib>/rshi.lib|windows
+!<lib>/rshi-static.lib|windows
+!<lib>/rslo.lib|windows
+!<lib>/rslo-static.lib|windows
+<lib>/librspub.a|unix
+<lib>/rspub.lib|windows
+
 # sdk-headers
 <include>/sdk.h|all
 

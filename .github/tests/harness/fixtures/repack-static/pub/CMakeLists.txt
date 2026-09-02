@@ -1,0 +1,16 @@
+cmake_minimum_required(VERSION 3.20)
+project(HarnessRsPub C)
+
+include(GNUInstallDirs)
+
+add_library(rspub STATIC rspub.c)
+target_include_directories(rspub PUBLIC
+	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
+
+install(TARGETS rspub
+	ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+	LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+install(FILES rspub.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})

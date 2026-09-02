@@ -82,6 +82,7 @@ add_subdirectory(rename)
 # Static archive merge
 # ---------------------------------------------------------------------------
 add_subdirectory(repack)
+add_subdirectory(repack-static)
 
 # ---------------------------------------------------------------------------
 # Slow configure (Ninja COMMENT timing)

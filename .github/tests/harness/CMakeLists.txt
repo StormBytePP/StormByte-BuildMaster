@@ -138,6 +138,8 @@ add_custom_target(run_buildmaster_smoke
 		# Repack (NOINSTALL phases + REPACK meta)
 		repack-a_install repack-b_install mergedlib_install
 		repack_link_test
+		rs-hi_install rs-lo_install rs-pub_install
+		repack_static_link_test
 		# Slow configure
 		slow-configure_install
 		# TOOLCHAIN

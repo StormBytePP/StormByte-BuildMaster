@@ -137,6 +137,12 @@ repack-a_install
 repack-b_install
 repack_link_test
 
+# repack-static
+rs-hi_install
+rs-lo_install
+rs-pub_install
+repack_static_link_test
+
 # sdk-headers
 sdk-headers_install
 

@@ -178,10 +178,21 @@ endfunction()
 ## @brief Resolve one leaf id into archives and a wait target.
 ## @param[in]  token    Registered component id.
 ## @param[out] out_files Parent-scope list of static archive paths.
-## @param[out] out_deps  Parent-scope wait targets (`_build` or `_install`).
-## @note NOINSTALL → files under the component BUILDDIR, wait `_build`.
-##       Otherwise → files under BUILDMASTER_INSTALL_LIBDIR, wait `_install`.
-##       Shared / headers / executable contribute no files.
+## @param[out] out_deps  Parent-scope wait targets (`_install`).
+## @note NOINSTALL → files under the component BUILDDIR. The
+##       `<id>_install` target still runs: it does **not** call
+##       `cmake --install`. It only seals oficios on the BUILDDIR
+##       (rename / outputs / strip). Waiting on `_build` skips that
+##       seal and REPACK sees the upstream stem (`x265-static.lib`).
+## @note Installing components → files under BUILDMASTER_INSTALL_LIBDIR,
+##       wait `_install` (prefix already renamed).
+## @note Shared / headers / executable contribute no files.
+## @todo Split the current `_install` target into explicit phases
+##       (`_install` = `cmake --install` only, `_post_install` = oficios
+##       + optional git reset). Rename of libraries stays **after**
+##       `--install` so `install(FILES)` still sees upstream names.
+##       `NOINSTALL` has no `_install` publish step; oficios stay
+##       post-build on the BUILDDIR. Do not retarget in this patch.
 function(_bm_repack_resolve_input token out_files out_deps)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_resolve_input")
 	set(_files "")
@@ -209,14 +220,11 @@ function(_bm_repack_resolve_input token out_files out_deps)
 
 	if(_ni)
 		set(_root "${_builddir}")
-		if(TARGET "${token}_build")
-			list(APPEND _deps "${token}_build")
-		endif()
 	else()
 		set(_root "${BUILDMASTER_INSTALL_LIBDIR}")
-		if(TARGET "${token}_install")
-			list(APPEND _deps "${token}_install")
-		endif()
+	endif()
+	if(TARGET "${token}_install")
+		list(APPEND _deps "${token}_install")
 	endif()
 
 	foreach(_spec IN LISTS _produced)

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(HarnessRsHi C)
+add_library(rshi STATIC rshi.c)
+set_target_properties(rshi PROPERTIES OUTPUT_NAME "rshi-static")
+target_include_directories(rshi PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

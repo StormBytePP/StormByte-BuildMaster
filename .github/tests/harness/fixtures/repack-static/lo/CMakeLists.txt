@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(HarnessRsLo C)
+add_library(rslo STATIC rslo.c)
+set_target_properties(rslo PROPERTIES OUTPUT_NAME "rslo-static")
+target_include_directories(rslo PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
