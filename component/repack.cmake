@@ -249,8 +249,8 @@ endfunction()
 ## @param[in] id REPACK publisher id.
 ## @param[out] out_arg `-DCMAKE_AR=<abs>` or empty.
 ## @note OPTSTR TOOLCHAIN (including meta inherit) wins. Empty → infer from
-##       this process. `msvc` → `lib.exe` (resolved). Never pass the parent's
-##       `llvm-lib` when the publisher is `msvc`.
+##       this process. Short names (`lib`, `llvm-ar`) are resolved; the
+##       merge script requires an existing path.
 function(_bm_repack_ar_arg id out_arg)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_ar_arg(${id})")
 	set(_arg "")
@@ -268,16 +268,23 @@ function(_bm_repack_ar_arg id out_arg)
 		if(DEFINED BM_TC_AR)
 			set(_ar "${BM_TC_AR}")
 		endif()
-		if((_tc STREQUAL "msvc" OR _tc STREQUAL "clang-cl")
-				AND NOT _ar STREQUAL "" AND NOT IS_ABSOLUTE "${_ar}"
-				AND COMMAND _bm_tc_resolve_msvc_tool)
-			_bm_tc_resolve_msvc_tool(_ar "${_ar}")
-		endif()
 	endif()
 	if(_ar STREQUAL "" AND CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
 		set(_ar "${CMAKE_AR}")
 	endif()
 	if(NOT _ar STREQUAL "")
+		if((_tc STREQUAL "msvc" OR _tc STREQUAL "clang-cl")
+				AND NOT IS_ABSOLUTE "${_ar}"
+				AND COMMAND _bm_tc_resolve_msvc_tool)
+			_bm_tc_resolve_msvc_tool(_ar "${_ar}")
+		endif()
+		if(NOT IS_ABSOLUTE "${_ar}")
+			find_program(_ar_abs NAMES "${_ar}")
+			if(_ar_abs)
+				set(_ar "${_ar_abs}")
+			endif()
+			unset(_ar_abs)
+		endif()
 		_bm_path_normalize(_ar "${_ar}")
 		set(_arg "-DCMAKE_AR=${_ar}")
 	endif()
