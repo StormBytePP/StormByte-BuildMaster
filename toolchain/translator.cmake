@@ -1,165 +1,160 @@
 # =============================================================================
-# toolchain/translator.cmake — dialect + IPO rewrite of C/CXX/LD flags
+# toolchain/translator.cmake — dialect + IPO + forced -fuse-ld=
 # =============================================================================
-# Not a public API. Callers: tools/meson/stages.cmake (and later CMake
-# wrappers). Does not set b_lto or CMAKE_INTERPROCEDURAL_*.
-# Cache key: profile + IPO on/off + hash of the three input strings.
+# Not public. Called from cmake/meson stages before the env runner refresh.
+# Pass 1: drop foreign dialect, rewrite -I/-L on MSVC-like, drop IPO and
+#         every -fuse-ld=.
+# Pass 2: IPO tokens of this profile (or nothing).
+# Pass 3: -fuse-ld= of this profile only (gcc=bfd, clang/clang-cl=lld,
+#         msvc=none). Always, not only when IPO is on.
 
-## @brief Infer BM profile from this process's C compiler.
-## @param[out] out Variable name for `gcc`, `clang`, `clang-cl`, or `msvc`.
-function(_bm_tc_infer_profile out)
-	if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-		set(${out} "clang-cl" PARENT_SCOPE)
-	elseif(MSVC OR CMAKE_C_COMPILER MATCHES "cl\\.exe")
-		set(${out} "msvc" PARENT_SCOPE)
-	elseif(CMAKE_C_COMPILER MATCHES "clang" OR CMAKE_CXX_COMPILER MATCHES "clang")
-		set(${out} "clang" PARENT_SCOPE)
+function(_bm_tc_flag_has hay needle)
+	string(FIND " ${hay} " " ${needle} " _pos)
+	if(_pos EQUAL -1)
+		set(_bm_tc_flag_has_result FALSE PARENT_SCOPE)
 	else()
-		set(${out} "gcc" PARENT_SCOPE)
+		set(_bm_tc_flag_has_result TRUE PARENT_SCOPE)
 	endif()
 endfunction()
 
-## @brief True if CMake IPO is on or `flags` already contain an IPO token.
-function(_bm_tc_ipo_wanted out flags)
-	set(_on FALSE)
+function(_bm_tc_flag_append io_var token)
+	if("${token}" STREQUAL "")
+		return()
+	endif()
+	set(_cur "${${io_var}}")
+	_bm_tc_flag_has("${_cur}" "${token}")
+	if(_bm_tc_flag_has_result)
+		return()
+	endif()
+	if(_cur STREQUAL "")
+		set(${io_var} "${token}" PARENT_SCOPE)
+	else()
+		set(${io_var} "${_cur} ${token}" PARENT_SCOPE)
+	endif()
+endfunction()
+
+function(_bm_tc_ipo_wanted c_str cxx_str ld_str out_var)
+	set(_yes FALSE)
 	if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
-		set(_on TRUE)
+		set(_yes TRUE)
 	endif()
-	if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
-		set(_on TRUE)
+	if(NOT _yes AND DEFINED CMAKE_BUILD_TYPE AND NOT CMAKE_BUILD_TYPE STREQUAL "")
+		string(TOUPPER "${CMAKE_BUILD_TYPE}" _bt)
+		if(CMAKE_INTERPROCEDURAL_OPTIMIZATION_${_bt})
+			set(_yes TRUE)
+		endif()
 	endif()
-	if(flags MATCHES "(^| )(-flto|/GL|/LTCG)([= ]|$)")
-		set(_on TRUE)
+	if(NOT _yes)
+		foreach(_s IN ITEMS "${c_str}" "${cxx_str}" "${ld_str}")
+			if(_s MATCHES "(^| )(-flto|/GL|/LTCG|-fwhole-program-vtables)( |$)")
+				set(_yes TRUE)
+				break()
+			endif()
+		endforeach()
 	endif()
-	set(${out} "${_on}" PARENT_SCOPE)
+	set(${out_var} "${_yes}" PARENT_SCOPE)
 endfunction()
 
-## @brief Drop foreign dialect and every IPO token. Convert -I/-L ↔ /I /LIBPATH.
-## @param[in] profile Destination BM profile.
-## @param[in] in Input flag string.
-## @param[out] out Cleaned string (no IPO tokens).
-function(_bm_tc_sanitize_flag_string profile in out)
-	set(_toks "")
-	separate_arguments(_raw NATIVE_COMMAND "${in}")
-	foreach(_t IN LISTS _raw)
+## @brief Drop foreign dialect and IPO tokens from one flag string.
+## @param[in]  in_str  Raw flag string.
+## @param[in]  profile gcc|clang|clang-cl|msvc
+## @param[out] out_var Sanitized string.
+## @note msvc/clang-cl: `-I`→`/I`, `-L`→`/LIBPATH:`. Unix `-fPIC` / `-f*`
+##       stay on gcc/clang — they are not noise. msvc drops `-f*` / `-W*`
+##       because those are not cl.exe.
+## @note Unix profiles: `/I`→`-I`, `/LIBPATH:`→`-L`, `/O[0-3d]`→`-O…`.
+##       `/GL` `/LTCG` `/Z7` are dropped (IPO/debug MSVC).
+function(_bm_tc_sanitize_flag_string in_str profile out_var)
+	set(_out "")
+	set(_msvc_like FALSE)
+	if(profile STREQUAL "msvc" OR profile STREQUAL "clang-cl")
+		set(_msvc_like TRUE)
+	endif()
+	separate_arguments(_tok UNIX_COMMAND "${in_str}")
+	foreach(_t IN LISTS _tok)
 		if(_t STREQUAL "")
 			continue()
 		endif()
-		# Pass 1: strip IPO always.
-		if(_t MATCHES "^-flto" OR _t STREQUAL "/GL" OR _t STREQUAL "/GL-" OR _t STREQUAL "/LTCG")
+		if(_t MATCHES "^-flto" OR _t STREQUAL "/GL" OR _t STREQUAL "/LTCG"
+				OR _t STREQUAL "-fwhole-program-vtables"
+				OR _t MATCHES "^-fuse-ld=")
 			continue()
 		endif()
-		if(_t MATCHES "^-fwhole-program")
-			continue()
-		endif()
-		# -fuse-ld=* is never a valid MSVC link.exe flag.
-		if(_t MATCHES "^-fuse-ld=")
-			if(profile STREQUAL "msvc")
-				continue()
-			endif()
-			# clang/gcc/clang-cl: drop here; pass 2 does not re-add fuse-ld.
-			# Native file already has ld=.
-			continue()
-		endif()
-		if(profile STREQUAL "msvc")
-			if(_t MATCHES "^-f" OR _t MATCHES "^-W" OR _t MATCHES "^-Wl," OR _t MATCHES "^-pthread")
-				continue()
-			endif()
+		if(_msvc_like)
 			if(_t MATCHES "^-I(.+)$")
 				set(_t "/I${CMAKE_MATCH_1}")
 			elseif(_t MATCHES "^-L(.+)$")
 				set(_t "/LIBPATH:${CMAKE_MATCH_1}")
+			elseif(_t MATCHES "^-f" OR _t MATCHES "^-W" OR _t STREQUAL "-pthread")
+				continue()
 			endif()
 		else()
+			if(_t STREQUAL "/GL" OR _t MATCHES "^/LTCG" OR _t STREQUAL "/Z7"
+					OR _t STREQUAL "/Zi" OR _t STREQUAL "/FS")
+				continue()
+			endif()
 			if(_t MATCHES "^/I(.+)$")
 				set(_t "-I${CMAKE_MATCH_1}")
 			elseif(_t MATCHES "^/LIBPATH:(.+)$")
 				set(_t "-L${CMAKE_MATCH_1}")
-			endif()
-			if(_t MATCHES "^/[A-Za-z]" AND NOT _t MATCHES "^/I")
-				# Other cl.exe tokens are foreign on gcc/clang.
+			elseif(_t MATCHES "^/O([0-3d])$")
+				set(_t "-O${CMAKE_MATCH_1}")
+			elseif(_t MATCHES "^/")
 				continue()
 			endif()
 		endif()
-		if(profile STREQUAL "clang-cl")
-			if(_t STREQUAL "/LTCG" OR _t STREQUAL "/GL")
-				continue()
-			endif()
+		if(_out STREQUAL "")
+			set(_out "${_t}")
+		else()
+			set(_out "${_out} ${_t}")
 		endif()
-		list(APPEND _toks "${_t}")
 	endforeach()
-	string(JOIN " " _joined ${_toks})
-	string(STRIP "${_joined}" _joined)
-	set(${out} "${_joined}" PARENT_SCOPE)
+	set(${out_var} "${_out}" PARENT_SCOPE)
 endfunction()
 
-## @brief Rewrite C/CXX/LD flags for `profile`. Cached per profile+IPO+hash.
-## @param[in,out] c_var Name of the CFLAGS variable.
-## @param[in,out] cxx_var Name of the CXXFLAGS variable.
-## @param[in,out] ld_var Name of the LDFLAGS variable.
-## @param[in] profile `gcc`, `clang`, `clang-cl`, or `msvc`.
-## @note After a miss, callers must refresh the env runner so it exports
-##       the translated strings (stages does this).
+## @brief Translate C/CXX/LD strings into @p profile. Updates PARENT_SCOPE.
+## @param[in,out] c_var   Name of the C flags variable.
+## @param[in,out] cxx_var Name of the CXX flags variable.
+## @param[in,out] ld_var  Name of the linker flags variable.
+## @param[in]     profile gcc|clang|clang-cl|msvc
+## @note Linker dialect is forced on every call:
+##       gcc `-fuse-ld=bfd`, clang/clang-cl `-fuse-ld=lld`, msvc none.
+##       clang-cl IPO is `-flto` and needs `-fuse-ld=lld` or Meson
+##       sanity dies with `LTO requires -fuse-ld=lld`.
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Entering _bm_tc_translate_flags(${profile})")
-	if(profile STREQUAL "")
-		_bm_log_message(TOOLCHAIN FATAL "_bm_tc_translate_flags: empty profile")
-	endif()
-
 	set(_c "${${c_var}}")
 	set(_cxx "${${cxx_var}}")
 	set(_ld "${${ld_var}}")
-	_bm_tc_ipo_wanted(_ipo "${_c} ${_cxx} ${_ld}")
-	if(_ipo)
-		set(_ipo_key "on")
-	else()
-		set(_ipo_key "off")
-	endif()
-	string(SHA1 _h "${profile}|${_ipo_key}|${_c}|${_cxx}|${_ld}")
-	set(_prop "BUILDMASTER_TC_TRANSLATED_${profile}_${_ipo_key}_${_h}")
-	get_property(_hit GLOBAL PROPERTY "${_prop}")
-	if(_hit)
-		list(GET _hit 0 _c)
-		list(GET _hit 1 _cxx)
-		list(GET _hit 2 _ld)
-		set(${c_var} "${_c}" PARENT_SCOPE)
-		set(${cxx_var} "${_cxx}" PARENT_SCOPE)
-		set(${ld_var} "${_ld}" PARENT_SCOPE)
-		_bm_log_message(TOOLCHAIN LOWLEVEL
-			"Exiting _bm_tc_translate_flags(${profile}) (cache)")
-		return()
-	endif()
 
-	_bm_tc_sanitize_flag_string("${profile}" "${_c}" _c)
-	_bm_tc_sanitize_flag_string("${profile}" "${_cxx}" _cxx)
-	_bm_tc_sanitize_flag_string("${profile}" "${_ld}" _ld)
+	_bm_tc_ipo_wanted("${_c}" "${_cxx}" "${_ld}" _ipo)
+	_bm_tc_sanitize_flag_string("${_c}" "${profile}" _c)
+	_bm_tc_sanitize_flag_string("${_cxx}" "${profile}" _cxx)
+	_bm_tc_sanitize_flag_string("${_ld}" "${profile}" _ld)
 
 	if(_ipo)
 		if(profile STREQUAL "msvc")
-			string(APPEND _c " /GL")
-			string(APPEND _cxx " /GL")
-			string(APPEND _ld " /LTCG")
-		elseif(profile STREQUAL "clang-cl")
-			string(APPEND _c " -flto")
-			string(APPEND _cxx " -flto")
-			string(APPEND _ld " -flto")
+			_bm_tc_flag_append(_c "/GL")
+			_bm_tc_flag_append(_cxx "/GL")
+			_bm_tc_flag_append(_ld "/LTCG")
 		else()
-			string(APPEND _c " -flto")
-			string(APPEND _cxx " -flto")
-			string(APPEND _ld " -flto")
+			_bm_tc_flag_append(_c "-flto")
+			_bm_tc_flag_append(_cxx "-flto")
+			_bm_tc_flag_append(_ld "-flto")
 		endif()
-		string(STRIP "${_c}" _c)
-		string(STRIP "${_cxx}" _cxx)
-		string(STRIP "${_ld}" _ld)
 	endif()
 
-	set_property(GLOBAL PROPERTY "${_prop}" "${_c};${_cxx};${_ld}")
+	if(profile STREQUAL "gcc")
+		_bm_tc_flag_append(_ld "-fuse-ld=bfd")
+	elseif(profile STREQUAL "clang" OR profile STREQUAL "clang-cl")
+		_bm_tc_flag_append(_ld "-fuse-ld=lld")
+	endif()
+
 	set(${c_var} "${_c}" PARENT_SCOPE)
 	set(${cxx_var} "${_cxx}" PARENT_SCOPE)
 	set(${ld_var} "${_ld}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN DEBUG
-		"translated ${profile} ipo=${_ipo_key} c='${_c}' ld='${_ld}'")
-	_bm_log_message(TOOLCHAIN LOWLEVEL
-		"Exiting _bm_tc_translate_flags(${profile})")
+		"translate ${profile} ipo=${_ipo} c='${_c}' ld='${_ld}'")
+	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_translate_flags")
 endfunction()

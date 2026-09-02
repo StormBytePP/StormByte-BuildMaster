@@ -1,5 +1,5 @@
 # BuildMaster toolchain profile: clang-cl (Windows)
-# LLD (lld-link) and llvm-lib are mandatory
+# Forced triple: clang-cl + lld-link + llvm-lib.
 
 set(BM_TC_C_COMPILER "clang-cl")
 set(BM_TC_CXX_COMPILER "clang-cl")
@@ -9,3 +9,4 @@ set(BM_TC_AR "llvm-lib")
 set(BM_TC_RANLIB "")
 set(BM_TC_NM "llvm-nm")
 set(BM_TC_FORCE_LLD TRUE)
+set(BM_TC_FUSE_LD "lld")

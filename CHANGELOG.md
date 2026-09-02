@@ -377,6 +377,12 @@ and the declaration shape changed.
   listed/removed members with the parent's `llvm-lib` (or the reverse)
   and warned `no such file or directory` for a name `/LIST` had just
   printed.
+- **toolchain triples are mandatory.** `gcc` is binutils
+  `ar` + `-fuse-ld=bfd`; `clang` / `clang-cl` are `llvm-ar` /
+  `llvm-lib` + `-fuse-ld=lld`; `msvc` is `lib.exe` + `link.exe`.
+  A missing tool is FATAL. The translator strips a foreign
+  `-fuse-ld=` / IPO dialect and writes the profile's linker flag
+  on every call (needed so `clang-cl -flto` can pass Meson sanity).
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

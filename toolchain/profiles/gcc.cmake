@@ -1,4 +1,5 @@
 # BuildMaster toolchain profile: gcc
+# Forced triple: gcc + ld.bfd + binutils ar. No LLD.
 # On macOS /usr/bin/gcc is Apple Clang. Use Homebrew gcc-N (highest N).
 
 set(BM_TC_C_COMPILER "gcc")
@@ -7,8 +8,9 @@ set(BM_TC_AR "ar")
 set(BM_TC_RANLIB "ranlib")
 set(BM_TC_NM "nm")
 set(BM_TC_FORCE_LLD FALSE)
-set(BM_TC_LINKER_TYPE "")
-set(BM_TC_LINKER "")
+set(BM_TC_LINKER_TYPE "BFD")
+set(BM_TC_LINKER "ld.bfd")
+set(BM_TC_FUSE_LD "bfd")
 
 if(APPLE)
 	set(_bm_gcc_hints

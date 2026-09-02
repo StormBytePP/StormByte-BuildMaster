@@ -1,5 +1,5 @@
 # BuildMaster toolchain profile: msvc (Windows)
-# MSVC link.exe and lib.exe; never LLD
+# Forced triple: cl + link.exe + lib.exe. Never LLD.
 
 set(BM_TC_C_COMPILER "cl")
 set(BM_TC_CXX_COMPILER "cl")
@@ -9,3 +9,4 @@ set(BM_TC_AR "lib")
 set(BM_TC_RANLIB "")
 set(BM_TC_NM "")
 set(BM_TC_FORCE_LLD FALSE)
+set(BM_TC_FUSE_LD "")

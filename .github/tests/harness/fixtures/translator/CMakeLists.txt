@@ -32,7 +32,7 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 
-# ----- msvc, IPO off: no IPO tokens in input -----
+# ----- msvc, IPO off -----
 set(_c "-fPIC -I/opt/inc -Wall")
 set(_cxx "-fPIC")
 set(_ld "-fuse-ld=link -L/opt/lib")
@@ -45,7 +45,7 @@ _bm_tc_tr_must_not("${_ld}" "/LTCG" "msvc ld IPO off")
 _bm_tc_tr_must_not("${_c}" "/GL" "msvc c IPO off")
 _bm_tc_tr_must_match("${_ld}" "/LIBPATH:/opt/lib" "msvc ld /LIBPATH")
 
-# ----- gcc, IPO off: no IPO tokens in input -----
+# ----- gcc, IPO off: forced -fuse-ld=bfd, never lld; keep -fPIC -----
 set(_c "/O2 /I/opt/inc -fPIC")
 set(_cxx "-O2")
 set(_ld "/LIBPATH:/opt/lib -fuse-ld=lld")
@@ -53,19 +53,21 @@ _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_not("${_c}" "/O2" "gcc c /O2")
 _bm_tc_tr_must_match("${_c}" "-I/opt/inc" "gcc c -I")
 _bm_tc_tr_must_match("${_c}" "-fPIC" "gcc c -fPIC")
-_bm_tc_tr_must_not("${_ld}" "-fuse-ld" "gcc ld fuse-ld")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld fuse-ld=bfd")
+_bm_tc_tr_must_not("${_ld}" "-fuse-ld=lld" "gcc ld no lld")
 _bm_tc_tr_must_match("${_ld}" "-L/opt/lib" "gcc ld -L")
 _bm_tc_tr_must_not("${_c}" "-flto" "gcc c IPO off")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "gcc ld IPO off")
 
-# ----- clang-cl, IPO off -----
+# ----- clang-cl, IPO off: forced -fuse-ld=lld -----
 set(_c "-I/opt/inc")
 set(_cxx "")
-set(_ld "-fuse-ld=lld")
+set(_ld "-fuse-ld=link")
 _bm_tc_translate_flags(_c _cxx _ld "clang-cl")
 _bm_tc_tr_must_not("${_c}" "/GL" "clang-cl c /GL")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "clang-cl ld /LTCG")
-_bm_tc_tr_must_not("${_ld}" "-fuse-ld" "clang-cl ld fuse-ld")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang-cl ld fuse-ld=lld")
+_bm_tc_tr_must_not("${_ld}" "-fuse-ld=link" "clang-cl ld no link")
 
 # ----- IPO on via CMake var -----
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
@@ -82,6 +84,7 @@ set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_match("${_c}" "-flto" "gcc c IPO on")
 _bm_tc_tr_must_match("${_ld}" "-flto" "gcc ld IPO on")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld IPO on bfd")
 _bm_tc_tr_must_not("${_c}" "/GL" "gcc c IPO on no /GL")
 
 set(_c "-O2")
@@ -89,12 +92,14 @@ set(_cxx "-O2")
 set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang c IPO on")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang ld IPO on lld")
 
 set(_c "-O2")
 set(_cxx "-O2")
 set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang-cl")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang-cl c IPO on")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang-cl ld IPO on lld")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "clang-cl ld IPO on no /LTCG")
 
 # ----- IPO on via input token, CMake var off -----
@@ -111,7 +116,7 @@ _bm_tc_tr_must_match("${_ld}" "/LTCG" "msvc from -flto /LTCG")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION "${_bm_ipo_save}")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE "${_bm_ipo_rel_save}")
 
-_bm_log_message(CORE STATUS "translator: dialect + IPO contracts OK")
+_bm_log_message(CORE STATUS "translator: dialect + IPO + fuse-ld contracts OK")
 
 add_custom_target(tc-translate
 	COMMAND ${CMAKE_COMMAND} -E echo "translator fixture already ran at configure"
