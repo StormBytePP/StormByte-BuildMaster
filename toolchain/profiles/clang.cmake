@@ -1,6 +1,7 @@
 # BuildMaster toolchain profile: clang
 # Linux: clang + ld.lld + llvm-ar.
-# Darwin: AppleClang + cctools ar/ld. llvm-ar / lld only if that
+# Darwin: AppleClang + cctools ar/ld. Do not set CMAKE_LINKER_TYPE;
+# CMake rejects LINKER_TYPE 'APPLE'. llvm-ar / lld only if that
 # binary sits next to the compiler (Homebrew llvm).
 
 set(BM_TC_C_COMPILER "clang")
@@ -11,7 +12,7 @@ if(APPLE)
 	set(BM_TC_RANLIB "ranlib")
 	set(BM_TC_NM "nm")
 	set(BM_TC_FORCE_LLD FALSE)
-	set(BM_TC_LINKER_TYPE "APPLE")
+	set(BM_TC_LINKER_TYPE "")
 	set(BM_TC_LINKER "ld")
 	set(BM_TC_FUSE_LD "")
 else()
