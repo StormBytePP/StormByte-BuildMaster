@@ -14,5 +14,22 @@ if(NOT BUILDMASTER_TOOLS_CMAKE_SRCDIR)
 	set(ENV_CMAKE_COMMAND "${ENV_CMAKE_COMMAND}" CACHE INTERNAL "")
 	set(ENV_CMAKE_SILENT_COMMAND "${ENV_CMAKE_SILENT_COMMAND}" CACHE INTERNAL "")
 	set(ENV_CMAKE_COMPILE_COMMAND "${ENV_CMAKE_COMPILE_COMMAND}" CACHE INTERNAL "")
+
+	if(NOT BUILDMASTER_INSTALL_DIR)
+		_bm_log_message(CMAKE FATAL
+			"tools/cmake: BUILDMASTER_INSTALL_DIR is empty — bootstrap is broken")
+	endif()
+	_bm_path_normalize(_bm_prefix "${BUILDMASTER_INSTALL_DIR}")
+	if(NOT CMAKE_PREFIX_PATH)
+		set(CMAKE_PREFIX_PATH "${_bm_prefix}")
+	else()
+		list(FIND CMAKE_PREFIX_PATH "${_bm_prefix}" _bm_pfx_i)
+		if(_bm_pfx_i EQUAL -1)
+			set(CMAKE_PREFIX_PATH "${_bm_prefix};${CMAKE_PREFIX_PATH}")
+		endif()
+	endif()
+	set(CMAKE_PREFIX_PATH "${CMAKE_PREFIX_PATH}" CACHE STRING
+		"BuildMaster install prefix first" FORCE)
+
 	include("${CMAKE_CURRENT_LIST_DIR}/update_toolchain.cmake")
 endif()

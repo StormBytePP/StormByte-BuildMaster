@@ -51,6 +51,7 @@ function Prepend-IfNonEmpty([string]$Name, [string]$Prefix, [string]$Sep) {
 
 Set-IfNonEmpty 'PKG_CONFIG' '@PKG_CONFIG@'
 Prepend-IfNonEmpty 'PKG_CONFIG_PATH' '@PKG_CONFIG_PATH@' ';'
+Prepend-IfNonEmpty 'CMAKE_PREFIX_PATH' '@CMAKE_PREFIX_PATH@' ';'
 Prepend-IfNonEmpty 'LIB' '@LIB@' ';'
 Prepend-IfNonEmpty 'INCLUDE' '@INCLUDE@' ';'
 Prepend-IfNonEmpty 'PATH' '@PATH@' ';'

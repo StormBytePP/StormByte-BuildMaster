@@ -85,3 +85,8 @@ if(DEFINED CMAKE_NM AND NOT "${CMAKE_NM}" STREQUAL "")
 	_bm_tc_export_raw(
 		"set(CMAKE_NM \"${_bm_nm}\" CACHE FILEPATH \"BuildMaster NM\" FORCE)")
 endif()
+
+string(REPLACE "\"" "\\\"" _bm_pfx "${CMAKE_PREFIX_PATH}")
+_bm_tc_export_raw(
+	"set(CMAKE_PREFIX_PATH \"${_bm_pfx}\" CACHE STRING \"BuildMaster prefix\" FORCE)")
+	

@@ -2,6 +2,7 @@
 
 update_pkg_config="@PKG_CONFIG@"
 update_pkgconfig_path="@PKG_CONFIG_PATH@"
+update_cmake_prefix="@CMAKE_PREFIX_PATH@"
 update_c_compiler="@CMAKE_C_COMPILER@"
 update_cxx_compiler="@CMAKE_CXX_COMPILER@"
 update_c_launcher="@CMAKE_C_COMPILER_LAUNCHER@"
@@ -28,6 +29,15 @@ if [ -n "$update_pkgconfig_path" ]; then
 		export PKG_CONFIG_PATH="$update_pkgconfig_path:$PKG_CONFIG_PATH"
 	else
 		export PKG_CONFIG_PATH="$update_pkgconfig_path"
+	fi
+fi
+
+if [ -n "$update_cmake_prefix" ]; then
+	update_cmake_prefix=$(printf '%s' "$update_cmake_prefix" | tr ';' ':')
+	if [ -n "$CMAKE_PREFIX_PATH" ]; then
+		export CMAKE_PREFIX_PATH="$update_cmake_prefix:$CMAKE_PREFIX_PATH"
+	else
+		export CMAKE_PREFIX_PATH="$update_cmake_prefix"
 	fi
 fi
 

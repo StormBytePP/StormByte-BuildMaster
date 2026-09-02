@@ -305,7 +305,11 @@ and the declaration shape changed.
   removes `links/`. Harness `links-chain` is host → Buffer only;
   Logger and Base arrive through `links/` + `buildmaster_link` /
   `buildmaster_depend` inside the Buffer tree.
-- **Added — toolchain flag translator.** Nested CMake/Meson stages rewrite `CFLAGS` / `CXXFLAGS` / `LDFLAGS` for the destination profile (`gcc`, `clang`, `clang-cl`, `msvc`): foreign dialect and `-fuse-ld=*` are dropped; `-I`/`-L` convert to `/I`/`/LIBPATH:` and the reverse. IPO tokens are stripped then re-emitted only if CMake IPO is on or the input already had an IPO flag (`/GL`+`/LTCG` on `msvc`, `-flto` otherwise). `b_lto` and `CMAKE_INTERPROCEDURAL_*` are unchanged. Not a public API (`toolchain/translator.cmake`).
+- **toolchain flag translator.** Nested CMake/Meson stages rewrite `CFLAGS` / `CXXFLAGS` / `LDFLAGS` for the destination profile (`gcc`, `clang`, `clang-cl`, `msvc`): foreign dialect and `-fuse-ld=*` are dropped; `-I`/`-L` convert to `/I`/`/LIBPATH:` and the reverse. IPO tokens are stripped then re-emitted only if CMake IPO is on or the input already had an IPO flag (`/GL`+`/LTCG` on `msvc`, `-flto` otherwise). `b_lto` and `CMAKE_INTERPROCEDURAL_*` are unchanged. Not a public API (`toolchain/translator.cmake`).
+- **`CMAKE_PREFIX_PATH` on nested CMake.** The cmake tool prepends
+  `BUILDMASTER_INSTALL_DIR` so `find_package` Config files under the shared
+  prefix are visible without per-component `-D`. Env runners export the same
+  list (`:` on Unix, `;` on Windows). Empty `BUILDMASTER_INSTALL_DIR` is FATAL.
 
 ### Changed
 
