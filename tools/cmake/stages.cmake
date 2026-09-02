@@ -33,6 +33,10 @@
 ##            runs under the deferred `<id>_configure` custom target
 ##            (suppress hierarchical STATUS; the target COMMENT is enough).
 ##            `"0"` or empty otherwise.
+## @note C/CXX/LD flags go through `_bm_tc_translate_flags` (profile =
+##       TOOLCHAIN= or inferred parent). EXE, SHARED and MODULE linker
+##       strings are translated separately. `b_lto` and
+##       `CMAKE_INTERPROCEDURAL_*` are not written here.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -93,7 +97,6 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# _bm_graph_create / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
 	endif()
@@ -212,8 +215,6 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		set(PATH "")
 	endif()
 
-	# Path used by configure.cmake.in as -DCMAKE_TOOLCHAIN_FILE=...
-	# Default: parent BuildMaster toolchain (unified install paths).
 	set(_BM_NESTED_TOOLCHAIN_FILE "${BUILDMASTER_TOOLCHAIN_FILE}")
 
 	if(NOT _toolchain_name STREQUAL "")
@@ -262,7 +263,6 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 			endif()
 		endif()
 
-		# BM_TC_* must match resolved values for the component runner bat/sh
 		set(BM_TC_C_COMPILER "${CMAKE_C_COMPILER}")
 		set(BM_TC_CXX_COMPILER "${CMAKE_CXX_COMPILER}")
 		set(BM_TC_AR "${CMAKE_AR}")
@@ -270,17 +270,21 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		set(BM_TC_RANLIB "${CMAKE_RANLIB}")
 		set(BM_TC_NM "${CMAKE_NM}")
 
-		_bm_tc_clean_ldflags(CMAKE_EXE_LINKER_FLAGS
-			"${CMAKE_EXE_LINKER_FLAGS}" "${_toolchain_name}")
-		_bm_tc_clean_ldflags(CMAKE_SHARED_LINKER_FLAGS
-			"${CMAKE_SHARED_LINKER_FLAGS}" "${_toolchain_name}")
-		_bm_tc_clean_ldflags(CMAKE_MODULE_LINKER_FLAGS
-			"${CMAKE_MODULE_LINKER_FLAGS}" "${_toolchain_name}")
-
-		_bm_tc_clean_cflags(CMAKE_C_FLAGS
-			"${CMAKE_C_FLAGS}" "${_toolchain_name}")
-		_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
-			"${CMAKE_CXX_FLAGS}" "${_toolchain_name}")
+		set(_bm_c_in "${CMAKE_C_FLAGS}")
+		set(_bm_cxx_in "${CMAKE_CXX_FLAGS}")
+		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
+			"${_toolchain_name}")
+		set(_bm_c_sh "${_bm_c_in}")
+		set(_bm_cxx_sh "${_bm_cxx_in}")
+		_bm_tc_translate_flags(_bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
+			"${_toolchain_name}")
+		set(_bm_c_mo "${_bm_c_in}")
+		set(_bm_cxx_mo "${_bm_cxx_in}")
+		_bm_tc_translate_flags(_bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
+			"${_toolchain_name}")
+		if(COMMAND _bm_env_update_runner)
+			_bm_env_update_runner()
+		endif()
 
 		if(COMMAND _bm_env_apply_install_search_paths)
 			_bm_env_apply_install_search_paths()
@@ -315,26 +319,27 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		endif()
 	else()
 		set(_CMAKE_USE_TOOLCHAIN_FILE "1")
-		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
-		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-			_bm_tc_clean_ldflags(CMAKE_EXE_LINKER_FLAGS
-				"${CMAKE_EXE_LINKER_FLAGS}" "clang-cl")
-			_bm_tc_clean_ldflags(CMAKE_SHARED_LINKER_FLAGS
-				"${CMAKE_SHARED_LINKER_FLAGS}" "clang-cl")
-			_bm_tc_clean_ldflags(CMAKE_MODULE_LINKER_FLAGS
-				"${CMAKE_MODULE_LINKER_FLAGS}" "clang-cl")
-			_bm_tc_clean_cflags(CMAKE_C_FLAGS
-				"${CMAKE_C_FLAGS}" "clang-cl")
-			_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
-				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		_bm_tc_infer_profile(_bm_inherit_profile)
+		set(_bm_c_in "${CMAKE_C_FLAGS}")
+		set(_bm_cxx_in "${CMAKE_CXX_FLAGS}")
+		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
+			"${_bm_inherit_profile}")
+		set(_bm_c_sh "${_bm_c_in}")
+		set(_bm_cxx_sh "${_bm_cxx_in}")
+		_bm_tc_translate_flags(_bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
+			"${_bm_inherit_profile}")
+		set(_bm_c_mo "${_bm_c_in}")
+		set(_bm_cxx_mo "${_bm_cxx_in}")
+		_bm_tc_translate_flags(_bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
+			"${_bm_inherit_profile}")
+		if(COMMAND _bm_env_update_runner)
+			_bm_env_update_runner()
 		endif()
 		if(COMMAND _bm_env_apply_install_search_paths)
 			_bm_env_apply_install_search_paths()
 		endif()
 	endif()
 
-	# configure.cmake.in substitutes @BUILDMASTER_TOOLCHAIN_FILE@ for the nested
-	# -DCMAKE_TOOLCHAIN_FILE=... (parent tree or component override file).
 	set(BUILDMASTER_TOOLCHAIN_FILE "${_BM_NESTED_TOOLCHAIN_FILE}")
 
 	_bm_env_quote_cmd_list(_CMAKE_CFG_CMD_PREFIX ${ENV_CMAKE_SILENT_COMMAND})

@@ -94,6 +94,7 @@ add_subdirectory(slow-configure)
 # ---------------------------------------------------------------------------
 add_subdirectory(toolchain)
 add_subdirectory(toolchain-sanity)
+add_subdirectory(translator)
 add_subdirectory(tc-prefix)
 
 # ---------------------------------------------------------------------------

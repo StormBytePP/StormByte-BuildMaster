@@ -74,6 +74,9 @@ endfunction()
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when setup runs
 ##            under the deferred `<id>_configure` custom target (suppress
 ##            hierarchical STATUS). `"0"` or empty otherwise.
+## @note C/CXX/LD flags go through `_bm_tc_translate_flags` (profile =
+##       TOOLCHAIN= or inferred parent). That drops `-fuse-ld=*` on msvc
+##       and rewrites IPO tokens. `b_lto` is unchanged here.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -105,7 +108,7 @@ endfunction()
 ##       `_MESON_CXX_ARGS` / `_MESON_LINK_ARGS` include the shared prefix
 ##       (`-I`/`-L` or `/I`/`/LIBPATH:`). Per-component runners also get
 ##       Windows `INCLUDE`/`LIB` when TOOLCHAIN= is set.
-## @note After fuse-ld and the last `_bm_env_apply_install_search_paths()`,
+## @note After translator and the last `_bm_env_apply_install_search_paths()`,
 ##       `_bm_tools_meson_append_prefix_link_args(_MESON_LINK_ARGS)` puts
 ##       the prefix `-L`/`/LIBPATH:` on the CLI `-Dc_link_args` /
 ##       `-Dcpp_link_args` line. Required because those `-D` values
@@ -143,7 +146,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		set(_BM_CONFIGURE_VIA_TARGET "0")
 	endif()
 
-	# _bm_graph_create / collect_outputs set these; raw callers get defaults
 	if(NOT DEFINED _BM_RENAME_ENABLED)
 		set(_BM_RENAME_ENABLED "1")
 	endif()
@@ -180,9 +182,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 
 	_bm_tc_validate(_toolchain_name "${_toolchain_raw}")
 
-	# Profile native file when TOOLCHAIN= is set; otherwise this process's
-	# compiler family. Never keep the outer job default unless this process
-	# still uses that family.
 	if(COMMAND _bm_tc_get_meson_native_file)
 		_bm_tc_get_meson_native_file(_MESON_NATIVE_FILE
 			TOOLCHAIN "${_toolchain_name}")
@@ -246,7 +245,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	if(NOT _toolchain_name STREQUAL "")
 		_bm_tc_load_profile("${_toolchain_name}")
 
-		# Short tool names + bindirs on PATH (avoid paths with spaces via cmd)
 		get_filename_component(_cmake_dir "${CMAKE_COMMAND}" DIRECTORY)
 		get_filename_component(_cmake_name "${CMAKE_COMMAND}" NAME)
 		_bm_path_normalize(_cmake_dir "${_cmake_dir}")
@@ -268,7 +266,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			set(PATH "${_bm_path_prefix};${PATH}")
 		endif()
 
-		# Resolve short MSVC tool names before runners embed AR/CC into the env
 		set(_bm_c_compiler "${BM_TC_C_COMPILER}")
 		set(_bm_cxx_compiler "${BM_TC_CXX_COMPILER}")
 		set(_MESON_AR "${BM_TC_AR}")
@@ -289,7 +286,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			endif()
 		endif()
 
-		# BM_TC_* must match resolved values for the component runner bat/sh
 		set(BM_TC_C_COMPILER "${_bm_c_compiler}")
 		set(BM_TC_CXX_COMPILER "${_bm_cxx_compiler}")
 		set(BM_TC_AR "${_MESON_AR}")
@@ -304,35 +300,14 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			_bm_path_normalize(_MESON_RANLIB "${_MESON_RANLIB}")
 		endif()
 
-		_bm_tc_clean_ldflags(_MESON_LINK_ARGS
-			"${_MESON_LINK_ARGS}" "${_toolchain_name}")
-		_bm_tc_clean_cflags(CMAKE_C_FLAGS
-			"${CMAKE_C_FLAGS}" "${_toolchain_name}")
-		_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
-			"${CMAKE_CXX_FLAGS}" "${_toolchain_name}")
+		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
+			"${_toolchain_name}")
+		if(COMMAND _bm_env_update_runner)
+			_bm_env_update_runner()
+		endif()
 
 		if(COMMAND _bm_env_apply_install_search_paths)
 			_bm_env_apply_install_search_paths()
-		endif()
-
-		# -fuse-ld= must be a driver flavor name, never an absolute path
-		if(BM_TC_FORCE_LLD)
-			_bm_tc_fuse_ld_flag(_bm_fuse_ld "LLD" "")
-		elseif(_toolchain_name STREQUAL "msvc")
-			_bm_tc_fuse_ld_flag(_bm_fuse_ld "MSVC" "")
-		else()
-			set(_bm_tc_lt "")
-			if(DEFINED BM_TC_LINKER_TYPE)
-				set(_bm_tc_lt "${BM_TC_LINKER_TYPE}")
-			endif()
-			set(_bm_tc_lnk "")
-			if(DEFINED BM_TC_LINKER)
-				set(_bm_tc_lnk "${BM_TC_LINKER}")
-			endif()
-			_bm_tc_fuse_ld_flag(_bm_fuse_ld "${_bm_tc_lt}" "${_bm_tc_lnk}")
-		endif()
-		if(NOT _bm_fuse_ld STREQUAL "")
-			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
 
 		_bm_env_create_runners(
@@ -358,31 +333,15 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			set(ENV_CMAKE_COMPILE_COMMAND ${_bm_tc_runner_silent} "${_cmake_name}")
 		endif()
 	else()
-		# Inherit parent: strip MSVC LTCG tokens if parent is clang-cl
-		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-			_bm_tc_clean_ldflags(_MESON_LINK_ARGS
-				"${_MESON_LINK_ARGS}" "clang-cl")
-			_bm_tc_clean_cflags(CMAKE_C_FLAGS
-				"${CMAKE_C_FLAGS}" "clang-cl")
-			_bm_tc_clean_cflags(CMAKE_CXX_FLAGS
-				"${CMAKE_CXX_FLAGS}" "clang-cl")
+		_bm_tc_infer_profile(_bm_inherit_profile)
+		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
+			"${_bm_inherit_profile}")
+		if(COMMAND _bm_env_update_runner)
+			_bm_env_update_runner()
 		endif()
 
 		if(COMMAND _bm_env_apply_install_search_paths)
 			_bm_env_apply_install_search_paths()
-		endif()
-
-		set(_bm_lt "")
-		if(DEFINED CMAKE_LINKER_TYPE)
-			set(_bm_lt "${CMAKE_LINKER_TYPE}")
-		endif()
-		set(_bm_lnk "")
-		if(DEFINED CMAKE_LINKER)
-			set(_bm_lnk "${CMAKE_LINKER}")
-		endif()
-		_bm_tc_fuse_ld_flag(_bm_fuse_ld "${_bm_lt}" "${_bm_lnk}")
-		if(NOT _bm_fuse_ld STREQUAL "")
-			string(APPEND _MESON_LINK_ARGS " ${_bm_fuse_ld}")
 		endif()
 
 		if(DEFINED CMAKE_AR AND NOT CMAKE_AR STREQUAL "")
@@ -403,10 +362,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		_bm_env_apply_install_search_paths()
 	endif()
 
-	# CLI -Dc_link_args replaces native-file c_link_args. Keep prefix -L
-	# here so probes (mp3lame) and the ffmpeg ninja link prefer BM libs
-	# over a same-named system .so even when the runner and .ini already
-	# advertise the prefix.
 	_bm_tools_meson_append_prefix_link_args(_MESON_LINK_ARGS)
 	string(STRIP "${_MESON_LINK_ARGS}" _MESON_LINK_ARGS)
 
@@ -420,9 +375,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		set(LTO_ENABLED "false")
 	endif()
 
-	# Meson -Dbuildtype= must be a concrete choice. Empty CMAKE_BUILD_TYPE
-	# (or multi-config generators) used to substitute nothing and Meson
-	# reported Value "." is not one of the choices.
 	if(CMAKE_BUILD_TYPE STREQUAL "Debug")
 		set(MESON_BUILD_TYPE "debug")
 	elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
@@ -445,9 +397,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
 
-	# MSVC-like drivers: request CodeView (/Z7) for nested Meson objects.
-	# Do not force /std:c*; upstream projects (e.g. PostgreSQL) set the C
-	# standard themselves. Unconditional /std:c11 broke real MSVC builds.
 	if(MSVC OR _toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl"
 			OR CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
 		string(APPEND _MESON_C_ARGS " /Z7")

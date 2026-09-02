@@ -146,6 +146,9 @@ add_custom_target(run_buildmaster_smoke
 		nest-tc_install
 		tc-prefix_install
 		tc-sanity
+		tc-prefix_install
+		tc-sanity
+		tc-translate
 		# WHOLE
 		out-lib_install plain-lib_install whole-lib_install
 		whole_link_test_nowhole_run whole_link_test_run
