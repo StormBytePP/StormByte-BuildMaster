@@ -413,14 +413,14 @@ and the declaration shape changed.
   A missing tool is FATAL. The translator strips a foreign
   `-fuse-ld=` / IPO dialect and writes the profile's linker flag
   on every call (needed so `clang-cl -flto` can pass Meson sanity).
-- **Fixed — `clang-cl -flto` sees `-fuse-ld=lld` before `/link`.**
-  The translator already forced `-fuse-ld=lld` on *link* flags.
-  Meson clang-cl sanity is `clang-cl <c_args> /link <c_link_args>`;
-  the driver ignores `-fuse-ld=` after `/link` and dies with
-  `LTO requires -fuse-ld=lld`. The flag is now also on C/CXX
-  (gcc gets `-fuse-ld=bfd` on C/CXX the same way). Harness
-  translator builds that sanity line and FATALs if `-flto` /
-  `-fuse-ld=` sit after `/link`.
+- **Fixed — `-fuse-ld=` placement.** `clang-cl` Meson sanity is
+  `clang-cl <c_args> /link <c_link_args>`; the driver ignores
+  `-fuse-ld=` after `/link` (`LTO requires -fuse-ld=lld`). That
+  profile gets `-fuse-ld=lld` on C/CXX *and* LD. `gcc` / `clang`
+  get it on LD only: the same flag on C breaks Meson
+  `cc -c -Werror=unused-command-line-argument` (dav1d reported
+  “Atomics not supported”). Harness checks both rules and the
+  clang-cl `/link` order.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

@@ -1,7 +1,6 @@
 # Configure-time only. Calls _bm_tc_translate_flags; no compile.
-# Also builds a Meson-style clang-cl sanity line:
-#   <c_args> /link <ld_args>
-# so -fuse-ld= / -flto cannot hide behind /link.
+# Meson clang-cl sanity: <c_args> /link <ld_args>
+# gcc/clang Unix: -fuse-ld= only on LD (Meson -c -Werror=unused-…).
 
 function(_bm_tc_tr_must_match hay needle label)
 	if(NOT hay MATCHES "${needle}")
@@ -17,7 +16,6 @@ function(_bm_tc_tr_must_not hay needle label)
 	endif()
 endfunction()
 
-## @brief Meson clang-cl sanity: compile flags, then /link, then link flags.
 function(_bm_tc_tr_cl_sanity c_str ld_str out_var)
 	string(STRIP "${c_str}" _c)
 	string(STRIP "${ld_str}" _ld)
@@ -28,7 +26,6 @@ function(_bm_tc_tr_cl_sanity c_str ld_str out_var)
 	endif()
 endfunction()
 
-## @brief Token must appear in hay before /link (compiler driver sees it).
 function(_bm_tc_tr_before_link hay needle label)
 	string(FIND "${hay}" "/link" _lp)
 	string(FIND "${hay}" "${needle}" _np)
@@ -58,7 +55,6 @@ endif()
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 
-# ----- msvc, IPO off -----
 set(_c "-fPIC -I/opt/inc -Wall")
 set(_cxx "-fPIC")
 set(_ld "-fuse-ld=link -L/opt/lib")
@@ -72,7 +68,6 @@ _bm_tc_tr_must_not("${_ld}" "/LTCG" "msvc ld IPO off")
 _bm_tc_tr_must_not("${_c}" "/GL" "msvc c IPO off")
 _bm_tc_tr_must_match("${_ld}" "/LIBPATH:/opt/lib" "msvc ld /LIBPATH")
 
-# ----- gcc, IPO off -----
 set(_c "/O2 /I/opt/inc -fPIC")
 set(_cxx "-O2")
 set(_ld "/LIBPATH:/opt/lib -fuse-ld=lld")
@@ -80,15 +75,13 @@ _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_not("${_c}" "/O2" "gcc c /O2")
 _bm_tc_tr_must_match("${_c}" "-I/opt/inc" "gcc c -I")
 _bm_tc_tr_must_match("${_c}" "-fPIC" "gcc c -fPIC")
-_bm_tc_tr_must_match("${_c}" "-fuse-ld=bfd" "gcc c fuse-ld=bfd")
+_bm_tc_tr_must_not("${_c}" "-fuse-ld" "gcc c no fuse-ld")
 _bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld fuse-ld=bfd")
-_bm_tc_tr_must_not("${_c}" "-fuse-ld=lld" "gcc c no lld")
 _bm_tc_tr_must_not("${_ld}" "-fuse-ld=lld" "gcc ld no lld")
 _bm_tc_tr_must_match("${_ld}" "-L/opt/lib" "gcc ld -L")
 _bm_tc_tr_must_not("${_c}" "-flto" "gcc c IPO off")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "gcc ld IPO off")
 
-# ----- clang-cl, IPO off: fuse-ld on C so Meson sanity sees it -----
 set(_c "-I/opt/inc")
 set(_cxx "")
 set(_ld "-fuse-ld=link")
@@ -101,7 +94,6 @@ _bm_tc_tr_must_not("${_ld}" "-fuse-ld=link" "clang-cl ld no link")
 _bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
 _bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl sanity fuse-ld before /link")
 
-# ----- IPO on via CMake var -----
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
 set(_c "-O2")
 set(_cxx "-O2")
@@ -119,7 +111,8 @@ set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_match("${_c}" "-flto" "gcc c IPO on")
 _bm_tc_tr_must_match("${_ld}" "-flto" "gcc ld IPO on")
-_bm_tc_tr_must_match("${_c}" "-fuse-ld=bfd" "gcc c IPO on bfd")
+_bm_tc_tr_must_not("${_c}" "-fuse-ld" "gcc c IPO on no fuse-ld")
+_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld IPO on bfd")
 _bm_tc_tr_must_not("${_c}" "/GL" "gcc c IPO on no /GL")
 
 set(_c "-O2")
@@ -127,7 +120,7 @@ set(_cxx "-O2")
 set(_ld "")
 _bm_tc_translate_flags(_c _cxx _ld "clang")
 _bm_tc_tr_must_match("${_c}" "-flto" "clang c IPO on")
-_bm_tc_tr_must_match("${_c}" "-fuse-ld=lld" "clang c IPO on lld")
+_bm_tc_tr_must_not("${_c}" "-fuse-ld" "clang c no fuse-ld")
 _bm_tc_tr_must_match("${_ld}" "-fuse-ld=lld" "clang ld IPO on lld")
 
 set(_c "-O2")
@@ -141,7 +134,6 @@ _bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
 _bm_tc_tr_before_link("${_sane}" "-flto" "clang-cl sanity -flto before /link")
 _bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl sanity lld before /link")
 
-# ----- IPO on via input token, CMake var off -----
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE OFF)
 set(_c "-flto")

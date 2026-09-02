@@ -120,11 +120,11 @@ endfunction()
 ## @param[in,out] cxx_var Name of the CXX flags variable.
 ## @param[in,out] ld_var  Name of the linker flags variable.
 ## @param[in]     profile gcc|clang|clang-cl|msvc
-## @note Linker dialect is forced on every call:
-##       gcc `-fuse-ld=bfd`, clang/clang-cl `-fuse-ld=lld`, msvc none.
-##       clang / clang-cl also get `-fuse-ld=` on C/CXX: Meson
-##       clang-cl sanity puts `c_link_args` after `/link` and the
-##       driver then ignores them (`LTO requires -fuse-ld=lld`).
+## @note gcc/clang: `-fuse-ld=` only on LD. Putting it on C breaks Meson
+##       `cc -c -Werror=unused-command-line-argument` (dav1d atomics).
+##       clang-cl: also on C/CXX because Meson sanity is
+##       `clang-cl <c_args> /link <link_args>` and the driver ignores
+##       `-fuse-ld=` after `/link`.
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Entering _bm_tc_translate_flags(${profile})")
@@ -150,10 +150,10 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	endif()
 
 	if(profile STREQUAL "gcc")
-		_bm_tc_flag_append(_c "-fuse-ld=bfd")
-		_bm_tc_flag_append(_cxx "-fuse-ld=bfd")
 		_bm_tc_flag_append(_ld "-fuse-ld=bfd")
-	elseif(profile STREQUAL "clang" OR profile STREQUAL "clang-cl")
+	elseif(profile STREQUAL "clang")
+		_bm_tc_flag_append(_ld "-fuse-ld=lld")
+	elseif(profile STREQUAL "clang-cl")
 		_bm_tc_flag_append(_c "-fuse-ld=lld")
 		_bm_tc_flag_append(_cxx "-fuse-ld=lld")
 		_bm_tc_flag_append(_ld "-fuse-ld=lld")
