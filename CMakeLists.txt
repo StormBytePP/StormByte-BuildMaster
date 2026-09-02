@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Version (pin local, before any redirect)
 # -----------------------------------------------------------------------------
-set(BUILDMASTER_VERSION "2.0.1-9999")
+set(BUILDMASTER_VERSION "2.0.0-9999")
 set(_BM_PIN_VERSION "${BUILDMASTER_VERSION}")
 set(_BM_PIN_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
