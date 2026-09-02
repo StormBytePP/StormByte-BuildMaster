@@ -12,7 +12,13 @@ include("${CMAKE_CURRENT_LIST_DIR}/../../../paths.cmake")
 ## @note Required hook for `_bm_tools_demand_extra(pkgconfig)`.
 ## @note `BUILDMASTER_TOOLS_PKGCONFIG_FORCE_BUNDLED=ON` skips the system
 ##       probe (harness only).
-## @note Bundled install uses `ENV_NINJA_COMMAND` (absolute ninja + runner).
+## @note Bundled install runs at **configure** time. The ninja binary is
+##       invoked directly (`CMAKE_MAKE_PROGRAM`, else the last element of
+##       `ENV_NINJA_COMMAND`). The env runner is not used here: on Windows
+##       it can swallow `-C` and `ninja install` returns 0 after copying
+##       docs without building `pkgconf${CMAKE_EXECUTABLE_SUFFIX}`.
+## @note After `ninja install`, the prefix exe must exist. rc=0 is not
+##       enough.
 ## @note Always sets `PKG_CONFIG_PATH` to
 ##       `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig` (GNUInstallDirs: `lib` or
 ##       `lib64`) and calls `_bm_env_update_runner()` so the generated
@@ -88,8 +94,20 @@ function(_bm_extra_pkgconfig_init)
 				"meson setup did not write ${PKGCONF_BUILD_DIR}/build.ninja")
 		endif()
 
+		# Configure-time extra: raw ninja, not ENV_NINJA_COMMAND (runner).
+		set(_bm_ninja "")
+		if(CMAKE_MAKE_PROGRAM)
+			set(_bm_ninja "${CMAKE_MAKE_PROGRAM}")
+		else()
+			list(GET ENV_NINJA_COMMAND -1 _bm_ninja)
+		endif()
+		if(_bm_ninja STREQUAL "")
+			_bm_log_message(PKGCONF FATAL
+				"no ninja binary for bundled pkgconf (CMAKE_MAKE_PROGRAM empty and ENV_NINJA_COMMAND='${ENV_NINJA_COMMAND}')")
+		endif()
+
 		execute_process(
-			COMMAND ${ENV_NINJA_COMMAND} -C "${PKGCONF_BUILD_DIR}" install
+			COMMAND "${_bm_ninja}" -C "${PKGCONF_BUILD_DIR}" install
 			RESULT_VARIABLE _pkgconf_build_result
 			OUTPUT_VARIABLE _pkgconf_build_out
 			ERROR_VARIABLE _pkgconf_build_err
@@ -97,22 +115,29 @@ function(_bm_extra_pkgconfig_init)
 		)
 		if(NOT _pkgconf_build_result EQUAL 0)
 			_bm_log_message(PKGCONF FATAL
-				"Building pkgconf failed (exit ${_pkgconf_build_result})\nbuilddir=${PKGCONF_BUILD_DIR}\nENV_NINJA_COMMAND=${ENV_NINJA_COMMAND}\n--- stdout ---\n${_pkgconf_build_out}\n--- stderr ---\n${_pkgconf_build_err}")
+				"Building pkgconf failed (exit ${_pkgconf_build_result})\nbuilddir=${PKGCONF_BUILD_DIR}\nninja=${_bm_ninja}\n--- stdout ---\n${_pkgconf_build_out}\n--- stderr ---\n${_pkgconf_build_err}")
 		endif()
 
 		set(PKG_CONFIG "${BUILDMASTER_INSTALL_BINDIR}/pkgconf${CMAKE_EXECUTABLE_SUFFIX}")
+		if(NOT EXISTS "${PKG_CONFIG}")
+			_bm_log_message(PKGCONF FATAL
+				"bundled pkgconf install did not produce ${PKG_CONFIG}\nbuilddir=${PKGCONF_BUILD_DIR}\nninja=${_bm_ninja}\n--- stdout ---\n${_pkgconf_build_out}\n--- stderr ---\n${_pkgconf_build_err}")
+		endif()
+
 		execute_process(
-			COMMAND ${ENV_RUNNER} "${PKG_CONFIG}" --version
+			COMMAND "${PKG_CONFIG}" --version
 			RESULT_VARIABLE _pkgconf_test_result
 			OUTPUT_VARIABLE _pkgconf_version
 			ERROR_VARIABLE _pkgconf_test_err
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			ERROR_STRIP_TRAILING_WHITESPACE
 		)
 		if(NOT _pkgconf_test_result EQUAL 0)
 			_bm_log_message(PKGCONF FATAL
 				"Testing pkgconf failed (exit ${_pkgconf_test_result}) exe=${PKG_CONFIG}\n${_pkgconf_test_err}")
 		endif()
 		set(PKG_CONFIG_WORKING TRUE)
-		string(REPLACE "\n" "" PKG_CONFIG_VERSION "${_pkgconf_version}")
+		set(PKG_CONFIG_VERSION "${_pkgconf_version}")
 		_bm_log_message(PKGCONF STATUS
 			"Using bundled pkgconf version: ${PKG_CONFIG_VERSION}" 3)
 	endif()
