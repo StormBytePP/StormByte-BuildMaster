@@ -1,7 +1,6 @@
 # Configure-time only. Calls _bm_tc_translate_flags; no compile.
-# Meson clang-cl sanity: <c_args> /link <ld_args>
-# gcc / Linux clang: -fuse-ld= only on LD.
-# Darwin clang: no -fuse-ld (ld64).
+# Darwin gcc/clang: no -fuse-ld. Linux gcc: bfd on LD. Linux clang: lld on LD.
+# clang-cl: -fuse-ld=lld on C before /link.
 
 function(_bm_tc_tr_must_match hay needle label)
 	if(NOT hay MATCHES "${needle}")
@@ -77,8 +76,12 @@ _bm_tc_tr_must_not("${_c}" "/O2" "gcc c /O2")
 _bm_tc_tr_must_match("${_c}" "-I/opt/inc" "gcc c -I")
 _bm_tc_tr_must_match("${_c}" "-fPIC" "gcc c -fPIC")
 _bm_tc_tr_must_not("${_c}" "-fuse-ld" "gcc c no fuse-ld")
-_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld fuse-ld=bfd")
-_bm_tc_tr_must_not("${_ld}" "-fuse-ld=lld" "gcc ld no lld")
+if(APPLE)
+	_bm_tc_tr_must_not("${_ld}" "-fuse-ld" "gcc ld apple no fuse-ld")
+else()
+	_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld fuse-ld=bfd")
+	_bm_tc_tr_must_not("${_ld}" "-fuse-ld=lld" "gcc ld no lld")
+endif()
 _bm_tc_tr_must_match("${_ld}" "-L/opt/lib" "gcc ld -L")
 _bm_tc_tr_must_not("${_c}" "-flto" "gcc c IPO off")
 _bm_tc_tr_must_not("${_ld}" "/LTCG" "gcc ld IPO off")
@@ -113,7 +116,11 @@ _bm_tc_translate_flags(_c _cxx _ld "gcc")
 _bm_tc_tr_must_match("${_c}" "-flto" "gcc c IPO on")
 _bm_tc_tr_must_match("${_ld}" "-flto" "gcc ld IPO on")
 _bm_tc_tr_must_not("${_c}" "-fuse-ld" "gcc c IPO on no fuse-ld")
-_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld IPO on bfd")
+if(APPLE)
+	_bm_tc_tr_must_not("${_ld}" "-fuse-ld" "gcc ld IPO apple no fuse-ld")
+else()
+	_bm_tc_tr_must_match("${_ld}" "-fuse-ld=bfd" "gcc ld IPO on bfd")
+endif()
 _bm_tc_tr_must_not("${_c}" "/GL" "gcc c IPO on no /GL")
 
 set(_c "-O2")

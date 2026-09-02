@@ -1,4 +1,7 @@
 # Configure-time only. Generated Meson native files + profile sources.
+# Profile .cmake files contain BOTH Darwin and Linux branches; do not
+# assert absence of Linux tokens in the source. Assert the generated
+# native_*.ini instead.
 
 function(_bm_tc_sanity_slurp path out_var)
 	if(NOT EXISTS "${path}")
@@ -45,7 +48,6 @@ if(WIN32)
 	_bm_tc_sanity_slurp("${_meson_dir}/native_clang-cl.ini" _cl_n)
 	_bm_tc_sanity_must_match("${_cl_n}" "llvm-lib" "native_clang-cl.ini ar")
 	_bm_tc_sanity_must_match("${_cl_n}" "lld-link" "native_clang-cl.ini ld")
-	# Not lib\\.exe: that is a substring of llvm-lib.exe.
 	_bm_tc_sanity_must_not("${_cl_n}" "[/\\\\]lib\\.exe" "native_clang-cl.ini")
 
 	_bm_tc_sanity_slurp("${_prof_dir}/clang-cl.cmake" _cl_p)
@@ -55,19 +57,28 @@ if(WIN32)
 	_bm_log_message(CORE STATUS "toolchain-sanity Windows: msvc + clang-cl OK")
 else()
 	_bm_tc_sanity_slurp("${_meson_dir}/native_gcc.ini" _gcc_n)
+	_bm_tc_sanity_slurp("${_prof_dir}/gcc.cmake" _gcc_p)
 	_bm_tc_sanity_must_not("${_gcc_n}" "llvm-ar" "native_gcc.ini")
 	_bm_tc_sanity_must_not("${_gcc_n}" "ld\\.lld" "native_gcc.ini")
 	_bm_tc_sanity_must_match("${_gcc_n}" "ar" "native_gcc.ini ar")
 
-	_bm_tc_sanity_slurp("${_prof_dir}/gcc.cmake" _gcc_p)
-	_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_AR \"ar\"" "profile gcc AR")
-	_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_FORCE_LLD FALSE" "profile gcc LLD")
+	if(APPLE)
+		_bm_tc_sanity_must_not("${_gcc_n}" "ld\\.bfd" "native_gcc.ini apple")
+		_bm_tc_sanity_must_not("${_gcc_n}" "LINKER_TYPE" "native_gcc.ini apple no BFD type")
+		_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_LINKER \"ld\"" "profile gcc apple ld")
+	else()
+		_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_AR \"ar\"" "profile gcc AR")
+		_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_FORCE_LLD FALSE" "profile gcc LLD")
+		_bm_tc_sanity_must_match("${_gcc_p}" "BM_TC_LINKER_TYPE \"BFD\"" "profile gcc BFD")
+	endif()
 
 	_bm_tc_sanity_slurp("${_meson_dir}/native_clang.ini" _clang_n)
 	_bm_tc_sanity_slurp("${_prof_dir}/clang.cmake" _clang_p)
 	if(APPLE)
 		_bm_tc_sanity_must_not("${_clang_n}" "llvm-ar" "native_clang.ini apple")
 		_bm_tc_sanity_must_not("${_clang_n}" "ld\\.lld" "native_clang.ini apple")
+		_bm_tc_sanity_must_match("${_clang_p}" "BM_TC_AR \"ar\"" "profile clang apple AR")
+		_bm_tc_sanity_must_match("${_clang_p}" "BM_TC_LINKER \"ld\"" "profile clang apple ld")
 	else()
 		_bm_tc_sanity_must_match("${_clang_n}" "llvm-ar" "native_clang.ini ar")
 		_bm_tc_sanity_must_match("${_clang_n}" "ld\\.lld" "native_clang.ini lld")

@@ -49,8 +49,10 @@ endfunction()
 ##       compiler / archiver / linker to absolute paths. Missing tool
 ##       is FATAL — no silent fallback to the parent job.
 ## @note Triple:
-##       gcc      → bfd + binutils `ar`
-##       clang    → lld + `llvm-ar` (Darwin: cctools `ld` + `ar`)
+##       gcc      → Linux: bfd + binutils `ar`
+##                  Darwin: Homebrew gcc-N + cctools `ld`/`ar` (no BFD)
+##       clang    → Linux: lld + `llvm-ar`
+##                  Darwin: cctools `ld` + `ar`
 ##       clang-cl → lld-link + `llvm-lib`
 ##       msvc     → link.exe + lib.exe
 ## @note Empty `name` or a missing profile file is FATAL.
@@ -77,8 +79,13 @@ function(_bm_tc_load_profile name)
 		"${BM_TC_AR}" BM_TC_AR)
 
 	if(name STREQUAL "gcc")
-		_bm_tc_require_program("linker" "${name}"
-			"ld.bfd;ld" BM_TC_LINKER)
+		if(APPLE)
+			_bm_tc_require_program("linker" "${name}"
+				"ld;ld64" BM_TC_LINKER)
+		else()
+			_bm_tc_require_program("linker" "${name}"
+				"ld.bfd;ld" BM_TC_LINKER)
+		endif()
 	elseif(name STREQUAL "clang")
 		if(APPLE)
 			_bm_tc_require_program("linker" "${name}"

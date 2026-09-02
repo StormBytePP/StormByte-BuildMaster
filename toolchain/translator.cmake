@@ -120,9 +120,9 @@ endfunction()
 ## @param[in,out] cxx_var Name of the CXX flags variable.
 ## @param[in,out] ld_var  Name of the linker flags variable.
 ## @param[in]     profile gcc|clang|clang-cl|msvc
-## @note gcc: `-fuse-ld=bfd` on LD only.
-##       clang (not Apple): `-fuse-ld=lld` on LD only.
-##       clang Darwin: no `-fuse-ld` (ld64).
+## @note Linux gcc: `-fuse-ld=bfd` on LD only.
+##       Linux clang: `-fuse-ld=lld` on LD only.
+##       Darwin gcc/clang: no `-fuse-ld` (ld64; CMake rejects BFD).
 ##       clang-cl: `-fuse-ld=lld` on C/CXX and LD (Meson `/link` order).
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
@@ -148,7 +148,7 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 		endif()
 	endif()
 
-	if(profile STREQUAL "gcc")
+	if(profile STREQUAL "gcc" AND NOT APPLE)
 		_bm_tc_flag_append(_ld "-fuse-ld=bfd")
 	elseif(profile STREQUAL "clang" AND NOT APPLE)
 		_bm_tc_flag_append(_ld "-fuse-ld=lld")

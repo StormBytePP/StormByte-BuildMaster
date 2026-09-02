@@ -436,14 +436,16 @@ and the declaration shape changed.
   `install_library.cmake.in`. Generated rules live under
   `scripts/install_rules/`. Worker `normalize_install_outputs.cmake`
   is `normalize_install_libraries.cmake`.
-- **Archiver is toolchain, not a tool.** `CMAKE_AR` and Meson
-  `[binaries] ar` / `ld` come from the component `TOOLCHAIN=`
-  profile: `msvc` → `lib.exe` + `link.exe`; `clang-cl` → `llvm-lib`
-  + `lld-link`; Linux `clang` → `llvm-ar` + `ld.lld`; Darwin
-  `clang` → cctools `ar` + `ld`; `gcc` → binutils `ar` + `-fuse-ld=bfd`.
-  A clang-cl parent does not force `llvm-lib` onto an `msvc` leaf or
-  onto REPACK merge. Missing AR on a profile is FATAL (incomplete
-  toolchain), not an optional tool miss.
+- **Archiver is toolchain, not a tool.**
+  `CMAKE_AR` and Meson `[binaries] ar` / `ld` come from the component
+  `TOOLCHAIN=` profile: `msvc` → `lib.exe` + `link.exe`; `clang-cl`
+  → `llvm-lib` + `lld-link`; Linux `clang` → `llvm-ar` + `ld.lld`;
+  Darwin `clang` → cctools `ar` + `ld`; Linux `gcc` → binutils
+  `ar` + `-fuse-ld=bfd`; Darwin `gcc` → Homebrew `gcc-N` + cctools
+  `ar`/`ld` (no `CMAKE_LINKER_TYPE=BFD`). A clang-cl parent does
+  not force `llvm-lib` onto an `msvc` leaf or onto REPACK merge.
+  Missing AR on a profile is FATAL (incomplete toolchain), not an
+  optional tool miss.
 - **Stage COMMENT:** configure stays CMake/Meson; compile and
   install use `[BuildMaster/Ninja]`.
 - **Root `CMakeLists.txt` includes helpers before `init_vars`,** so
@@ -508,18 +510,23 @@ and the declaration shape changed.
   with `lib.exe` no longer lists/removes members with the parent’s
   `llvm-lib` (or the reverse) and warns `no such file or directory`
   for a name `/LIST` had just printed.
-- **Toolchain triples are mandatory.** `gcc` is binutils `ar` +
-  `-fuse-ld=bfd`. Linux `clang` is `llvm-ar` + `-fuse-ld=lld`.
-  Darwin `clang` is cctools `ar` + `ld` (AppleClang; no `llvm-ar`,
-  no lld unless that LLVM sits next to the compiler). `clang-cl`
-  is `llvm-lib` + `lld-link` + `-fuse-ld=lld`. `msvc` is `lib.exe`
-  + `link.exe`. A missing tool of *that* triple is FATAL.
+- **Toolchain triples are mandatory.** Linux `gcc` is binutils
+  `ar` + `-fuse-ld=bfd`. Darwin `gcc` is Homebrew `gcc-N` +
+  cctools `ar`/`ld` (no `CMAKE_LINKER_TYPE=BFD`, no `-fuse-ld=bfd`;
+  Apple CMake rejects `LINKER_TYPE 'BFD'`). Linux `clang` is
+  `llvm-ar` + `-fuse-ld=lld`. Darwin `clang` is cctools `ar` +
+  `ld`. `clang-cl` is `llvm-lib` + `lld-link` + `-fuse-ld=lld` on
+  C/CXX and LD (Meson sanity ignores the flag after `/link`).
+  `msvc` is `lib.exe` + `link.exe`. A missing tool of *that*
+  triple is FATAL. Linux `gcc`/`clang` get `-fuse-ld=` on LD only
+  (`cc -c -Werror=unused-command-line-argument`). Darwin gcc/clang
+  get none (ld64).
 - **`-fuse-ld=` placement.** `clang-cl`: on C/CXX and LD (Meson
   sanity is `clang-cl <c_args> /link <c_link_args>`; the driver
-  ignores the flag after `/link`). `gcc` and Linux `clang`: LD
-  only (`cc -c -Werror=unused-command-line-argument` + fuse-ld on
-  C made dav1d report “Atomics not supported”). Darwin `clang`:
-  no `-fuse-ld` (ld64). Harness checks all three.
+  ignores the flag after `/link`). Linux `gcc` / `clang`: LD only
+  (`cc -c -Werror=unused-command-line-argument` + fuse-ld on C
+  made dav1d report “Atomics not supported”). Darwin `gcc` /
+  `clang`: no `-fuse-ld` (ld64). Harness checks all four.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 
