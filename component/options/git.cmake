@@ -17,6 +17,10 @@
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Unknown inner keys → WARNING.
 ##       Empty `SWITCH=` or empty `PATCH=` or empty `ROOT=` → FATAL.
 ##       Meta + any GIT op is FATAL in `buildmaster_meta`.
+## @note `PATCH=` is one path. `PATCH={a;b}` (or several `PATCH=` keys) is
+##       several paths in declaration order. A CMake list expanded inside
+##       `PATCH={${LIST}}` is the same form. Brace unwrap happens here so
+##       `PARENT_SCOPE` does not re-split `{a;b}` into `{a` + `b}`.
 ## @note `ROOT=` is always a path under the component srcdir. A leading
 ##       `/` or drive letter is stripped (not an absolute filesystem path).
 ##       Omitted `ROOT` → work tree is srcdir. Git is demanded only when
@@ -92,7 +96,24 @@ function(_bm_opt_parse_git options_string
 						_bm_log_message(COMPONENT FATAL
 							"GIT PATCH= requires a file path")
 					endif()
-					list(APPEND _patches "${_iv}")
+					_bm_opt_unwrap_brace("${_iv}" _pinner _pbrace)
+					if(_pbrace)
+						if("${_pinner}" STREQUAL "")
+							_bm_log_message(COMPONENT FATAL
+								"GIT PATCH= requires a file path")
+						endif()
+						foreach(_pe IN LISTS _pinner)
+							if(_pe STREQUAL "")
+								continue()
+							endif()
+							string(STRIP "${_pe}" _pe)
+							if(NOT _pe STREQUAL "")
+								list(APPEND _patches "${_pe}")
+							endif()
+						endforeach()
+					else()
+						list(APPEND _patches "${_iv}")
+					endif()
 				elseif(_ik STREQUAL "TITLE")
 					set(_title "${_iv}")
 				elseif(_ik STREQUAL "ROOT")
@@ -185,6 +206,7 @@ endfunction()
 ## @note No-op when GIT is absent. Empty group is already WARNING in parse.
 ##       PATCH paths: absolute unchanged; relative to
 ##       `CMAKE_CURRENT_SOURCE_DIR`. Missing file is FATAL.
+##       `PATCH={a;b}` is already expanded to one list entry per file.
 ##       `ROOT=` is always under `_srcdir` (leading `/` or drive stripped).
 ##       Escape above `_srcdir` is FATAL before any existence check.
 ##       Missing work tree is FATAL after the escape check.
