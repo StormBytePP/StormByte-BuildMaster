@@ -128,6 +128,7 @@ add_custom_target(run_buildmaster_smoke
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run
 		mtc-inherit_install mtc-pinned_install
+		mtc-inherit_install mtc-pinned_install mtc-meson_install
 		# Groups (CMake + Meson leaves)
 		grp-opus_install grp-speex_install grp-maudio_install
 		grp-vmaf_install grp-ssim_install grp-mfilter_install

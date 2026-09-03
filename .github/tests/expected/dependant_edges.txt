@@ -86,8 +86,10 @@ meta-plugins_install -> leaf-b_install
 
 # meta-toolchain
 meta-tc_install -> mtc-inherit_install
+meta-tc_install -> mtc-meson_install
 meta-tc_install -> mtc-pinned_install
 mtc-inherit -> mtc-inherit_install
+mtc-meson -> mtc-meson_install
 mtc-pinned -> mtc-pinned_install
 
 # noinstall

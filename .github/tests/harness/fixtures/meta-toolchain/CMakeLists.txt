@@ -1,10 +1,12 @@
 # Meta TOOLCHAIN inheritance:
 #   meta-tc          TOOLCHAIN=<other>
-#   mtc-inherit      no TOOLCHAIN → must compile as <other>
+#   mtc-inherit      CMake, no TOOLCHAIN → must compile as <other>
+#   mtc-meson        Meson, no TOOLCHAIN → same (native_<other>.ini, not default)
 #   mtc-pinned       TOOLCHAIN=<host> → must stay <host>
 #
 # Compile-time #error (same header as fixtures/toolchain) fails the build
-# if inherit is dropped or overwrites the pinned child.
+# if inherit is dropped, overwrites the pinned child, or Meson honors
+# native_default.ini from the parent job.
 
 if(NOT BM_TEST_REPO_ROOT)
 	get_filename_component(BM_TEST_REPO_ROOT
@@ -47,9 +49,11 @@ _bm_log_message(CORE STATUS
 
 set(_inh_src "${CMAKE_CURRENT_SOURCE_DIR}/inherit")
 set(_pin_src "${CMAKE_CURRENT_SOURCE_DIR}/pinned")
+set(_mes_src "${CMAKE_CURRENT_SOURCE_DIR}/meson-inherit")
 
 buildmaster_meta_add(meta-tc mtc-inherit)
 buildmaster_meta_add(meta-tc mtc-pinned)
+buildmaster_meta_add(meta-tc mtc-meson)
 
 _bm_backend_cmake_create(
 	mtc-inherit
@@ -68,6 +72,15 @@ _bm_backend_cmake_create(
 	static
 	"meta-toolchain/mtcpinned"
 	"TOOLCHAIN=${_bm_tc_host}"
+)
+
+buildmaster_component(
+	mtc-meson
+	"Harness meta-toolchain Meson inherit leaf"
+	"${_mes_src}"
+	"-Dexpect_family=${_bm_tc_other}"
+	static
+	"meta-toolchain/mtcmeson"
 )
 
 buildmaster_meta(

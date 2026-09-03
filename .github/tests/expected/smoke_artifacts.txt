@@ -180,9 +180,12 @@ bin/bm_rescan_exe.exe|windows
 # meta-toolchain
 <include>/meta-toolchain/mtc_inherit.h|all
 <include>/meta-toolchain/mtc_pinned.h|all
+<include>/meta-toolchain/tc_mtc_meson.h|all
 <lib>/meta-toolchain/libmtcinherit.a|unix
+<lib>/meta-toolchain/libmtcmeson.a|unix
 <lib>/meta-toolchain/libmtcpinned.a|unix
 <lib>/meta-toolchain/mtcinherit.lib|windows
+<lib>/meta-toolchain/mtcmeson.lib|windows
 <lib>/meta-toolchain/mtcpinned.lib|windows
 
 # noinstall
