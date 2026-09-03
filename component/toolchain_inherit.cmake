@@ -21,6 +21,8 @@
 #
 # Runs after _bm_meta_materialize (leaves known) and before
 # cmake/meson materialize so create_*_stages reads the updated OPTSTR.
+# Declared TOOLCHAIN= profiles are demanded here so configure does not
+# load gcc+clang+lld on a parent-only job.
 
 ## @brief TOOLCHAIN value stored on a registered component (from OPTSTR).
 ## @param[in]  id     Component id.
@@ -324,30 +326,61 @@ function(_bm_tc_propagate_pass out_changed)
 	set(${out_changed} "${_changed}" PARENT_SCOPE)
 endfunction()
 
+## @brief Demand every profile that a component or meta actually pinned.
+## @note Parent profile is already demanded at Meson native init.
+##       A leaf that inherited TOOLCHAIN= from a meta is demanded here
+##       with who `component:<id>:meta:<mid>`.
+function(_bm_tc_demand_declared)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_tc_demand_declared")
+	get_property(_ids GLOBAL PROPERTY BUILDMASTER_COMPONENT_IDS)
+	foreach(_id IN LISTS _ids)
+		_bm_tc_stored("${_id}" _tc)
+		if("${_tc}" STREQUAL "")
+			continue()
+		endif()
+		get_property(_from GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_TOOLCHAIN_FROM)
+		set(_who "component:${_id}")
+		if(NOT "${_from}" STREQUAL "")
+			if(_from MATCHES "meta '([^']+)'")
+				set(_who "component:${_id}:meta:${CMAKE_MATCH_1}")
+			endif()
+		endif()
+		_bm_tc_demand_profile("${_tc}" "${_who}")
+	endforeach()
+	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
+	foreach(_id IN LISTS _metas)
+		get_property(_tc GLOBAL PROPERTY BUILDMASTER_META_${_id}_TOOLCHAIN)
+		if("${_tc}" STREQUAL "")
+			continue()
+		endif()
+		_bm_tc_demand_profile("${_tc}" "meta:${_id}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_tc_demand_declared")
+endfunction()
+
 ## @brief Repeat inheritance until nested metas stabilize.
 ## @note FATAL after 64 passes (should be impossible: meta cycles already die
 ##       in `_bm_meta_collect_leaves`).
+## @note Always demands declared TOOLCHAIN= profiles, even when there
+##       are no metas (explicit leaf TOOLCHAIN= still has to resolve).
 function(_bm_tc_propagate_metas)
 	_bm_log_message(COMPONENT LOWLEVEL
 		"Entering _bm_tc_propagate_metas")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
-	if(NOT _metas)
-		_bm_log_message(COMPONENT LOWLEVEL
-			"Exiting _bm_tc_propagate_metas")
-		return()
+	if(_metas)
+		set(_guard 0)
+		set(_changed TRUE)
+		while(_changed)
+			math(EXPR _guard "${_guard} + 1")
+			if(_guard GREATER 64)
+				_bm_log_message(COMPONENT FATAL
+					"TOOLCHAIN/IPO inherit: exceeded 64 passes")
+			endif()
+			_bm_tc_propagate_pass(_changed)
+		endwhile()
 	endif()
 
-	set(_guard 0)
-	set(_changed TRUE)
-	while(_changed)
-		math(EXPR _guard "${_guard} + 1")
-		if(_guard GREATER 64)
-			_bm_log_message(COMPONENT FATAL
-				"TOOLCHAIN/IPO inherit: exceeded 64 passes")
-		endif()
-		_bm_tc_propagate_pass(_changed)
-	endwhile()
-
+	_bm_tc_demand_declared()
 	_bm_log_message(COMPONENT LOWLEVEL
 		"Exiting _bm_tc_propagate_metas")
 endfunction()

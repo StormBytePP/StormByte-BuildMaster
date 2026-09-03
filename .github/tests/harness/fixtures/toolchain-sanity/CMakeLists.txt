@@ -1,7 +1,9 @@
-# Configure-time only. Generated Meson native files + profile sources.
+# Configure-time. Generated Meson native files + profile sources.
 # Profile .cmake files contain BOTH Darwin and Linux branches; do not
 # assert absence of Linux tokens in the source. Assert the generated
 # native_*.ini instead.
+# native_<profile>.ini exists only after that profile is demanded
+# (parent job, TOOLCHAIN=, or this fixture when the binaries exist).
 
 function(_bm_tc_sanity_slurp path out_var)
 	if(NOT EXISTS "${path}")
@@ -35,7 +37,12 @@ endif()
 set(_meson_dir "${BUILDMASTER_SCRIPTSDIR}/meson")
 set(_prof_dir "${BUILDMASTER_SRCDIR}/toolchain/profiles")
 
+_bm_tc_infer_profile(_bm_tc_parent)
+
 if(WIN32)
+	_bm_tc_demand_profile("msvc" "component:tc-sanity")
+	_bm_tc_demand_profile("clang-cl" "component:tc-sanity")
+
 	_bm_tc_sanity_slurp("${_meson_dir}/native_msvc.ini" _msvc_n)
 	_bm_tc_sanity_must_match("${_msvc_n}" "lib\\.exe" "native_msvc.ini ar")
 	_bm_tc_sanity_must_match("${_msvc_n}" "link\\.exe" "native_msvc.ini ld")
@@ -56,6 +63,9 @@ if(WIN32)
 
 	_bm_log_message(CORE STATUS "toolchain-sanity Windows: msvc + clang-cl OK")
 else()
+	_bm_tc_demand_profile("gcc" "component:tc-sanity")
+	_bm_tc_demand_profile("clang" "component:tc-sanity")
+
 	_bm_tc_sanity_slurp("${_meson_dir}/native_gcc.ini" _gcc_n)
 	_bm_tc_sanity_slurp("${_prof_dir}/gcc.cmake" _gcc_p)
 	_bm_tc_sanity_must_not("${_gcc_n}" "llvm-ar" "native_gcc.ini")
@@ -85,7 +95,8 @@ else()
 		_bm_tc_sanity_must_match("${_clang_p}" "BM_TC_LINKER \"ld.lld\"" "profile clang lld")
 		_bm_tc_sanity_must_match("${_clang_p}" "BM_TC_AR \"llvm-ar\"" "profile clang AR")
 	endif()
-	_bm_log_message(CORE STATUS "toolchain-sanity Unix: gcc + clang OK")
+	_bm_log_message(CORE STATUS
+		"toolchain-sanity Unix: parent=${_bm_tc_parent}; gcc + clang demanded OK")
 endif()
 
 add_custom_target(tc-sanity

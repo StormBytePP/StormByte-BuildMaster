@@ -37,6 +37,8 @@ endif()
 _bm_log_message(CORE STATUS
 	"Harness toolchain swap: ${CMAKE_C_COMPILER_ID} → TOOLCHAIN=${_bm_tc_other}")
 
+_bm_tc_demand_profile("${_bm_tc_other}" "component:nest-tc")
+
 _bm_backend_cmake_create(
 	nest-tc
 	"Harness TOOLCHAIN nest"

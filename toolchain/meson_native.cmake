@@ -4,7 +4,7 @@
 #
 # Variables set (and exported into the toolchain dump):
 #   BUILDMASTER_MESON_NATIVE_FILE           - parent / default job compilers
-#   BUILDMASTER_MESON_NATIVE_FILE_<name>    - per known profile (gcc, msvc, …)
+#   BUILDMASTER_MESON_NATIVE_FILE_<name>    - demanded profiles only
 # =============================================================================
 
 include_guard(GLOBAL)
@@ -135,6 +135,8 @@ endfunction()
 ## @note `gcc` leaves BM_TC_LINKER empty (bfd via the driver). `msvc` /
 ##       `clang-cl` link through `cl`/`clang-cl`; `ld` is still written
 ##       when BM_TC_LINKER is set so the file documents link.exe / lld-link.
+## @note Named profiles are demanded first. A missing linker FATAL names
+##       the requester stored on `BUILDMASTER_TC_PROFILE_WHO_<profile>`.
 function(_bm_tc_meson_native_ld profile_key out_ld)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_meson_native_ld")
 	set(_ld "")
@@ -144,7 +146,14 @@ function(_bm_tc_meson_native_ld profile_key out_ld)
 			set(_ld "${CMAKE_LINKER}")
 		endif()
 	else()
-		_bm_tc_load_profile("${_pk}")
+		get_property(_who GLOBAL PROPERTY BUILDMASTER_TC_PROFILE_WHO_${_pk})
+		if("${_who}" STREQUAL "")
+			set(_who "parent")
+		endif()
+		if(COMMAND _bm_tc_demand_profile)
+			_bm_tc_demand_profile("${_pk}" "${_who}")
+		endif()
+		_bm_tc_load_profile("${_pk}" "${_who}")
 		if(NOT BM_TC_LINKER STREQUAL "")
 			if(_pk STREQUAL "msvc")
 				_bm_tc_resolve_msvc_tool(_ld "${BM_TC_LINKER}")
@@ -155,8 +164,9 @@ function(_bm_tc_meson_native_ld profile_key out_ld)
 				if(_bm_tc_ld)
 					_bm_path_normalize(_ld "${_bm_tc_ld}")
 				else()
+					_bm_tc_who_line(_why "${_who}")
 					_bm_log_message(TOOLCHAIN FATAL
-						"toolchain profile '${_pk}': linker '${BM_TC_LINKER}' not found")
+						"${_why}\nMissing linker for profile '${_pk}': ${BM_TC_LINKER}.\nInstall the '${_pk}' toolchain or drop TOOLCHAIN=${_pk} on that id.")
 				endif()
 				unset(_bm_tc_ld CACHE)
 			endif()
@@ -293,7 +303,10 @@ function(_bm_tc_get_meson_native_file out_var)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_get_meson_native_file")
 endfunction()
 
-## @brief Generate native files for the parent job and every known profile.
+## @brief Generate native files for the parent job only.
+## @note Other profiles are written by `_bm_tc_demand_profile` when a
+##       component or meta sets TOOLCHAIN= to that name. Configure must
+##       not probe gcc+clang+lld+llvm-ar on a job that only has the parent.
 function(_bm_tc_init_meson_native_files)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_init_meson_native_files")
 	if(NOT DEFINED BUILDMASTER_SCRIPTSDIR OR BUILDMASTER_SCRIPTSDIR STREQUAL "")
@@ -320,65 +333,12 @@ function(_bm_tc_init_meson_native_files)
 		_bm_log_message(TOOLCHAIN DEBUG "Skipping default Meson native file (compilers not set yet)")
 	endif()
 
-	if(NOT DEFINED BUILDMASTER_KNOWN_TOOLCHAINS)
-		_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_init_meson_native_files")
-		return()
+	_bm_tc_infer_profile(_parent)
+	_bm_tc_demand_profile("${_parent}" "parent")
+	if(DEFINED BUILDMASTER_MESON_NATIVE_FILE_${_parent})
+		set(BUILDMASTER_MESON_NATIVE_FILE_${_parent}
+			"${BUILDMASTER_MESON_NATIVE_FILE_${_parent}}" PARENT_SCOPE)
 	endif()
 
-	foreach(_prof IN LISTS BUILDMASTER_KNOWN_TOOLCHAINS)
-		if(_prof STREQUAL "msvc" OR _prof STREQUAL "clang-cl")
-			if(NOT WIN32)
-				continue()
-			endif()
-		endif()
-		if(_prof STREQUAL "gcc" OR _prof STREQUAL "clang")
-			if(WIN32)
-				continue()
-			endif()
-		endif()
-
-		set(_profile_file "${BUILDMASTER_TOOLCHAIN_PROFILES_DIR}/${_prof}.cmake")
-		if(NOT EXISTS "${_profile_file}")
-			continue()
-		endif()
-
-		include("${_profile_file}")
-
-		set(_pc "${BM_TC_C_COMPILER}")
-		set(_px "${BM_TC_CXX_COMPILER}")
-		if(_px STREQUAL "")
-			set(_px "${_pc}")
-		endif()
-
-		if(_prof STREQUAL "msvc" OR _prof STREQUAL "clang-cl")
-			if(COMMAND _bm_tc_resolve_msvc_tool)
-				_bm_tc_resolve_msvc_tool(_pc_res "${_pc}")
-				_bm_tc_resolve_msvc_tool(_px_res "${_px}")
-				set(_pc "${_pc_res}")
-				set(_px "${_px_res}")
-			endif()
-		else()
-			if(NOT IS_ABSOLUTE "${_pc}")
-				find_program(_bm_nc NAMES "${_pc}" "${_pc}.exe")
-				if(_bm_nc)
-					_bm_path_normalize(_pc "${_bm_nc}")
-				endif()
-				unset(_bm_nc CACHE)
-			endif()
-			if(NOT IS_ABSOLUTE "${_px}")
-				find_program(_bm_nx NAMES "${_px}" "${_px}.exe")
-				if(_bm_nx)
-					_bm_path_normalize(_px "${_bm_nx}")
-				endif()
-				unset(_bm_nx CACHE)
-			endif()
-		endif()
-
-		if(NOT _pc STREQUAL "")
-			_bm_tc_write_meson_native_file("${_prof}" "${_pc}" "${_px}" LAUNCHER "${_launch}")
-			set(BUILDMASTER_MESON_NATIVE_FILE_${_prof}
-				"${BUILDMASTER_MESON_NATIVE_FILE_${_prof}}" PARENT_SCOPE)
-		endif()
-	endforeach()
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_init_meson_native_files")
 endfunction()

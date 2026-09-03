@@ -353,7 +353,15 @@ and the declaration shape changed.
   pkg-config/`pkgconf` and builds the bundled tree only when that
   probe fails. `BUILDMASTER_INITIALIZE_EXTRA_TOOLS` is gone.
   Configure prints `Setting up tools: <name>` only when that tool
-  actually starts.
+  actually starts. Compiler profiles follow the same rule:
+  configure loads the parent profile inferred from
+  `CMAKE_C_COMPILER` / `CMAKE_CXX_COMPILER` and writes only
+  `native_default.ini` plus that profile’s Meson file. Any other
+  name (`gcc`, `clang`, `clang-cl`, `msvc`) is demanded when a
+  component or meta sets `TOOLCHAIN=` to it. Missing cc/cxx/ar/ld
+  is FATAL on *that* id and names the parent profile plus
+  `CMAKE_C_COMPILER`. A gcc job does not need clang, lld or
+  llvm-ar on PATH. There is no `REQUIRE_TOOL=gcc`.
 - **Harness + consumer tests** for recursive cmake/meson, helper
   `.pc`, meta-toolchain, LINKFLAGS (OPTIONS fold + no INTERFACE
   leak; meta ignore), hooks, late link, raw `LINK=`, duplicate
@@ -368,7 +376,8 @@ and the declaration shape changed.
   REPACK publisher that ignores an executable dest, WHOLE meta
   + SHARED host that must not see the exe), negatives
   `exe-pc` / `exe-repack` / `exe-empty-produced`, toolchain
-  profile `ar`/`ld` text check, translator dialect + `/link`
+  profile `ar`/`ld` text check (only the parent profile plus any
+  `TOOLCHAIN=` actually used), translator dialect + `/link`
   order.
 - **Harness entry `run_buildmaster_main`.** One target: smoke
   (install stages + artifacts) already depends on
