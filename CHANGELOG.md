@@ -364,12 +364,14 @@ and the declaration shape changed.
   (`-flto` on gcc/clang/clang-cl; `/GL` + `/LTCG` on msvc).
   `IPO=off` strips every IPO token even if the parent has IPO on.
   `IPO=fat` is thin plus `-ffat-lto-objects` on gcc/clang C/CXX only
-  (MSVC and clang-cl treat fat as on; no fat objects on LD). Invalid
-  values are FATAL. A meta with `IPO=` stamps members that omit the
-  key (same destinations as `TOOLCHAIN=`); an explicit child `IPO=`
-  wins and a second meta does not FATAL. CMake/Meson stages call
-  `_bm_tc_translate_component`; Meson `-Db_lto=` follows the same
-  mode. Harness: translator `on`/`off`/`fat` vs parent cache;
+  (MSVC and clang-cl treat fat as on; no fat objects on LD).
+  Darwin: AppleClang rejects `-ffat-lto-objects`, so `fat` is `on`
+  (`-flto` only) and one STATUS notice is emitted per configure.
+  Invalid values are FATAL. A meta with `IPO=` stamps members that
+  omit the key (same destinations as `TOOLCHAIN=`); an explicit child
+  `IPO=` wins and a second meta does not FATAL. CMake/Meson stages
+  call `_bm_tc_translate_component`; Meson `-Db_lto=` follows the
+  same mode. Harness: translator `on`/`off`/`fat` vs parent cache;
   negative `ipo-bad` (`IPO=nope`).
 
 ### Changed
@@ -540,6 +542,9 @@ and the declaration shape changed.
   (`cc -c -Werror=unused-command-line-argument` + fuse-ld on C
   made dav1d report “Atomics not supported”). Darwin `gcc` /
   `clang`: no `-fuse-ld` (ld64). Harness checks all four.
+- **Darwin `IPO=fat`.** `-ffat-lto-objects` is not passed on Apple
+  (AppleClang rejects it; nested try_compile died). Fat becomes
+  `on`. One STATUS per configure.
 
 [2.0.0]: https://github.com/StormBytePP/StormByte-BuildMaster/releases/tag/2.0.0
 

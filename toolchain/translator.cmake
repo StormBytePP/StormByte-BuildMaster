@@ -6,12 +6,15 @@
 #         every -fuse-ld= and -ffat-lto-objects.
 # Pass 2: IPO tokens of this profile according to the resolved mode
 #         (inherit parent / on / off / fat). fat is on + -ffat-lto-objects
-#         on gcc/clang C/CXX only. MSVC and clang-cl treat fat as on.
+#         on gcc/clang C/CXX only, and only when NOT APPLE. AppleClang
+#         rejects -ffat-lto-objects; Darwin fat is treated as on (-flto).
+#         MSVC and clang-cl treat fat as on.
 # Pass 3: -fuse-ld= of this profile only (gcc=bfd, clang/clang-cl=lld,
 #         msvc=none). Always, not only when IPO is on.
 #         clang-cl Meson sanity puts link_args after /link; the driver
 #         only honors -fuse-ld= on the compiler command. Put it on
 #         C/CXX as well as LD.
+#         Darwin gcc/clang: no -fuse-ld (ld64).
 
 function(_bm_tc_flag_has hay needle)
 	string(FIND " ${hay} " " ${needle} " _pos)
@@ -71,7 +74,13 @@ endfunction()
 ## @param[in]  cxx_str CXX flags.
 ## @param[in]  ld_str  LD flags.
 ## @param[out] out_on  TRUE when thin or fat LTO tokens must be written.
-## @param[out] out_fat TRUE when `-ffat-lto-objects` must be written (gcc/clang).
+## @param[out] out_fat TRUE when `-ffat-lto-objects` must be written (gcc/clang,
+##                     non-Apple only).
+## @note Darwin/AppleClang rejects `-ffat-lto-objects`. Requested `fat` is
+##       kept as `on` (`-flto` only). The STATUS notice is emitted once
+##       per configure; later components stay silent.
+## @note MSVC/clang-cl never set out_fat; the caller treats fat as on
+##       for those profiles.
 function(_bm_tc_ipo_resolve mode c_str cxx_str ld_str out_on out_fat)
 	set(_on FALSE)
 	set(_fat FALSE)
@@ -84,6 +93,15 @@ function(_bm_tc_ipo_resolve mode c_str cxx_str ld_str out_on out_fat)
 		set(_fat TRUE)
 	else()
 		_bm_tc_ipo_wanted("${c_str}" "${cxx_str}" "${ld_str}" _on)
+	endif()
+	if(_fat AND APPLE)
+		get_property(_said GLOBAL PROPERTY BUILDMASTER_TC_IPO_FAT_DARWIN_NOTIFIED)
+		if(NOT _said)
+			_bm_log_message(TOOLCHAIN STATUS
+				"IPO=fat ignored on Darwin: AppleClang has no -ffat-lto-objects; using IPO=on (-flto only). Further components will not be notified.")
+			set_property(GLOBAL PROPERTY BUILDMASTER_TC_IPO_FAT_DARWIN_NOTIFIED TRUE)
+		endif()
+		set(_fat FALSE)
 	endif()
 	set(${out_on} "${_on}" PARENT_SCOPE)
 	set(${out_fat} "${_fat}" PARENT_SCOPE)
@@ -158,6 +176,8 @@ endfunction()
 ##       Linux clang: `-fuse-ld=lld` on LD only.
 ##       Darwin gcc/clang: no `-fuse-ld` (ld64; CMake rejects BFD / APPLE).
 ##       clang-cl: `-fuse-ld=lld` on C/CXX and LD (Meson `/link` order).
+## @note Darwin: `_fat` is already cleared by `_bm_tc_ipo_resolve`. The
+##       append of `-ffat-lto-objects` is also gated on `NOT APPLE`.
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	set(_ipo_mode "inherit")
 	if(ARGC GREATER 4)
@@ -183,7 +203,7 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 			_bm_tc_flag_append(_c "-flto")
 			_bm_tc_flag_append(_cxx "-flto")
 			_bm_tc_flag_append(_ld "-flto")
-			if(_fat AND (profile STREQUAL "gcc" OR profile STREQUAL "clang"))
+			if(_fat AND NOT APPLE AND (profile STREQUAL "gcc" OR profile STREQUAL "clang"))
 				_bm_tc_flag_append(_c "-ffat-lto-objects")
 				_bm_tc_flag_append(_cxx "-ffat-lto-objects")
 			endif()
