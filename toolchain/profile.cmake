@@ -5,19 +5,36 @@
 ## @brief Infer gcc|clang|clang-cl|msvc from this process compiler.
 ## @param[out] out_var Parent-scope profile name.
 ## @note Used when a component has no TOOLCHAIN= (inherit / extra tools).
-##       clang-cl before clang. cl.exe → msvc. Everything else gcc.
+## @note Windows: only clang-cl / msvc. GNU-like clang.exe (LLVM on PATH
+##       ahead of cl) is clang-cl. Never infer gcc or clang on WIN32.
 function(_bm_tc_infer_profile out_var)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_infer_profile")
 	set(_name "gcc")
-	if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
-		set(_name "clang-cl")
-	elseif(CMAKE_C_COMPILER MATCHES "clang" OR CMAKE_CXX_COMPILER MATCHES "clang"
-			OR CMAKE_C_COMPILER_ID STREQUAL "Clang"
-			OR CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
-		set(_name "clang")
-	elseif(MSVC OR CMAKE_C_COMPILER MATCHES "cl\\.exe$"
-			OR CMAKE_C_COMPILER_ID STREQUAL "MSVC")
-		set(_name "msvc")
+	if(WIN32)
+		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl"
+				OR (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND
+					CMAKE_C_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC"))
+			set(_name "clang-cl")
+		elseif(MSVC OR CMAKE_C_COMPILER MATCHES "cl\\.exe$"
+				OR CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+			set(_name "msvc")
+		elseif(CMAKE_C_COMPILER MATCHES "clang" OR CMAKE_CXX_COMPILER MATCHES "clang"
+				OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
+			set(_name "clang-cl")
+		else()
+			set(_name "msvc")
+		endif()
+	else()
+		if(CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")
+			set(_name "clang-cl")
+		elseif(CMAKE_C_COMPILER MATCHES "clang" OR CMAKE_CXX_COMPILER MATCHES "clang"
+				OR CMAKE_C_COMPILER_ID STREQUAL "Clang"
+				OR CMAKE_C_COMPILER_ID STREQUAL "AppleClang")
+			set(_name "clang")
+		elseif(MSVC OR CMAKE_C_COMPILER MATCHES "cl\\.exe$"
+				OR CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+			set(_name "msvc")
+		endif()
 	endif()
 	set(${out_var} "${_name}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN DEBUG "infer profile '${_name}'")
@@ -25,9 +42,6 @@ function(_bm_tc_infer_profile out_var)
 endfunction()
 
 ## @brief Human line for who asked a profile.
-## @param[out] out_var Parent-scope text.
-## @param[in]  who     `parent` or `component:<id>` / `meta:<id>` /
-##            `component:<id>:meta:<mid>`.
 function(_bm_tc_who_line out_var who)
 	_bm_tc_infer_profile(_parent)
 	set(_cc "${CMAKE_C_COMPILER}")
@@ -58,12 +72,6 @@ function(_bm_tc_who_line out_var who)
 endfunction()
 
 ## @brief Resolve one profile tool to an absolute path or FATAL.
-## @param[in]  label   Word in the error (`C compiler`, `archiver`, `linker`).
-## @param[in]  name    Profile id (for the message).
-## @param[in]  names   `find_program` NAMES (first hit wins).
-## @param[out] out_var Absolute path.
-## @param[in]  who     Optional ARGV4 — see `_bm_tc_who_line`. Default `parent`.
-## @note Missing tool is FATAL. No silent fallback to the parent job.
 function(_bm_tc_require_program label name names out_var)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Entering _bm_tc_require_program(${label})")
@@ -71,8 +79,31 @@ function(_bm_tc_require_program label name names out_var)
 	if(ARGC GREATER 4 AND NOT "${ARGV4}" STREQUAL "")
 		set(_who "${ARGV4}")
 	endif()
+	_bm_log_message(TOOLCHAIN DEBUG
+		"require ${label} profile='${name}' who='${_who}' names='${names}'")
 	find_program(_bm_prog NAMES ${names})
+	_bm_log_message(TOOLCHAIN DEBUG
+		"require ${label} find_program='${_bm_prog}' PREFIX='${CMAKE_PREFIX_PATH}' PROGRAM_PATH='${CMAKE_PROGRAM_PATH}' FIND_ROOT='${CMAKE_FIND_ROOT_PATH}' MODE_PROGRAM='${CMAKE_FIND_ROOT_PATH_MODE_PROGRAM}'")
 	if(NOT _bm_prog)
+		foreach(_n IN LISTS names)
+			if(_n STREQUAL "")
+				continue()
+			endif()
+			set(_which "")
+			execute_process(
+				COMMAND sh -c "command -v '${_n}' || true"
+				OUTPUT_VARIABLE _which
+				OUTPUT_STRIP_TRAILING_WHITESPACE
+				ERROR_QUIET
+			)
+			if(EXISTS "${_n}")
+				set(_ex "1")
+			else()
+				set(_ex "0")
+			endif()
+			_bm_log_message(TOOLCHAIN DEBUG
+				"require-miss which('${_n}')='${_which}' exists=${_ex} PATH='$ENV{PATH}'")
+		endforeach()
 		_bm_tc_who_line(_why "${_who}")
 		string(REPLACE ";" " or " _pretty "${names}")
 		_bm_log_message(TOOLCHAIN FATAL
@@ -85,19 +116,6 @@ function(_bm_tc_require_program label name names out_var)
 endfunction()
 
 ## @brief Load a toolchain profile into `BM_TC_*` in the caller scope.
-## @param[in] name Normalized toolchain name (`_bm_tc_validate`).
-## @param[in] who  Optional ARGV1 — demand origin for FATAL text.
-## @note Includes `toolchain/profiles/<name>.cmake`. Then resolves
-##       compiler / archiver / linker to absolute paths. Missing tool
-##       is FATAL — no silent fallback to the parent job.
-## @note Triple:
-##       gcc      → Linux: bfd + binutils `ar`
-##                  Darwin: Homebrew gcc-N + cctools `ld`/`ar` (no BFD)
-##       clang    → Linux: lld + `llvm-ar`
-##                  Darwin: cctools `ld` + `ar`
-##       clang-cl → lld-link + `llvm-lib`
-##       msvc     → link.exe + lib.exe
-## @note Empty `name` or a missing profile file is FATAL.
 function(_bm_tc_load_profile name)
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Entering _bm_tc_load_profile")
 	set(_who "parent")
@@ -117,6 +135,8 @@ function(_bm_tc_load_profile name)
 	endif()
 
 	include("${_profile_file}")
+	_bm_log_message(TOOLCHAIN DEBUG
+		"load_profile name='${name}' who='${_who}' cc='${BM_TC_C_COMPILER}' cxx='${BM_TC_CXX_COMPILER}' ar='${BM_TC_AR}' ld='${BM_TC_LINKER}'")
 
 	_bm_tc_require_program("C compiler" "${name}"
 		"${BM_TC_C_COMPILER}" BM_TC_C_COMPILER "${_who}")
@@ -194,12 +214,6 @@ function(_bm_tc_load_profile name)
 endfunction()
 
 ## @brief Load profile @p name once and write its Meson native file.
-## @param[in] name Normalized profile (`gcc` / `clang` / `clang-cl` / `msvc`).
-## @param[in] who  Demand origin for FATAL text (`_bm_tc_who_line`).
-## @note Second call is a no-op. Empty name is a no-op (inherit parent).
-##       Marks the profile enabled *before* writing the native file so
-##       `_bm_tc_meson_native_ld` → demand cannot recurse.
-##       Does not initialize any other known profile.
 function(_bm_tc_demand_profile name who)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Entering _bm_tc_demand_profile(${name})")

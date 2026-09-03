@@ -69,6 +69,10 @@ bin/whexe.exe|windows
 <lib>/whlib.lib|windows
 <lib>/libwhlib.a|unix
 
+# exe-rescan
+bin/bm_rescan_exe|unix
+bin/bm_rescan_exe.exe|windows
+
 # file-decompress
 # no prefix artifacts (unpack under the fixture binary dir)
 

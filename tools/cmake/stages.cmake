@@ -37,9 +37,13 @@
 ##       (profile = TOOLCHAIN= or inferred parent; IPO mode from
 ##       `BUILDMASTER_COMPONENT_<id>_OPTSTR` via `_bm_opt_parse_ipo`).
 ##       EXE, SHARED and MODULE linker strings are translated separately.
-##       `b_lto` and `CMAKE_INTERPROCEDURAL_*` are not written here:
-##       the translator emits `-flto` / `/GL` / `/LTCG` /
-##       `-ffat-lto-objects` according to `IPO=` (`inherit`/`on`/`off`/`fat`).
+##       After translate, `BM_TC_IPO_ON` / `BM_TC_IPO_COMPILE_OPTIONS` /
+##       `BM_TC_LINK_GROUP_{START,END}` are sealed for
+##       `configure.cmake.in`. The leaf keeps
+##       `CMAKE_INTERPROCEDURAL_OPTIMIZATION` (recursive detect). Fat is
+##       `CMAKE_<LANG>_COMPILE_OPTIONS_IPO`, not a second `-flto` on
+##       `CMAKE_C_FLAGS`. GNU rescan (`--start-group`) only on Linux
+##       gcc/clang `LINK_EXECUTABLE`. Darwin / msvc / clang-cl: empty.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -341,6 +345,22 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		if(COMMAND _bm_env_apply_install_search_paths)
 			_bm_env_apply_install_search_paths()
 		endif()
+	endif()
+
+	if(NOT DEFINED BM_TC_IPO_ON)
+		set(BM_TC_IPO_ON FALSE)
+	endif()
+	if(NOT DEFINED BM_TC_IPO_FAT)
+		set(BM_TC_IPO_FAT FALSE)
+	endif()
+	if(NOT DEFINED BM_TC_IPO_COMPILE_OPTIONS)
+		set(BM_TC_IPO_COMPILE_OPTIONS "")
+	endif()
+	if(NOT DEFINED BM_TC_LINK_GROUP_START)
+		set(BM_TC_LINK_GROUP_START "")
+	endif()
+	if(NOT DEFINED BM_TC_LINK_GROUP_END)
+		set(BM_TC_LINK_GROUP_END "")
 	endif()
 
 	set(BUILDMASTER_TOOLCHAIN_FILE "${_BM_NESTED_TOOLCHAIN_FILE}")

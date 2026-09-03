@@ -171,12 +171,17 @@ and the declaration shape changed.
   `<stem>${CMAKE_EXECUTABLE_SUFFIX}` on Windows; never `.exe.exe`).
   The parent stub is still `add_library(<id> INTERFACE)` — it is not
   an `IMPORTED` executable. Nested CMake/Meson build the binary;
-  `LINK` / `LINKFLAGS` apply to that nested link. `WHOLE` on the
-  executable itself is INFO and ignored. A leaf of a `WHOLE` meta
-  is the same INFO skip: the meta must not emit
-  `-WHOLEARCHIVE:<bindir>/<stem>.exe` / `--whole-archive` of the
-  binary. `STRIPRES` does not run. `PC={…}` ENABLED is FATAL.
-  `REPACK` on the executable itself is FATAL. A first-level
+  `LINK` / `LINKFLAGS` apply to that nested link. Linux gcc/clang:
+  nested *and* parent `CMAKE_<LANG>_LINK_EXECUTABLE` wrap
+  `<LINK_LIBRARIES>` with `-Wl,--start-group` / `--end-group` so a
+  static exe that lists provider before consumer (ld.bfd single
+  pass) still resolves, including under LTO. Darwin ld64 and
+  MSVC/clang-cl do not get those flags. SHARED/MODULE recipes are
+  unchanged. `WHOLE` on the executable itself is INFO and ignored.
+  A leaf of a `WHOLE` meta is the same INFO skip: the meta must
+  not emit `-WHOLEARCHIVE:<bindir>/<stem>.exe` / `--whole-archive`
+  of the binary. `STRIPRES` does not run. `PC={…}` ENABLED is
+  FATAL. `REPACK` on the executable itself is FATAL. A first-level
   `depend`/`link` dest that is `executable` is not a REPACK member
   (INFO skip; not FATAL as a “publishing member”). A leaf of a
   `REPACK` meta that is `executable` is the same INFO skip and is
@@ -330,10 +335,18 @@ and the declaration shape changed.
   `find_package` / `*Config.cmake` under the shared prefix resolve
   without per-leaf `-DFOO_ROOT=`.
 - **Toolchain translator.** One pass per profile: drop foreign
-  dialect and IPO tokens, rewrite `-I`/`-L` ↔ `/I`/`/LIBPATH:`,
-  then inject this profile’s IPO (if wanted) and `-fuse-ld=` (see
-  Fixed). Called from CMake/Meson stages before the env runner
-  refresh. `-fPIC` stays on gcc/clang; it is dropped on msvc.
+  dialect and IPO tokens (`-flto*`, `-ffat-lto-objects`,
+  `-fno-fat-lto-objects`, `/GL`, `/LTCG`, `-fuse-ld=`), rewrite
+  `-I`/`-L` ↔ `/I`/`/LIBPATH:`, then inject this profile’s linker
+  flavor and IPO *without* writing `-flto`/`-ffat-lto-objects`
+  back onto gcc/clang `CMAKE_C{XX}_FLAGS`. Those compile tokens
+  live in `BM_TC_IPO_COMPILE_OPTIONS` so the leaf
+  `CMAKE_INTERPROCEDURAL_OPTIMIZATION` module is the single
+  dialect (`-DCMAKE_<LANG>_COMPILE_OPTIONS_IPO=`). LD still
+  gets `-flto` or `/LTCG`. MSVC/clang-cl still write `/GL` or
+  `-flto` on C/CXX. `-fuse-ld=` as before (see Fixed). Called
+  from CMake/Meson stages before the env runner refresh. `-fPIC`
+  stays on gcc/clang; it is dropped on msvc.
 - **On-demand tools.** Bootstrap always initializes `ninja`. The
   archiver is **not** a tool: it is a field of the `TOOLCHAIN=`
   profile (`CMAKE_AR` / Meson `[binaries] ar` and `ld`). `cmake`,
@@ -374,7 +387,8 @@ and the declaration shape changed.
   `BUILDONLY` removed / `NOINSTALL=OFF` FATAL, mode `executable`
   (plain CMake/Meson, link a BM static, rename stem, NOINSTALL,
   REPACK publisher that ignores an executable dest, WHOLE meta
-  + SHARED host that must not see the exe), negatives
+  + SHARED host that must not see the exe, `exe-rescan` static
+  provider-before-consumer under `IPO=fat`), negatives
   `exe-pc` / `exe-repack` / `exe-empty-produced`, toolchain
   profile `ar`/`ld` text check (only the parent profile plus any
   `TOOLCHAIN=` actually used), translator dialect + `/link`
@@ -396,18 +410,24 @@ and the declaration shape changed.
 - **`IPO=` on component and meta.** Per-id LTO, independent of parent
   `CMAKE_INTERPROCEDURAL_*`. Omitted → inherit the parent (and leftover
   `-flto` / `/GL` tokens). `IPO` / `IPO=` / `IPO=on` → thin LTO
-  (`-flto` on gcc/clang/clang-cl; `/GL` + `/LTCG` on msvc).
+  (gcc/clang: `CMAKE_INTERPROCEDURAL_OPTIMIZATION` + compile-options
+  `-flto`; clang-cl `-flto` on C/CXX; msvc `/GL` + `/LTCG`).
   `IPO=off` strips every IPO token even if the parent has IPO on.
-  `IPO=fat` is thin plus `-ffat-lto-objects` on gcc/clang C/CXX only
-  (MSVC and clang-cl treat fat as on; no fat objects on LD).
-  Darwin: AppleClang rejects `-ffat-lto-objects`, so `fat` is `on`
-  (`-flto` only) and one STATUS notice is emitted per configure.
-  Invalid values are FATAL. A meta with `IPO=` stamps members that
-  omit the key (same destinations as `TOOLCHAIN=`); an explicit child
-  `IPO=` wins and a second meta does not FATAL. CMake/Meson stages
-  call `_bm_tc_translate_component`; Meson `-Db_lto=` follows the
-  same mode. Harness: translator `on`/`off`/`fat` vs parent cache;
-  negative `ipo-bad` (`IPO=nope`).
+  `IPO=fat` is thin plus `-ffat-lto-objects` on gcc/clang compile
+  options only (`BM_TC_IPO_COMPILE_OPTIONS` / Meson `c_args`), never
+  a second copy on `CMAKE_C_FLAGS` (that mixed `-flto
+  -ffat-lto-objects` with CMake’s `-flto=auto -fno-fat-lto-objects`
+  and the last token won). MSVC and clang-cl treat fat as on; no
+  fat objects on LD. Darwin: AppleClang rejects
+  `-ffat-lto-objects`, so `fat` is `on` (`-flto` only) and one
+  STATUS notice is emitted per configure. Invalid values are
+  FATAL. A meta with `IPO=` stamps members that omit the key
+  (same destinations as `TOOLCHAIN=`); an explicit child `IPO=`
+  wins and a second meta does not FATAL. CMake/Meson stages call
+  `_bm_tc_translate_component`; Meson `-Db_lto=` follows the same
+  mode. Harness: translator `on`/`off`/`fat` vs parent cache and
+  `BM_TC_IPO_COMPILE_OPTIONS`; `exe-rescan` (provider before
+  consumer + `IPO=fat`); negative `ipo-bad` (`IPO=nope`).
 
 ### Changed
 

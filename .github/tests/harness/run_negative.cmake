@@ -7,6 +7,14 @@ if(CMAKE_GENERATOR)
 	list(APPEND _gen_args -G "${CMAKE_GENERATOR}")
 endif()
 
+set(_cc_args)
+if(CMAKE_C_COMPILER)
+	list(APPEND _cc_args "-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}")
+endif()
+if(CMAKE_CXX_COMPILER)
+	list(APPEND _cc_args "-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}")
+endif()
+
 set(_cfg_cases
 	missing-hook
 	bad-linkflags
@@ -37,6 +45,7 @@ foreach(_c IN LISTS _cfg_cases)
 			-S "${_s}"
 			-B "${_b}"
 			${_gen_args}
+			${_cc_args}
 			-DBM_TEST_REPO_ROOT=${BM_TEST_REPO_ROOT}
 		RESULT_VARIABLE _rc
 		OUTPUT_VARIABLE _out
@@ -160,6 +169,7 @@ foreach(_c IN LISTS _ins_cases)
 			-S "${_s}"
 			-B "${_b}"
 			${_gen_args}
+			${_cc_args}
 			-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
 			-DBM_TEST_REPO_ROOT=${BM_TEST_REPO_ROOT}
 		RESULT_VARIABLE _rc

@@ -47,6 +47,9 @@ wh-meta_install
 wh-host
 exe-meta-whole_check
 
+# exe-rescan
+exe-rescan_install
+
 # file-decompress
 buildmaster_decompress_check
 

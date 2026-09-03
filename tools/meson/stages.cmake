@@ -45,6 +45,41 @@ function(_bm_tools_meson_append_prefix_link_args _args_var)
 	endif()
 endfunction()
 
+## @brief Fold translator IPO compile options and GNU rescan into Meson args.
+## @param[in,out] c_var   `_MESON_C_ARGS`.
+## @param[in,out] cxx_var `_MESON_CXX_ARGS`.
+## @param[in,out] ld_var  `_MESON_LINK_ARGS`.
+## @note Translator no longer puts `-flto`/`-ffat-lto-objects` on
+##       `CMAKE_C_FLAGS` (CMake IPO owns that dialect). Meson has no
+##       `COMPILE_OPTIONS_IPO`; fat must land on `c_args` / `cpp_args`.
+##       `-Db_lto=` stays the LTO on/off switch (`LTO_ENABLED`).
+## @note GNU `--start-group` only when `BM_TC_LINK_GROUP_START` is set
+##       (Linux gcc/clang). Darwin / msvc / clang-cl: no-op.
+function(_bm_tools_meson_apply_ipo_and_group c_var cxx_var ld_var)
+	if(DEFINED BM_TC_IPO_COMPILE_OPTIONS AND NOT BM_TC_IPO_COMPILE_OPTIONS STREQUAL "")
+		set(_c "${${c_var}}")
+		set(_cxx "${${cxx_var}}")
+		if(NOT _c MATCHES "-ffat-lto-objects" AND NOT _c MATCHES "-flto")
+			string(APPEND _c " ${BM_TC_IPO_COMPILE_OPTIONS}")
+		endif()
+		if(NOT _cxx MATCHES "-ffat-lto-objects" AND NOT _cxx MATCHES "-flto")
+			string(APPEND _cxx " ${BM_TC_IPO_COMPILE_OPTIONS}")
+		endif()
+		string(STRIP "${_c}" _c)
+		string(STRIP "${_cxx}" _cxx)
+		set(${c_var} "${_c}" PARENT_SCOPE)
+		set(${cxx_var} "${_cxx}" PARENT_SCOPE)
+	endif()
+	if(DEFINED BM_TC_LINK_GROUP_START AND NOT BM_TC_LINK_GROUP_START STREQUAL "")
+		set(_ld "${${ld_var}}")
+		if(NOT _ld MATCHES "--start-group")
+			set(_ld "${BM_TC_LINK_GROUP_START} ${_ld} ${BM_TC_LINK_GROUP_END}")
+			string(STRIP "${_ld}" _ld)
+			set(${ld_var} "${_ld}" PARENT_SCOPE)
+		endif()
+	endif()
+endfunction()
+
 ## @brief Create setup/compile/install scripts for a Meson-built component.
 ## @param[out] _file_setup Name of the variable to set in parent scope
 ##            with the generated Meson `*_configure.cmake` script path.
@@ -77,11 +112,11 @@ endfunction()
 ## @note C/CXX/LD flags go through `_bm_tc_translate_component`
 ##       (profile = TOOLCHAIN= or inferred parent; IPO mode from
 ##       `BUILDMASTER_COMPONENT_<id>_OPTSTR` via `_bm_opt_parse_ipo`).
-##       That drops `-fuse-ld=*` on msvc and rewrites IPO tokens
-##       (`-flto` / `/GL` / `/LTCG` / `-ffat-lto-objects`).
 ## @note `LTO_ENABLED` (`-Db_lto=`) follows the same IPO mode:
 ##       `on`/`fat` → `true`, `off` → `false`, `inherit` → parent
 ##       `CMAKE_INTERPROCEDURAL_OPTIMIZATION[_RELEASE]`.
+##       Fat compile tokens come from `BM_TC_IPO_COMPILE_OPTIONS` via
+##       `_bm_tools_meson_apply_ipo_and_group`, not from `CMAKE_C_FLAGS`.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -409,6 +444,7 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 
 	set(_MESON_C_ARGS "${CMAKE_C_FLAGS}")
 	set(_MESON_CXX_ARGS "${CMAKE_CXX_FLAGS}")
+	_bm_tools_meson_apply_ipo_and_group(_MESON_C_ARGS _MESON_CXX_ARGS _MESON_LINK_ARGS)
 
 	if(MSVC OR _toolchain_name STREQUAL "msvc" OR _toolchain_name STREQUAL "clang-cl"
 			OR CMAKE_C_COMPILER MATCHES "clang-cl" OR CMAKE_CXX_COMPILER MATCHES "clang-cl")

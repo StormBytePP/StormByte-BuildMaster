@@ -3,19 +3,28 @@
 # =============================================================================
 # Not public. Called from cmake/meson stages before the env runner refresh.
 # Pass 1: drop foreign dialect, rewrite -I/-L on MSVC-like, drop IPO and
-#         every -fuse-ld= and -ffat-lto-objects.
+#         every -fuse-ld= / -flto* / -ffat-lto-objects / -fno-fat-lto-objects.
 # Pass 2: IPO tokens of this profile according to the resolved mode
-#         (inherit parent / on / off / fat). fat is on + -ffat-lto-objects
-#         on gcc C/CXX always, and on clang C/CXX when NOT APPLE.
-#         AppleClang rejects -ffat-lto-objects; Darwin clang fat is
-#         treated as on (-flto). Homebrew gcc on Darwin keeps fat.
-#         MSVC and clang-cl treat fat as on.
+#         (inherit parent / on / off / fat).
+#         CMake leaves keep CMAKE_INTERPROCEDURAL_OPTIMIZATION. Do not put
+#         -flto / -ffat-lto-objects back on C/CXX: the child's IPO module
+#         would then append -flto=auto -fno-fat-lto-objects and the last
+#         token wins. Fat is expressed as CMAKE_<LANG>_COMPILE_OPTIONS_IPO
+#         (`BM_TC_IPO_COMPILE_OPTIONS`) so the module and BM agree.
+#         LD still gets -flto (or /LTCG) so the link line is LTO.
+#         AppleClang rejects -ffat-lto-objects; Darwin clang fat → on
+#         (-flto) + STATUS once. Homebrew gcc on Darwin keeps fat on the
+#         IPO compile-options string.
+#         MSVC and clang-cl treat fat as on (/GL+/LTCG or -flto).
 # Pass 3: -fuse-ld= of this profile only (gcc=bfd, clang/clang-cl=lld,
 #         msvc=none). Always, not only when IPO is on.
 #         clang-cl Meson sanity puts link_args after /link; the driver
 #         only honors -fuse-ld= on the compiler command. Put it on
 #         C/CXX as well as LD.
 #         Darwin gcc/clang: no -fuse-ld (ld64).
+# Pass 4: GNU rescan wrap tokens for later CMAKE_<LANG>_LINK_EXECUTABLE
+#         (`BM_TC_LINK_GROUP_START` / `BM_TC_LINK_GROUP_END`).
+#         Linux gcc/clang only. Empty on Darwin, MSVC, clang-cl.
 
 function(_bm_tc_flag_has hay needle)
 	string(FIND " ${hay} " " ${needle} " _pos)
@@ -106,6 +115,8 @@ endfunction()
 ##       because those are not cl.exe.
 ## @note Unix profiles: `/I`→`-I`, `/LIBPATH:`→`-L`, `/O[0-3d]`→`-O…`.
 ##       `/GL` `/LTCG` `/Z7` are dropped (IPO/debug MSVC).
+## @note Also drops `-fno-fat-lto-objects` and `-flto=auto` so a child
+##       IPO module cannot leak a second dialect into CMAKE_C_FLAGS.
 function(_bm_tc_sanitize_flag_string in_str profile out_var)
 	set(_out "")
 	set(_msvc_like FALSE)
@@ -120,6 +131,7 @@ function(_bm_tc_sanitize_flag_string in_str profile out_var)
 		if(_t MATCHES "^-flto" OR _t STREQUAL "/GL" OR _t STREQUAL "/LTCG"
 				OR _t STREQUAL "-fwhole-program-vtables"
 				OR _t STREQUAL "-ffat-lto-objects"
+				OR _t STREQUAL "-fno-fat-lto-objects"
 				OR _t MATCHES "^-fuse-ld=")
 			continue()
 		endif()
@@ -166,9 +178,12 @@ endfunction()
 ##       Linux clang: `-fuse-ld=lld` on LD only.
 ##       Darwin gcc/clang: no `-fuse-ld` (ld64; CMake rejects BFD / APPLE).
 ##       clang-cl: `-fuse-ld=lld` on C/CXX and LD (Meson `/link` order).
-## @note `-ffat-lto-objects` is written for gcc whenever `_fat` is set,
-##       including Homebrew gcc on Darwin. clang on Darwin (AppleClang)
-##       demotes fat to on and emits the STATUS notice once per configure.
+## @note Unix gcc/clang IPO compile tokens go to `BM_TC_IPO_COMPILE_OPTIONS`,
+##       not back into C/CXX flags. `BM_TC_IPO_ON` / `BM_TC_IPO_FAT` follow.
+## @note GNU rescan: `BM_TC_LINK_GROUP_START`=`-Wl,--start-group` and
+##       `BM_TC_LINK_GROUP_END`=`-Wl,--end-group` on Linux gcc/clang.
+##       Empty on Darwin / msvc / clang-cl (ld64 and link.exe do not
+##       accept those flags; MSVC scans archives).
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	set(_ipo_mode "inherit")
 	if(ARGC GREATER 4)
@@ -185,14 +200,17 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	_bm_tc_sanitize_flag_string("${_cxx}" "${profile}" _cxx)
 	_bm_tc_sanitize_flag_string("${_ld}" "${profile}" _ld)
 
+	set(_ipo_copt "")
 	if(_ipo)
 		if(profile STREQUAL "msvc")
 			_bm_tc_flag_append(_c "/GL")
 			_bm_tc_flag_append(_cxx "/GL")
 			_bm_tc_flag_append(_ld "/LTCG")
-		else()
+		elseif(profile STREQUAL "clang-cl")
 			_bm_tc_flag_append(_c "-flto")
 			_bm_tc_flag_append(_cxx "-flto")
+			_bm_tc_flag_append(_ld "-flto")
+		else()
 			_bm_tc_flag_append(_ld "-flto")
 			if(_fat AND profile STREQUAL "clang" AND APPLE)
 				get_property(_said GLOBAL PROPERTY BUILDMASTER_TC_IPO_FAT_DARWIN_NOTIFIED)
@@ -204,8 +222,9 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 				set(_fat FALSE)
 			endif()
 			if(_fat AND (profile STREQUAL "gcc" OR profile STREQUAL "clang"))
-				_bm_tc_flag_append(_c "-ffat-lto-objects")
-				_bm_tc_flag_append(_cxx "-ffat-lto-objects")
+				set(_ipo_copt "-flto -ffat-lto-objects")
+			else()
+				set(_ipo_copt "-flto")
 			endif()
 		endif()
 	endif()
@@ -220,11 +239,23 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 		_bm_tc_flag_append(_ld "-fuse-ld=lld")
 	endif()
 
+	set(_grp_s "")
+	set(_grp_e "")
+	if((profile STREQUAL "gcc" OR profile STREQUAL "clang") AND NOT APPLE)
+		set(_grp_s "-Wl,--start-group")
+		set(_grp_e "-Wl,--end-group")
+	endif()
+
 	set(${c_var} "${_c}" PARENT_SCOPE)
 	set(${cxx_var} "${_cxx}" PARENT_SCOPE)
 	set(${ld_var} "${_ld}" PARENT_SCOPE)
+	set(BM_TC_IPO_ON "${_ipo}" PARENT_SCOPE)
+	set(BM_TC_IPO_FAT "${_fat}" PARENT_SCOPE)
+	set(BM_TC_IPO_COMPILE_OPTIONS "${_ipo_copt}" PARENT_SCOPE)
+	set(BM_TC_LINK_GROUP_START "${_grp_s}" PARENT_SCOPE)
+	set(BM_TC_LINK_GROUP_END "${_grp_e}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN DEBUG
-		"translate ${profile} ipo=${_ipo_mode} on=${_ipo} fat=${_fat} c='${_c}' ld='${_ld}'")
+		"translate ${profile} ipo=${_ipo_mode} on=${_ipo} fat=${_fat} copt='${_ipo_copt}' c='${_c}' ld='${_ld}'")
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_translate_flags")
 endfunction()
 
@@ -251,6 +282,11 @@ function(_bm_tc_translate_component id c_var cxx_var ld_var profile)
 	set(${c_var} "${${c_var}}" PARENT_SCOPE)
 	set(${cxx_var} "${${cxx_var}}" PARENT_SCOPE)
 	set(${ld_var} "${${ld_var}}" PARENT_SCOPE)
+	set(BM_TC_IPO_ON "${BM_TC_IPO_ON}" PARENT_SCOPE)
+	set(BM_TC_IPO_FAT "${BM_TC_IPO_FAT}" PARENT_SCOPE)
+	set(BM_TC_IPO_COMPILE_OPTIONS "${BM_TC_IPO_COMPILE_OPTIONS}" PARENT_SCOPE)
+	set(BM_TC_LINK_GROUP_START "${BM_TC_LINK_GROUP_START}" PARENT_SCOPE)
+	set(BM_TC_LINK_GROUP_END "${BM_TC_LINK_GROUP_END}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN LOWLEVEL
 		"Exiting _bm_tc_translate_component")
 endfunction()

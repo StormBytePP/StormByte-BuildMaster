@@ -1,0 +1,22 @@
+# Leaf CMAKE_C_LINK_EXECUTABLE must wrap LINK_LIBRARIES on GNU ELF.
+if(APPLE OR WIN32 OR MSVC)
+    return()
+endif()
+_bm_tc_infer_profile(_prof)
+if(NOT _prof STREQUAL "gcc" AND NOT _prof STREQUAL "clang")
+    return()
+endif()
+if(NOT DEFINED CMAKE_C_LINK_EXECUTABLE OR "${CMAKE_C_LINK_EXECUTABLE}" STREQUAL "")
+    message(FATAL_ERROR "exe-rescan: parent CMAKE_C_LINK_EXECUTABLE empty")
+endif()
+if(NOT CMAKE_C_LINK_EXECUTABLE MATCHES "--start-group")
+    message(FATAL_ERROR
+        "exe-rescan: parent link recipe missing --start-group\n  ${CMAKE_C_LINK_EXECUTABLE}")
+endif()
+if(NOT CMAKE_C_LINK_EXECUTABLE MATCHES "--end-group")
+    message(FATAL_ERROR
+        "exe-rescan: parent link recipe missing --end-group\n  ${CMAKE_C_LINK_EXECUTABLE}")
+endif()
+if(NOT TARGET exe-rescan)
+    message(FATAL_ERROR "exe-rescan: missing target exe-rescan")
+endif()

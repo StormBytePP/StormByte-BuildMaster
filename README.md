@@ -630,6 +630,15 @@ The nested project is what actually links libraries (`find_library` /
 `link_with`); `buildmaster_link(mytool mylib)` is the wait edge and the
 parent INTERFACE, not a target inside the upstream `CMakeLists.txt`.
 
+A nested CMake or Meson executable that links several static archives
+can list the provider *before* the consumer. GNU `ld.bfd` walks an
+archive once. Under LTO that shows up as an undefined symbol that
+`nm` can still see in the `.a`. On Linux gcc/clang, BuildMaster wraps
+`<LINK_LIBRARIES>` with `-Wl,--start-group` / `--end-group` on both
+the nested leaf and the parent `CMAKE_<LANG>_LINK_EXECUTABLE`. Darwin
+`ld64` and MSVC / clang-cl already rescan; they do not get those
+flags. SHARED and MODULE recipes stay as CMake wrote them.
+
 `RENAME` (default ON) normalizes variant binary names onto the produced
 stem. `WHOLE` / `STRIPRES` / enabled `PC={…}` do not apply (`PC` ENABLED
 is FATAL). `REPACK` on the executable itself is FATAL.
@@ -750,27 +759,36 @@ Meson `cc.has_function` probe links a bitcode archive and decides the
 symbol does not exist. That is a long evening that looks like a missing
 dependency.
 
-`IPO=` is per id. The translator strips foreign LTO tokens and then
-puts back only what this profile and this mode asked for.
+`IPO=` is per id. The translator strips foreign LTO tokens. On gcc and
+clang it does **not** write `-flto` / `-ffat-lto-objects` back onto
+`CMAKE_C{XX}_FLAGS`. Those compile tokens go to
+`CMAKE_<LANG>_COMPILE_OPTIONS_IPO` so the leaf
+`CMAKE_INTERPROCEDURAL_OPTIMIZATION` module is the only dialect. A
+second copy on `CMAKE_C_FLAGS` used to mix `-flto -ffat-lto-objects`
+with CMake’s `-flto=auto -fno-fat-lto-objects`; the last token won,
+and `ld.bfd` then dropped objects that `nm` still listed. LD still
+gets `-flto` (or `/LTCG`). MSVC and clang-cl still write `/GL` or
+`-flto` on C/CXX — that is their dialect.
 
 | Written | Meaning |
 |---------|---------|
 | *(omit)* | Inherit the parent (`CMAKE_INTERPROCEDURAL_OPTIMIZATION` / `_RELEASE`) and leftover `-flto` / `/GL` tokens |
 | `IPO` / `IPO=` / `IPO=on` | Thin LTO on this id |
 | `IPO=off` | Strip every IPO token, even if the parent has LTO on |
-| `IPO=fat` | Thin LTO plus `-ffat-lto-objects` on gcc/clang **C/CXX** (not on LD). MSVC and clang-cl treat fat as on (`/GL`+`/LTCG`, or `-flto`) |
+| `IPO=fat` | Thin LTO plus `-ffat-lto-objects` on gcc/clang **compile options** (and Meson `c_args`). Not on `CMAKE_C_FLAGS`. Not on LD. MSVC and clang-cl treat fat as on (`/GL`+`/LTCG`, or `-flto`) |
 | anything else | **FATAL** |
 
-Thin tokens: gcc / clang / clang-cl get `-flto` on C, CXX and LD.
-MSVC gets `/GL` on C/CXX and `/LTCG` on LD — never `/LTCG` on the
-compiler line.
+Thin tokens: gcc / clang get `-flto` on the IPO compile-options string
+and on LD. clang-cl gets `-flto` on C, CXX and LD. MSVC gets `/GL` on
+C/CXX and `/LTCG` on LD — never `/LTCG` on the compiler line.
 
 A meta with `IPO=` stamps members that omitted the key (same
 destinations as `TOOLCHAIN=`). A member that already wrote `IPO=`
 keeps it. Two metas that want different values do not FATAL.
 
 CMake and Meson stages both honour the mode. Meson `-Db_lto=` follows
-it (`off` → `false`, `on`/`fat` → `true`, omit → parent).
+it (`off` → `false`, `on`/`fat` → `true`, omit → parent). Fat objects
+on Meson are extra `c_args`, not a second `b_lto` switch.
 
 You do not turn the parent off “just in case”. You write `IPO=off` on
 the leaf that cannot probe under LTO, and leave the rest of the graph
@@ -801,9 +819,9 @@ A clang-cl parent does not leave `llvm-lib` on an `msvc` leaf.
 Paths are absolute before the component toolchain file is written.
 
 Flag dialect is rewritten for that profile before the env runner
-refresh: foreign `-I`/`-L`/`-flto`/`/GL` tokens do not leak, then
-`IPO=` (or the parent) injects the tokens this profile actually
-understands. See
+refresh: foreign `-I`/`-L`/`-flto`/`/GL` tokens do not leak. Then
+`IPO=` (or the parent) fills `CMAKE_<LANG>_COMPILE_OPTIONS_IPO` on
+gcc/clang, and `/GL` or `-flto` on MSVC / clang-cl. See
 [Interprocedural optimization (`IPO`)](#interprocedural-optimization-ipo).
 
 ---

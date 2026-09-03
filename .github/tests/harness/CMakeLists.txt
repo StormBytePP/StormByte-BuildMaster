@@ -47,6 +47,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_hash.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_exe_meta_whole.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_exe_rescan.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -58,6 +59,9 @@ add_custom_target(run_buildmaster_checks
 # Bindir is this harness's consumer_nested. Do not cmake -S it twice
 # in the same tree (links/ dump + ALIAS). GHA consumer job uses a
 # different bindir; run_buildmaster_main does that after smoke.
+# Nested configure must use this process compiler. On Windows clang-cl
+# jobs PATH has LLVM/bin first; a bare cmake -S picks clang.exe
+# (GNU-like) and demand_profile(infer=clang) is FATAL.
 set(_BM_CONSUMER_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../consumer")
 set(_BM_CONSUMER_BIN "${CMAKE_CURRENT_BINARY_DIR}/consumer_nested")
 set(_BM_CONSUMER_EXE "${_BM_CONSUMER_BIN}/lib/consumer_host${CMAKE_EXECUTABLE_SUFFIX}")
@@ -68,6 +72,8 @@ add_custom_target(run_buildmaster_consumer
 		-B "${_BM_CONSUMER_BIN}"
 		-G "${CMAKE_GENERATOR}"
 		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
 	COMMAND ${CMAKE_COMMAND} --build "${_BM_CONSUMER_BIN}" --target consumer_host
 	COMMAND "${_BM_CONSUMER_EXE}"
 	COMMENT "[BuildMaster/Core     ]: consumer add_subdirectory + DEFER finalize"
@@ -108,15 +114,16 @@ add_custom_target(run_buildmaster_smoke
 		exe-rpleaf_install
 		exe-rpexe_install
 		exe-rppub_install
-        em-lib_install
-        em-exe_install
-        em-meta_install
-        em-meta-nolib_check
-        wh-lib_install
-        wh-exe_install
-        wh-meta_install
-        wh-host
-        exe-meta-whole_check
+		em-lib_install
+		em-exe_install
+		em-meta_install
+		em-meta-nolib_check
+		wh-lib_install
+		wh-exe_install
+		wh-meta_install
+		wh-host
+		exe-meta-whole_check
+		exe-rescan_install
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run
@@ -186,6 +193,8 @@ add_custom_target(run_buildmaster_negative
 		-DBM_TEST_NEGATIVE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/../negative
 		-DCMAKE_GENERATOR=${CMAKE_GENERATOR}
 		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
 		-P ${CMAKE_CURRENT_SOURCE_DIR}/run_negative.cmake
 	COMMENT "[BuildMaster/Core     ]: negative configure contracts"
 	VERBATIM
@@ -209,6 +218,8 @@ add_custom_target(run_buildmaster_main
 		-B "${_BM_CONSUMER_CI_BIN}"
 		-G "${CMAKE_GENERATOR}"
 		-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+		-DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}
+		-DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
 	COMMAND ${CMAKE_COMMAND} --build "${_BM_CONSUMER_CI_BIN}" --target consumer_host
 	COMMAND "${_BM_CONSUMER_CI_EXE}"
 	DEPENDS run_buildmaster_smoke
