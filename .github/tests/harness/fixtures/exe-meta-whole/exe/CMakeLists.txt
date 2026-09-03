@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(whexe C)
+include(GNUInstallDirs)
+add_executable(whexe main.c)
+install(TARGETS whexe RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

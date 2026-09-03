@@ -1,0 +1,23 @@
+# Host SHARED + meta WHOLE must not see the exe path or stem.
+if(NOT TARGET wh-meta)
+    message(FATAL_ERROR "exe-meta-whole: missing target wh-meta")
+endif()
+if(NOT TARGET wh-host)
+    message(FATAL_ERROR "exe-meta-whole: missing target wh-host")
+endif()
+
+foreach(_tgt IN ITEMS wh-meta wh-host)
+    get_target_property(_ll "${_tgt}" LINK_LIBRARIES)
+    get_target_property(_il "${_tgt}" INTERFACE_LINK_LIBRARIES)
+    if(NOT _ll)
+        set(_ll "")
+    endif()
+    if(NOT _il)
+        set(_il "")
+    endif()
+    set(_blob "${_ll} ${_il}")
+    if(_blob MATCHES "\\.exe" OR _blob MATCHES "whexe")
+        message(FATAL_ERROR
+            "exe-meta-whole: '${_tgt}' link line mentions the executable\n  LINK_LIBRARIES=${_ll}\n  INTERFACE_LINK_LIBRARIES=${_il}")
+    endif()
+endforeach()

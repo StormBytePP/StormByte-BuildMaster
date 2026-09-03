@@ -46,6 +46,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_hash.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_exe_meta_whole.cmake")
 
 add_custom_target(run_buildmaster_checks
 	COMMENT "[BuildMaster/Core     ]: harness contract checks"
@@ -111,6 +112,11 @@ add_custom_target(run_buildmaster_smoke
         em-exe_install
         em-meta_install
         em-meta-nolib_check
+        wh-lib_install
+        wh-exe_install
+        wh-meta_install
+        wh-host
+        exe-meta-whole_check
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run

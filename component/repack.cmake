@@ -79,7 +79,10 @@ function(_bm_repack_component_members id out_var)
 endfunction()
 
 ## @brief Register merges for every meta that has REPACK.
-## @note OUTPUT stem is the meta id. INPUTS are the flattened member leaves.
+## @note OUTPUT stem is the meta id. INPUTS are the flattened member
+##       leaves that produce a static archive. `executable` / `headers`
+##       / `shared` leaves are not INPUTS (`executable` is INFO skip;
+##       shared/headers stay INTERFACE in `_bm_meta_wire`).
 ##       Called at the start of `_bm_repack_materialize` (finalize).
 function(_bm_repack_register_metas)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_repack_register_metas")
@@ -97,6 +100,25 @@ function(_bm_repack_register_metas)
 			_bm_log_message(COMPONENT FATAL
 				"buildmaster_meta('${_id}'): REPACK requires at least one member (buildmaster_meta_add)")
 		endif()
+		set(_inputs "")
+		foreach(_leaf IN LISTS _leaves)
+			if("${_leaf}" STREQUAL "")
+				continue()
+			endif()
+			get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
+			if(_lmode STREQUAL "executable")
+				_bm_log_message(COMPONENT INFO
+					"buildmaster_meta('${_id}'): REPACK ignores member '${_leaf}' (executable)")
+				continue()
+			endif()
+			if(_lmode STREQUAL "static")
+				list(APPEND _inputs "${_leaf}")
+			endif()
+		endforeach()
+		if(NOT _inputs)
+			_bm_log_message(COMPONENT FATAL
+				"buildmaster_meta('${_id}'): REPACK requires at least one static member")
+		endif()
 		get_property(_rids GLOBAL PROPERTY BUILDMASTER_REPACK_IDS)
 		set(_hit -1)
 		if(_rids)
@@ -107,10 +129,10 @@ function(_bm_repack_register_metas)
 		endif()
 		set_property(GLOBAL APPEND PROPERTY BUILDMASTER_REPACK_IDS "${_id}")
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_OUTPUT "${_id}")
-		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS "${_leaves}")
+		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_INPUTS "${_inputs}")
 		set_property(GLOBAL PROPERTY BUILDMASTER_REPACK_${_id}_KIND "meta")
 		_bm_log_message(COMPONENT DEBUG
-			"REPACK meta ${_id} leaves=${_leaves}")
+			"REPACK meta ${_id} leaves=${_inputs}")
 	endforeach()
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_repack_register_metas")
 endfunction()

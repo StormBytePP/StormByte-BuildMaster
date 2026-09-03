@@ -63,6 +63,12 @@ bin/emexe.exe|windows
 <lib>/emlib.lib|windows
 <lib>/libemlib.a|unix
 
+# exe-meta-whole
+bin/whexe|unix
+bin/whexe.exe|windows
+<lib>/whlib.lib|windows
+<lib>/libwhlib.a|unix
+
 # file-decompress
 # no prefix artifacts (unpack under the fixture binary dir)
 

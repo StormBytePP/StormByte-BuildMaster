@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(whlib C)
+include(GNUInstallDirs)
+add_library(whlib STATIC lib.c)
+install(TARGETS whlib ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

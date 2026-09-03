@@ -14,8 +14,11 @@
 ## @note `REPACK` metas do not INTERFACE-link static leaves (the merge
 ##       publishes one archive). Shared/headers leaves stay INTERFACE;
 ##       shared also emits WARNING (cannot fold a .so/.dll into the pack).
+##       `executable` leaves are order-only (`*_install`). INFO skip;
+##       never a pack member and never a WHOLE path.
 ## @note Without REPACK, WHOLE flattens static produced files; otherwise
 ##       `target_link_libraries(<meta> INTERFACE <leaf>)`.
+##       WHOLE never wraps an `executable` produced path (`bin/gzip.exe`).
 function(_bm_meta_wire)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_wire")
 	get_property(_metas GLOBAL PROPERTY BUILDMASTER_META_IDS)
@@ -68,6 +71,9 @@ function(_bm_meta_wire)
 					if(TARGET "${_leaf}")
 						target_link_libraries(${_id} INTERFACE ${_leaf})
 					endif()
+				elseif(_lmode STREQUAL "executable")
+					_bm_log_message(COMPONENT INFO
+						"meta '${_id}': REPACK ignores member '${_leaf}' (executable)")
 				endif()
 			endforeach()
 			continue()
@@ -79,6 +85,11 @@ function(_bm_meta_wire)
 			foreach(_leaf IN LISTS _leaves)
 				get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
 				get_property(_lwhole GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_WHOLE)
+				if(_lmode STREQUAL "executable")
+					_bm_log_message(COMPONENT INFO
+						"meta '${_id}': WHOLE ignores member '${_leaf}' (executable)")
+					continue()
+				endif()
 				if(_lmode STREQUAL "shared" OR _lmode STREQUAL "headers")
 					if(TARGET "${_leaf}")
 						target_link_libraries(${_id} INTERFACE ${_leaf})
@@ -125,6 +136,10 @@ function(_bm_meta_wire)
 			endif()
 		else()
 			foreach(_leaf IN LISTS _leaves)
+				get_property(_lmode GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_leaf}_MODE)
+				if(_lmode STREQUAL "executable")
+					continue()
+				endif()
 				if(TARGET "${_leaf}")
 					target_link_libraries(${_id} INTERFACE ${_leaf})
 				endif()

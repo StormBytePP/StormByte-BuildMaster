@@ -40,6 +40,13 @@ em-exe_install
 em-meta_install
 em-meta-nolib_check
 
+# exe-meta-whole
+wh-lib_install
+wh-exe_install
+wh-meta_install
+wh-host
+exe-meta-whole_check
+
 # file-decompress
 buildmaster_decompress_check
 

@@ -24,6 +24,13 @@ em-lib -> em-lib_install
 em-meta_install -> em-exe_install
 em-meta_install -> em-lib_install
 
+# exe-meta-whole
+wh-exe -> wh-exe_install
+wh-lib -> wh-lib_install
+wh-meta_install -> wh-exe_install
+wh-meta_install -> wh-lib_install
+wh-host -> wh-meta_install
+
 # file-to-component
 payload-lib -> payload-lib_install
 

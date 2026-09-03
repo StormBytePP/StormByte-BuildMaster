@@ -171,17 +171,21 @@ and the declaration shape changed.
   `<stem>${CMAKE_EXECUTABLE_SUFFIX}` on Windows; never `.exe.exe`).
   The parent stub is still `add_library(<id> INTERFACE)` — it is not
   an `IMPORTED` executable. Nested CMake/Meson build the binary;
-  `LINK` / `LINKFLAGS` apply to that nested link. `WHOLE` is INFO and
-  ignored. `STRIPRES` does not run. `PC={…}` ENABLED is FATAL.
+  `LINK` / `LINKFLAGS` apply to that nested link. `WHOLE` on the
+  executable itself is INFO and ignored. A leaf of a `WHOLE` meta
+  is the same INFO skip: the meta must not emit
+  `-WHOLEARCHIVE:<bindir>/<stem>.exe` / `--whole-archive` of the
+  binary. `STRIPRES` does not run. `PC={…}` ENABLED is FATAL.
   `REPACK` on the executable itself is FATAL. A first-level
   `depend`/`link` dest that is `executable` is not a REPACK member
-  (INFO skip; not FATAL as a “publishing member”). Extra
-  `buildmaster_link` dests that are raw library specs are **not**
-  folded as IMPORTED archives on an executable. Produced exe stems
-  are never `BM_LINKS_LIBNAMES` and never land on a consumer or
-  meta link line (`gzip.exe` is not a library). Membership in a
-  meta is order-only (`*_install`). Oficios:
-  `rename_executable` (when `RENAME`) then `outputs`.
+  (INFO skip; not FATAL as a “publishing member”). A leaf of a
+  `REPACK` meta that is `executable` is the same INFO skip and is
+  not an INPUT of the merge. Extra `buildmaster_link` dests that
+  are raw library specs are **not** folded as IMPORTED archives on
+  an executable. Produced exe stems are never `BM_LINKS_LIBNAMES`
+  and never land on a consumer or meta link line (`gzip.exe` is
+  not a library). Membership in a meta is order-only (`*_install`).
+  Oficios: `rename_executable` (when `RENAME`) then `outputs`.
 - **Assigned build directory.** There is no public builddir argument.
   The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and
   `file(MAKE_DIRECTORY)`. The path is an internal property, not part
@@ -245,8 +249,9 @@ and the declaration shape changed.
   oficio `rename_executable`, worker
   `normalize_install_executables.cmake`. Headers mode never registers
   a rename oficio (stamps are not archives).
-- **`WHOLE`.** Whole-archive link of produced static archives.
-  Ignored (INFO) on headers and executable.
+- **`WHOLE`.** Whole-archive link of produced **static** archives.
+  Ignored (INFO) on headers and executable, including when that
+  executable is a leaf of a `WHOLE` meta.
 - **`STRIPRES` (flag, default ON).** After `RENAME`, strip `*.res`
   from static MSVC / clang-cl archives. Shared / headers / executable
   never strip.
@@ -275,8 +280,10 @@ and the declaration shape changed.
   (`POST_BUILD` on `<id>_install`). `REPACK` + `NOINSTALL` on the
   same id is FATAL. `REPACK` + headers or executable on the same id
   is FATAL. Shared + `REPACK` on a component is WARNING + skip at
-  finalize. Zero static members is FATAL. An `executable` dest of a
-  REPACK publisher is skipped (INFO), not a member.
+  finalize.   Zero static members is FATAL. An `executable` dest of a
+  REPACK publisher is skipped (INFO), not a member. An
+  `executable` leaf of a `REPACK` meta is the same INFO skip
+  and is not a merge INPUT.
   `buildmaster_link` to a `NOINSTALL` dest is FATAL (order-only:
   `buildmaster_depend`, or publish via a `REPACK` meta / component).
 - **Helper `.pc` (`PC={…}`).** After install, write
@@ -358,7 +365,8 @@ and the declaration shape changed.
   without prefix publish), `REQUIRE_TOOL=pkgconfig` bundled path,
   `BUILDONLY` removed / `NOINSTALL=OFF` FATAL, mode `executable`
   (plain CMake/Meson, link a BM static, rename stem, NOINSTALL,
-  REPACK publisher that ignores an executable dest), negatives
+  REPACK publisher that ignores an executable dest, WHOLE meta
+  + SHARED host that must not see the exe), negatives
   `exe-pc` / `exe-repack` / `exe-empty-produced`, toolchain
   profile `ar`/`ld` text check, translator dialect + `/link`
   order.
