@@ -110,7 +110,7 @@ Porting an older caller:
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
-## [2.0.0] - 2026-08-31
+## [2.0.0] - 2026-09-04
 
 2.x versus 1.0.x is a different product: declarative graph, no generated
 fragment to `include()`, no public dependant factories, no public
