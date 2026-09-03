@@ -92,6 +92,21 @@ Porting an older caller:
       Partial HIT (lib without Config.cmake) is FATAL, not a silent
       fallback. Needs the 2.0.1 idempotent stamps first or restore
       and rebuild will race.
+- [ ] **RENAME should rewrite installed `.pc` files to the produced stem.**
+      `RENAME` already moves `libfoo-static.a` / `jpeg-static.lib` /
+      `libpng16.a` to the `produced` name. The matching
+      `*.pc` (`Libs: -lpng16`, `-ljpeg`, `-ltesseract55`) is left
+      untouched, so Meson/`pkg-config --static --libs` still looks
+      for the *pre-rename* artifact. Consumers then fail with
+      LNK1104 / “library not found” even though the archive exists
+      under the produced stem.
+      After renaming an archive, scan
+      `${BUILDMASTER_INSTALL_DIR}/**/pkgconfig/*.pc` (or the
+      component’s own `.pc`) and rewrite `-l<old-stem>` (and
+      `Name:` if it is only the old stem) to `-l<produced>`.
+      Do not invent new `.pc` files. Shared-library sonames and
+      CMake `*Config.cmake` / `*Targets.cmake` are a separate
+      ticket (`find_package` paths vs `pkg-config`).
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
