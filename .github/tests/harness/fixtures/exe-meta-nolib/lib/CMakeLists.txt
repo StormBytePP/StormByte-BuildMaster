@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(emlib C)
+include(GNUInstallDirs)
+add_library(emlib STATIC lib.c)
+install(TARGETS emlib ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

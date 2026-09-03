@@ -177,7 +177,10 @@ and the declaration shape changed.
   `depend`/`link` dest that is `executable` is not a REPACK member
   (INFO skip; not FATAL as a “publishing member”). Extra
   `buildmaster_link` dests that are raw library specs are **not**
-  folded as IMPORTED archives on an executable. Oficios:
+  folded as IMPORTED archives on an executable. Produced exe stems
+  are never `BM_LINKS_LIBNAMES` and never land on a consumer or
+  meta link line (`gzip.exe` is not a library). Membership in a
+  meta is order-only (`*_install`). Oficios:
   `rename_executable` (when `RENAME`) then `outputs`.
 - **Assigned build directory.** There is no public builddir argument.
   The graph uses `${CMAKE_CURRENT_BINARY_DIR}/bm/<id>` and

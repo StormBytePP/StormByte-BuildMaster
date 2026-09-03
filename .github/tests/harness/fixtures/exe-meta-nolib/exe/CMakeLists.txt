@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(emexe C)
+include(GNUInstallDirs)
+add_executable(emexe main.c)
+install(TARGETS emexe RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

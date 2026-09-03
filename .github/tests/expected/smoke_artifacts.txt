@@ -57,6 +57,12 @@ bin/exerpackexe.exe|windows
 !<lib>/exerpackleaf.lib|windows
 !<lib>/libexerpackleaf.a|unix
 
+# exe-meta-nolib
+bin/emexe|unix
+bin/emexe.exe|windows
+<lib>/emlib.lib|windows
+<lib>/libemlib.a|unix
+
 # file-decompress
 # no prefix artifacts (unpack under the fixture binary dir)
 

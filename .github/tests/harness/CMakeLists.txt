@@ -107,6 +107,10 @@ add_custom_target(run_buildmaster_smoke
 		exe-rpleaf_install
 		exe-rpexe_install
 		exe-rppub_install
+        em-lib_install
+        em-exe_install
+        em-meta_install
+        em-meta-nolib_check
 		# Meta
 		leaf-a_install leaf-b_install meta-inner_install meta-out_install
 		meta-plugins_install meta-tc_install meta_link_test_run

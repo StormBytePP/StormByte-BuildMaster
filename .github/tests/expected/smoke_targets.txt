@@ -34,6 +34,12 @@ exe-rpleaf_install
 exe-rpexe_install
 exe-rppub_install
 
+# exe-meta-nolib
+em-lib_install
+em-exe_install
+em-meta_install
+em-meta-nolib_check
+
 # file-decompress
 buildmaster_decompress_check
 

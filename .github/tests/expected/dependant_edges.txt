@@ -18,6 +18,12 @@ dup-a -> dup-a_install
 dup-a_configure -> dup-b_install
 dup-b -> dup-b_install
 
+# exe-meta-nolib
+em-exe -> em-exe_install
+em-lib -> em-lib_install
+em-meta_install -> em-exe_install
+em-meta_install -> em-lib_install
+
 # file-to-component
 payload-lib -> payload-lib_install
 
