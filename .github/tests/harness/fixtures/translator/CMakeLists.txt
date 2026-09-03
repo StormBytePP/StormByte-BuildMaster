@@ -1,6 +1,7 @@
 # Configure-time only. Calls _bm_tc_translate_flags; no compile.
 # Darwin gcc/clang: no -fuse-ld. Linux gcc: bfd on LD. Linux clang: lld on LD.
 # clang-cl: -fuse-ld=lld on C before /link.
+# 5th arg IPO mode: inherit (omit) / on / off / fat.
 
 function(_bm_tc_tr_must_match hay needle label)
 	if(NOT hay MATCHES "${needle}")
@@ -163,6 +164,50 @@ _bm_tc_translate_flags(_c _cxx _ld "clang-cl")
 _bm_tc_tr_cl_sanity("${_c}" "${_ld}" _sane)
 _bm_tc_tr_before_link("${_sane}" "-fuse-ld=lld" "clang-cl from tokens lld before /link")
 _bm_tc_tr_before_link("${_sane}" "-flto" "clang-cl from tokens flto before /link")
+
+# Explicit IPO=off while parent cache is ON: strip, no inherit.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set(_c "-O2 -flto")
+set(_cxx "-O2")
+set(_ld "")
+_bm_tc_translate_flags(_c _cxx _ld "gcc" "off")
+_bm_tc_tr_must_not("${_c}" "-flto" "gcc IPO=off no -flto")
+_bm_tc_tr_must_not("${_c}" "-ffat-lto-objects" "gcc IPO=off no fat")
+_bm_tc_tr_must_not("${_ld}" "-flto" "gcc ld IPO=off no -flto")
+
+# Explicit IPO=on while parent cache is OFF.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION OFF)
+set(_c "-O2")
+set(_cxx "-O2")
+set(_ld "")
+_bm_tc_translate_flags(_c _cxx _ld "clang" "on")
+_bm_tc_tr_must_match("${_c}" "-flto" "clang IPO=on -flto")
+_bm_tc_tr_must_not("${_c}" "-ffat-lto-objects" "clang IPO=on no fat")
+
+# IPO=fat: thin + fat objects on gcc/clang C/CXX. Not on LD. MSVC fat==on.
+set(_c "-O2")
+set(_cxx "-O2")
+set(_ld "")
+_bm_tc_translate_flags(_c _cxx _ld "gcc" "fat")
+_bm_tc_tr_must_match("${_c}" "-flto" "gcc IPO=fat -flto")
+_bm_tc_tr_must_match("${_c}" "-ffat-lto-objects" "gcc IPO=fat objects")
+_bm_tc_tr_must_match("${_cxx}" "-ffat-lto-objects" "gcc cxx IPO=fat objects")
+_bm_tc_tr_must_not("${_ld}" "-ffat-lto-objects" "gcc ld IPO=fat no objects")
+
+set(_c "-O2")
+set(_cxx "-O2")
+set(_ld "")
+_bm_tc_translate_flags(_c _cxx _ld "msvc" "fat")
+_bm_tc_tr_must_match("${_c}" "/GL" "msvc IPO=fat /GL")
+_bm_tc_tr_must_match("${_ld}" "/LTCG" "msvc IPO=fat /LTCG")
+_bm_tc_tr_must_not("${_c}" "-ffat-lto-objects" "msvc IPO=fat no gnu fat")
+
+set(_c "-O2")
+set(_cxx "-O2")
+set(_ld "")
+_bm_tc_translate_flags(_c _cxx _ld "clang-cl" "fat")
+_bm_tc_tr_must_match("${_c}" "-flto" "clang-cl IPO=fat -flto")
+_bm_tc_tr_must_not("${_c}" "-ffat-lto-objects" "clang-cl IPO=fat no gnu fat")
 
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION "${_bm_ipo_save}")
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE "${_bm_ipo_rel_save}")

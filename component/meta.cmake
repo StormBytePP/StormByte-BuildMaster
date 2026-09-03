@@ -11,8 +11,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/meta/helpers.cmake")
 ## @param[in] id Meta component identifier (non-empty).
 ## @note Does not create CMake targets. Safe before `buildmaster_meta()`.
 ## @note First call appends to BUILDMASTER_META_IDS and sets TITLE=id,
-##       WHOLE=FALSE, CREATED=FALSE, INDENT=0, TOOLCHAIN="". Later calls
-##       are no-ops. Groups stamp INDENT at finalize if the meta is a member.
+##       WHOLE=FALSE, CREATED=FALSE, INDENT=0, TOOLCHAIN="", IPO=inherit.
+##       Later calls are no-ops. Groups stamp INDENT at finalize if the
+##       meta is a member.
 ## @note Empty id is FATAL.
 function(_bm_meta_ensure id)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_meta_ensure")
@@ -34,6 +35,7 @@ function(_bm_meta_ensure id)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_CREATED FALSE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_INDENT 0)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_TOOLCHAIN "")
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${id}_IPO "inherit")
 	_bm_log_message(COMPONENT DEBUG "Lazy-registered meta ${id}")
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_meta_ensure")
 endfunction()
@@ -62,8 +64,8 @@ endfunction()
 ## @param[in] _id     Meta identifier (also the REPACK archive stem).
 ## @param[in] _title  Human-readable title.
 ## @param[in] ARGV2   Optional options string (`WHOLE`, `REPACK`, `NOINSTALL`,
-##                    `LINK=`, `LINKFLAGS=`, `TOOLCHAIN=`, `REQUIRE_TOOL=`,
-##                    `ALIAS=` / `ALIAS={…}`).
+##                    `LINK=`, `LINKFLAGS=`, `TOOLCHAIN=`, `IPO=`,
+##                    `REQUIRE_TOOL=`, `ALIAS=` / `ALIAS={…}`).
 ##                    `INDENT=` is WARNING and ignored; put the meta in a
 ##                    `buildmaster_group()`.
 ## @note Invoked only from the public macro. Origin is the caller's list file.
@@ -83,6 +85,11 @@ endfunction()
 ## @note `NOINSTALL` on a meta is prevalent: finalize stamps
 ##       `BUILDMASTER_COMPONENT_<leaf>_NOINSTALL` on every member. A child
 ##       cannot turn it off.
+## @note `IPO` / `IPO=` / `IPO=on|off|fat` is stored on
+##       `BUILDMASTER_META_<id>_IPO` and pushed to members that omit the
+##       key (`_bm_tc_propagate_metas`). Omitted → `inherit` (parent
+##       CMake IPO / leftover flags). A child with its own `IPO=` is
+##       not overwritten.
 ## @note `PC` / `PC={…}` is FATAL on a meta.
 ## @note `GIT={…}` with FETCH / SWITCH / RESET / PATCH is FATAL on a meta
 ##       (no srcdir). Empty `GIT` / `GIT={}` is the parser WARNING only.
@@ -136,6 +143,7 @@ function(_bm_meta_impl _id _title)
 
 	_bm_opt_parse(
 		_indent _tc _rename _noinstall _whole _stripres "${_optstr}")
+	_bm_opt_parse_ipo("${_optstr}" _ipo)
 	_bm_opt_parse_pc(
 		"${_optstr}" _pc_present _pc_enabled _pc_name _pc_ver _pc_desc)
 	_bm_opt_parse_link("${_optstr}" _meta_link)
@@ -179,6 +187,7 @@ function(_bm_meta_impl _id _title)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_CREATED TRUE)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_INDENT 0)
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_TOOLCHAIN "${_tc}")
+	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_IPO "${_ipo}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINK "${_meta_link}")
 	set_property(GLOBAL PROPERTY BUILDMASTER_META_${_id}_LINKFLAGS "${_meta_linkflags}")
 	if(_whole)

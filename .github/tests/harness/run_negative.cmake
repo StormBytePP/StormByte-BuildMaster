@@ -23,6 +23,7 @@ set(_cfg_cases
 	exe-pc
 	exe-repack
 	exe-empty-produced
+	ipo-bad
 )
 set(_ins_cases pc-clobber)
 set(_failed 0)
@@ -131,6 +132,15 @@ foreach(_c IN LISTS _cfg_cases)
 			string(FIND "${_blob}" "executable mode requires at least one produced spec" _hit)
 			if(_hit LESS 0)
 				message(STATUS "negative/${_c} configure failed but not with empty-produced text:\n${_blob}")
+				math(EXPR _failed "${_failed} + 1")
+			else()
+				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")
+			endif()
+		elseif(_c STREQUAL "ipo-bad")
+			string(JOIN "\n" _blob "${_out}" "${_err}")
+			string(FIND "${_blob}" "IPO: invalid value" _hit)
+			if(_hit LESS 0)
+				message(STATUS "negative/${_c} configure failed but not with IPO-invalid text:\n${_blob}")
 				math(EXPR _failed "${_failed} + 1")
 			else()
 				message(STATUS "[BuildMaster/Core     ]: negative/${_c} configure-failed as required")

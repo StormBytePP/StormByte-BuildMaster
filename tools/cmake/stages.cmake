@@ -33,10 +33,13 @@
 ##            runs under the deferred `<id>_configure` custom target
 ##            (suppress hierarchical STATUS; the target COMMENT is enough).
 ##            `"0"` or empty otherwise.
-## @note C/CXX/LD flags go through `_bm_tc_translate_flags` (profile =
-##       TOOLCHAIN= or inferred parent). EXE, SHARED and MODULE linker
-##       strings are translated separately. `b_lto` and
-##       `CMAKE_INTERPROCEDURAL_*` are not written here.
+## @note C/CXX/LD flags go through `_bm_tc_translate_component`
+##       (profile = TOOLCHAIN= or inferred parent; IPO mode from
+##       `BUILDMASTER_COMPONENT_<id>_OPTSTR` via `_bm_opt_parse_ipo`).
+##       EXE, SHARED and MODULE linker strings are translated separately.
+##       `b_lto` and `CMAKE_INTERPROCEDURAL_*` are not written here:
+##       the translator emits `-flto` / `/GL` / `/LTCG` /
+##       `-ffat-lto-objects` according to `IPO=` (`inherit`/`on`/`off`/`fat`).
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -272,15 +275,15 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 
 		set(_bm_c_in "${CMAKE_C_FLAGS}")
 		set(_bm_cxx_in "${CMAKE_CXX_FLAGS}")
-		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
 			"${_toolchain_name}")
 		set(_bm_c_sh "${_bm_c_in}")
 		set(_bm_cxx_sh "${_bm_cxx_in}")
-		_bm_tc_translate_flags(_bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" _bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
 			"${_toolchain_name}")
 		set(_bm_c_mo "${_bm_c_in}")
 		set(_bm_cxx_mo "${_bm_cxx_in}")
-		_bm_tc_translate_flags(_bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" _bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
 			"${_toolchain_name}")
 		if(COMMAND _bm_env_update_runner)
 			_bm_env_update_runner()
@@ -322,15 +325,15 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 		_bm_tc_infer_profile(_bm_inherit_profile)
 		set(_bm_c_in "${CMAKE_C_FLAGS}")
 		set(_bm_cxx_in "${CMAKE_CXX_FLAGS}")
-		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS
 			"${_bm_inherit_profile}")
 		set(_bm_c_sh "${_bm_c_in}")
 		set(_bm_cxx_sh "${_bm_cxx_in}")
-		_bm_tc_translate_flags(_bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" _bm_c_sh _bm_cxx_sh CMAKE_SHARED_LINKER_FLAGS
 			"${_bm_inherit_profile}")
 		set(_bm_c_mo "${_bm_c_in}")
 		set(_bm_cxx_mo "${_bm_cxx_in}")
-		_bm_tc_translate_flags(_bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
+		_bm_tc_translate_component("${_component}" _bm_c_mo _bm_cxx_mo CMAKE_MODULE_LINKER_FLAGS
 			"${_bm_inherit_profile}")
 		if(COMMAND _bm_env_update_runner)
 			_bm_env_update_runner()

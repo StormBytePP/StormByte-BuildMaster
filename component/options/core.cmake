@@ -3,8 +3,8 @@
 # =============================================================================
 
 ## @brief Keys that may appear without '=' (flag form → enabled).
-## @note RENAME, NOINSTALL, WHOLE, STRIPRES, PC, GIT, REPACK, FILES and
-##       REQUIRE_TOOL accept `KEY`, `KEY=` and `KEY=ON|OFF`. Other keys
+## @note RENAME, NOINSTALL, WHOLE, STRIPRES, PC, GIT, REPACK, FILES,
+##       REQUIRE_TOOL and IPO accept `KEY`, `KEY=` and `KEY=…`. Other keys
 ##       require `KEY=value`. Keep this list in sync with `_bm_opt_parse()`.
 ## @note `NOINSTALL` is a bare flag. `NOINSTALL=` / truthy values warn and
 ##       enable. Falsy values are FATAL. Parsed in `_bm_opt_parse_noinstall`.
@@ -19,6 +19,10 @@
 ## @note `REQUIRE_TOOL` / `REQUIRE_TOOL=` / `REQUIRE_TOOL={}` is WARNING
 ##       and ignored (`Use REQUIRE_TOOL=pkgconfig or REQUIRE_TOOL={…}`).
 ##       Unknown extra ids are FATAL in `_bm_tools_demand_extra`.
+## @note `IPO` is accepted bare so the splitter does not warn. Values are
+##       parsed in `_bm_opt_parse_ipo`: omitted → inherit; `IPO` / `IPO=` /
+##       `IPO=on` → thin LTO; `IPO=off` → strip; `IPO=fat` → thin + fat
+##       objects on gcc/clang. Invalid values are FATAL.
 ## @note `REPACK` is a flag on meta **and** on a static publishing component.
 ##       Meta: merges every produced static archive of the member leaves
 ##       into one prefix archive named after the meta id.
@@ -38,7 +42,9 @@
 ## @note `REQUIRE_TOOL` is allowed on meta and component.
 ## @note `NOINSTALL` is allowed on meta and component. On a meta it is
 ##       stamped onto every member at finalize (prevalent).
-set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;NOINSTALL;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES;REQUIRE_TOOL")
+## @note `IPO` is allowed on meta and component. A meta value is inherited
+##       by members that omit the key (same idea as `TOOLCHAIN=`).
+set(BUILDMASTER_COMPONENT_OPTION_FLAGS "RENAME;NOINSTALL;BUILDONLY;WHOLE;STRIPRES;PC;GIT;REPACK;FILES;REQUIRE_TOOL;IPO")
 
 # CMake lists use ';' as the element separator. Tokens that contain ';'
 # inside `{…}` are stored with this stand-in so foreach(IN LISTS) does
@@ -230,6 +236,7 @@ endfunction()
 ##       Accepted falsy: `0`, `OFF`, `FALSE`, `NO`.
 ##       Any other non-empty value → WARNING and FALSE.
 ## @note Do not use this for `NOINSTALL` (`_bm_opt_parse_noinstall`).
+## @note Do not use this for `IPO` (`_bm_opt_parse_ipo`).
 function(_bm_opt_flag val out_bool)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_flag")
 	if("${val}" STREQUAL "")

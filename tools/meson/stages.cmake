@@ -74,9 +74,14 @@ endfunction()
 ## @param[in] _configure_via_target Optional (ARGV12) `"1"` when setup runs
 ##            under the deferred `<id>_configure` custom target (suppress
 ##            hierarchical STATUS). `"0"` or empty otherwise.
-## @note C/CXX/LD flags go through `_bm_tc_translate_flags` (profile =
-##       TOOLCHAIN= or inferred parent). That drops `-fuse-ld=*` on msvc
-##       and rewrites IPO tokens. `b_lto` is unchanged here.
+## @note C/CXX/LD flags go through `_bm_tc_translate_component`
+##       (profile = TOOLCHAIN= or inferred parent; IPO mode from
+##       `BUILDMASTER_COMPONENT_<id>_OPTSTR` via `_bm_opt_parse_ipo`).
+##       That drops `-fuse-ld=*` on msvc and rewrites IPO tokens
+##       (`-flto` / `/GL` / `/LTCG` / `-ffat-lto-objects`).
+## @note `LTO_ENABLED` (`-Db_lto=`) follows the same IPO mode:
+##       `on`/`fat` → `true`, `off` → `false`, `inherit` → parent
+##       `CMAKE_INTERPROCEDURAL_OPTIMIZATION[_RELEASE]`.
 ## @note Reads `_BM_RENAME_ENABLED` from the caller (`"1"` / `"0"`). If unset,
 ##       defaults to `"1"`. The rename oficio is selected by
 ##       `BUILDMASTER_COMPONENT_<id>_INSTALL_OFICIOS` /
@@ -300,7 +305,7 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			_bm_path_normalize(_MESON_RANLIB "${_MESON_RANLIB}")
 		endif()
 
-		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
+		_bm_tc_translate_component("${_component}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
 			"${_toolchain_name}")
 		if(COMMAND _bm_env_update_runner)
 			_bm_env_update_runner()
@@ -334,7 +339,7 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 		endif()
 	else()
 		_bm_tc_infer_profile(_bm_inherit_profile)
-		_bm_tc_translate_flags(CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
+		_bm_tc_translate_component("${_component}" CMAKE_C_FLAGS CMAKE_CXX_FLAGS _MESON_LINK_ARGS
 			"${_bm_inherit_profile}")
 		if(COMMAND _bm_env_update_runner)
 			_bm_env_update_runner()
@@ -369,7 +374,15 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	_bm_env_quote_cmd_list(_MESON_SILENT_CMD_PREFIX ${ENV_MESON_SILENT_COMMAND})
 	_bm_env_quote_cmd_list(_MESON_COMPILE_CMD_PREFIX ${ENV_MESON_COMPILE_COMMAND})
 
-	if(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
+	get_property(_bm_ipo_optstr GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_component}_OPTSTR)
+	_bm_opt_parse_ipo("${_bm_ipo_optstr}" _bm_ipo_mode)
+	if(_bm_ipo_mode STREQUAL "off")
+		set(LTO_ENABLED "false")
+	elseif(_bm_ipo_mode STREQUAL "on" OR _bm_ipo_mode STREQUAL "fat")
+		set(LTO_ENABLED "true")
+	elseif(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
+		set(LTO_ENABLED "true")
+	elseif(CMAKE_BUILD_TYPE STREQUAL "Release" AND CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE)
 		set(LTO_ENABLED "true")
 	else()
 		set(LTO_ENABLED "false")
@@ -519,6 +532,6 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 	set(${_file_setup} "${_MESON_SETUP_FILE}" PARENT_SCOPE)
 	set(${_file_compile} "${_MESON_COMPILE_FILE}" PARENT_SCOPE)
 	set(${_file_install} "${_MESON_INSTALL_FILE}" PARENT_SCOPE)
-	_bm_log_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE} buildtype=${MESON_BUILD_TYPE}")
+	_bm_log_message(MESON DEBUG "Wrote Meson stages for ${_component} native=${_MESON_NATIVE_FILE} buildtype=${MESON_BUILD_TYPE} b_lto=${LTO_ENABLED} ipo=${_bm_ipo_mode}")
 	_bm_log_message(MESON LOWLEVEL "Exiting _bm_tools_meson_stages")
 endfunction()

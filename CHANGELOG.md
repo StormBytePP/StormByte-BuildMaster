@@ -358,6 +358,19 @@ and the declaration shape changed.
   `CXXFLAGS`, `FILES`, `LINKFLAGS`, `NOINSTALL`). Groups are
   omitted. Row order is readability, not the graph walk. Nested
   bootstraps stay silent.
+- **`IPO=` on component and meta.** Per-id LTO, independent of parent
+  `CMAKE_INTERPROCEDURAL_*`. Omitted → inherit the parent (and leftover
+  `-flto` / `/GL` tokens). `IPO` / `IPO=` / `IPO=on` → thin LTO
+  (`-flto` on gcc/clang/clang-cl; `/GL` + `/LTCG` on msvc).
+  `IPO=off` strips every IPO token even if the parent has IPO on.
+  `IPO=fat` is thin plus `-ffat-lto-objects` on gcc/clang C/CXX only
+  (MSVC and clang-cl treat fat as on; no fat objects on LD). Invalid
+  values are FATAL. A meta with `IPO=` stamps members that omit the
+  key (same destinations as `TOOLCHAIN=`); an explicit child `IPO=`
+  wins and a second meta does not FATAL. CMake/Meson stages call
+  `_bm_tc_translate_component`; Meson `-Db_lto=` follows the same
+  mode. Harness: translator `on`/`off`/`fat` vs parent cache;
+  negative `ipo-bad` (`IPO=nope`).
 
 ### Changed
 

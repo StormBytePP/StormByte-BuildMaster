@@ -37,6 +37,8 @@
 ##       (`write NOINSTALL, not NOINSTALL=…`). Falsy values are FATAL
 ##       (`omit the key to install`). Any other value is FATAL.
 ## @note `INDENT` / `INDENT_LEVEL` is ignored. Use `buildmaster_group()`.
+## @note `IPO` / `IPO=` / `IPO=on|off|fat` is parsed by `_bm_opt_parse_ipo`.
+##       This walker only acknowledges the key so it is not an unknown option.
 function(_bm_opt_parse out_indent out_toolchain out_rename
 											out_noinstall out_whole out_stripres
 											options_string)
@@ -66,6 +68,8 @@ function(_bm_opt_parse out_indent out_toolchain out_rename
 					"INDENT= is ignored; put the component in a buildmaster_group() so the outline stamps indent")
 			elseif(_key STREQUAL "TOOLCHAIN")
 				set(_toolchain "${_val}")
+			elseif(_key STREQUAL "IPO")
+				# parsed by _bm_opt_parse_ipo()
 			elseif(_key STREQUAL "LINK")
 				# parsed by _bm_opt_parse_link()
 			elseif(_key STREQUAL "LINKFLAGS")

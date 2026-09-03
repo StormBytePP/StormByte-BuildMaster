@@ -56,6 +56,7 @@ BuildMaster is that layer, written once:
 | `LNK2005` / duplicate `.res` after `/WHOLEARCHIVE` | `STRIPRES` on static MSVC / clang-cl archives (default on) |
 | `shlwapi` on every consumer because a static `.lib` does not record it | `LINK={…}` on the producer (or the meta) |
 | `/FORCE:MULTIPLE` on the **parent** because one leaf needed it | `LINKFLAGS={…}` on **that** leaf (not inherited) |
+| Parent `-flto` / `/GL` leaking into a leaf that cannot probe under LTO | `IPO=off` on that leaf (or `IPO=fat` when you still need real objects) |
 | Hand-written `.pc` so the next Meson node finds this prefix | `PC={…}` on the leaf |
 | Six hours of “it works on my Linux box”, then 02:00 and a Windows CI that never heard of `pkg-config` | `REQUIRE_TOOL=pkgconfig` |
 | A submodule whose `meson.build` / `CMakeLists.txt` lives one folder down | `SOURCE=libfoo` (same isolation as `GIT ROOT=`) |
@@ -96,6 +97,7 @@ a product, not a build blog.
 - [Extra tools (`REQUIRE_TOOL`)](#extra-tools-require_tool)
 - [Whole-archive linking (`WHOLE`)](#whole-archive-linking-whole)
 - [Stripping `.res` members (`STRIPRES`)](#stripping-res-members-stripres)
+- [Interprocedural optimization (`IPO`)](#interprocedural-optimization-ipo)
 - [Subcomponent specs](#subcomponent-specs)
 - [Per-component toolchains](#per-component-toolchains)
 - [Hooks](#hooks)
@@ -191,6 +193,20 @@ buildmaster_component(
 	static
 	mylib
 	"TOOLCHAIN=clang-cl;WHOLE;ALIAS=My::Lib;LINK={shlwapi;ws2_32};PC={VERSION=1.2.3;NAME=mylib};REQUIRE_TOOL=pkgconfig"
+)
+```
+
+A leaf that must not inherit the parent’s LTO:
+
+```cmake
+buildmaster_component(
+	tinyprobe
+	"Tiny probe lib"
+	"${CMAKE_SOURCE_DIR}/thirdparty/tinyprobe/src"
+	""
+	static
+	tinyprobe
+	"IPO=off"
 )
 ```
 
@@ -437,9 +453,11 @@ buildmaster_link(engine plugins)
 A meta is an `INTERFACE` bucket. No `srcdir`, no nested configure.
 `GIT=` / `FILES=` / `SOURCE=` / `BACKEND=` on a meta are FATAL.
 `LINKFLAGS=` on a meta is WARNING + ignore. `TOOLCHAIN=` copies onto
-members that did not pin one. `REQUIRE_TOOL=` on a meta is accepted.
-`NOINSTALL` on a meta is prevalent: finalize stamps every member.
-`ALIAS=` on a meta is the same contract as on a component.
+members that did not pin one. `IPO=` does the same: members that omit
+`IPO=` inherit the meta; a member that wrote `IPO=` keeps its own
+value (no FATAL if two metas disagree). `REQUIRE_TOOL=` on a meta is
+accepted. `NOINSTALL` on a meta is prevalent: finalize stamps every
+member. `ALIAS=` on a meta is the same contract as on a component.
 
 A group cannot be a meta member.
 
@@ -454,8 +472,9 @@ buildmaster_group(grp-audio "Audio")
 buildmaster_group_add(grp-audio opus speex)
 ```
 
-`buildmaster_group_add` requires the group to already exist. Members may
-be components, metas, or other groups. Cycles and id clashes are FATAL.
+`buildmaster_group_add` requires the group to already exist. Members
+may be components, metas, or other groups. Cycles and id clashes are
+FATAL.
 
 Groups are not consumption. Linking still goes through
 `buildmaster_link` on the real ids.
@@ -475,7 +494,7 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 - A trailing `;` is allowed.
 - Keys are case-insensitive, stored uppercase.
 - Bare flag (`RENAME`, `WHOLE`, `NOINSTALL`, `STRIPRES`, `REPACK`,
-  `REQUIRE_TOOL`) is accepted by the splitter.
+  `REQUIRE_TOOL`, `IPO`) is accepted by the splitter.
 - `BUILDONLY` is accepted by the splitter only so the parser can FATAL
   (`use NOINSTALL`).
 - Unknown keys: **WARNING**, ignored.
@@ -484,6 +503,7 @@ KEY=value;KEY2=value with spaces;PC={VERSION=1.2.3;NAME=foo}
 | Key | Default | Notes |
 |-----|---------|-------|
 | `TOOLCHAIN` | parent | Profile name (`gcc`, `clang`, `clang-cl`, `msvc`) |
+| `IPO` / `IPO=` / `IPO=on\|off\|fat` | inherit | Per-id LTO. Omitted follows the parent. Invalid value is FATAL |
 | `RENAME` | ON | Normalize variant archive / binary names after install |
 | `WHOLE` | OFF | Whole-archive the produced statics |
 | `STRIPRES` | ON | Strip `*.res` from static MSVC / clang-cl archives |
@@ -506,6 +526,9 @@ ignored. A name that is not a known extra is FATAL.
 `NOINSTALL=` and `NOINSTALL=ON` enable with WARNING
 (`write NOINSTALL, not NOINSTALL=…`). `NOINSTALL=OFF` is FATAL
 (`omit the key to install`).
+
+Bare `IPO` and `IPO=` mean thin LTO on. See
+[Interprocedural optimization (`IPO`)](#interprocedural-optimization-ipo).
 
 ---
 
@@ -597,20 +620,19 @@ Mode `headers`. No produced spec.
 
 Mode `executable`. Produced spec is a binary stem, not `libfoo.a`.
 
-The file lands under `BUILDMASTER_INSTALL_BINDIR` (`bin/<stem>` on
-Unix, `bin/<stem>.exe` on Windows). `NOINSTALL` keeps it under the
-component BUILDDIR.
+The file lands under `BUILDMASTER_INSTALL_BINDIR` (`bin/<stem>` on Unix,
+`bin/<stem>.exe` on Windows). `NOINSTALL` keeps it under the component
+BUILDDIR.
 
-`<id>` is still an `INTERFACE` stub. Do not
-`target_link_libraries(host mytool)` expecting symbols from the
-binary. Run the file after `<id>_install`. The nested project is what
-actually links libraries (`find_library` / `link_with`);
-`buildmaster_link(mytool mylib)` is the wait edge and the parent
-INTERFACE, not a target inside the upstream `CMakeLists.txt`.
+`<id>` is still an `INTERFACE` stub. Do not `target_link_libraries(host mytool)`
+expecting symbols from the binary. Run the file after `<id>_install`.
+The nested project is what actually links libraries (`find_library` /
+`link_with`); `buildmaster_link(mytool mylib)` is the wait edge and the
+parent INTERFACE, not a target inside the upstream `CMakeLists.txt`.
 
-`RENAME` (default ON) normalizes variant binary names onto the
-produced stem. `WHOLE` / `STRIPRES` / enabled `PC={…}` do not apply
-(`PC` ENABLED is FATAL). `REPACK` on the executable itself is FATAL.
+`RENAME` (default ON) normalizes variant binary names onto the produced
+stem. `WHOLE` / `STRIPRES` / enabled `PC={…}` do not apply (`PC` ENABLED
+is FATAL). `REPACK` on the executable itself is FATAL.
 
 ---
 
@@ -634,9 +656,9 @@ Cached under `BUILDMASTER_DOWNLOADSDIR`. Meta + any `FILES` key is FATAL.
 Order is fixed: FETCH → SWITCH → RESET → PATCH. Empty `GIT` / `GIT={}`
 is WARNING. Meta + a real git op is FATAL.
 
-`ROOT=` is the same isolation contract as optstr `SOURCE=`: always
-under the component srcdir, escape FATAL before existence, host repo
-FATAL. Operations never run in the parent project.
+`ROOT=` is the same isolation contract as optstr `SOURCE=`: always under
+the component srcdir, escape FATAL before existence, host repo FATAL.
+Operations never run in the parent project.
 
 ---
 
@@ -646,8 +668,8 @@ FATAL. Operations never run in the parent project.
 "PC={VERSION=1.2.3;NAME=mylib;DESCRIPTION=My library}"
 ```
 
-Writes `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` after
-install. FATAL if that path already exists. Not a portable package.
+Writes `${BUILDMASTER_INSTALL_LIBDIR}/pkgconfig/<Name>.pc` after install.
+FATAL if that path already exists. Not a portable package.
 
 `PC=` only **writes** the file. It does not demand the `pkgconfig`
 extra. The next Meson or Autotools leaf that *reads* `.pc` files is
@@ -660,8 +682,6 @@ your problem — see [`REQUIRE_TOOL`](#extra-tools-require_tool).
 
 ## Extra tools (`REQUIRE_TOOL`)
 
-This is the 02:00 clause.
-
 You spent the evening on Linux. Every Meson leaf found `libfoo` through
 a `.pc` you just wrote. You push. Windows CI does not have `pkg-config`.
 The leaf that “just works” locally dies in `dependency('foo')` and you
@@ -671,13 +691,13 @@ debug a missing *tool*, not a missing library.
 
 ```cmake
 buildmaster_component(
-	ffmpeg
-	"FFmpeg"
-	"${CMAKE_SOURCE_DIR}/thirdparty/ffmpeg"
+	codecpack
+	"Codec pack"
+	"${CMAKE_SOURCE_DIR}/thirdparty/codecpack"
 	""
 	static
-	avcodec
-	"REQUIRE_TOOL=pkgconfig;PC={VERSION=7.0;NAME=libavcodec}"
+	codecpack
+	"REQUIRE_TOOL=pkgconfig;PC={VERSION=1.0;NAME=codecpack}"
 )
 ```
 
@@ -689,10 +709,9 @@ buildmaster_component(
   `BUILDMASTER_TOOLS_EXTRA_KNOWN` and `tools/extra/<id>/`, it does not
   exist.
 
-`pkgconfig` (this release) still prefers a working system
-pkg-config / pkgconf. Only if that probe fails does it build the
-bundled tree (the Windows case, and any runner that shipped a broken
-one).
+`pkgconfig` (this release) still prefers a working system pkg-config /
+pkgconf. Only if that probe fails does it build the bundled tree (the
+Windows case, and any runner that shipped a broken one).
 
 The extra is demanded at **register**, so it exists before nested
 configure. A second `REQUIRE_TOOL=pkgconfig` is a no-op.
@@ -709,17 +728,53 @@ public command.
 
 ## Whole-archive linking (`WHOLE`)
 
-`WHOLE` on a static component (or a meta) wraps produced archives so
-the linker cannot drop unreferenced objects (plugins, statically
-registered codecs). Shared / headers / executable: INFO + ignore.
+`WHOLE` on a static component (or a meta) wraps produced archives so the
+linker cannot drop unreferenced objects (plugins, statically registered
+codecs). Shared / headers / executable: INFO + ignore.
 
 ---
 
 ## Stripping `.res` members (`STRIPRES`)
 
-Default ON for static MSVC / clang-cl archives. After `RENAME`,
-`*.res` members are removed so `/WHOLEARCHIVE` does not duplicate
-resources. Other toolchains: silent no-op.
+Default ON for static MSVC / clang-cl archives. After `RENAME`, `*.res`
+members are removed so `/WHOLEARCHIVE` does not duplicate resources.
+Other toolchains: silent no-op.
+
+---
+
+## Interprocedural optimization (`IPO`)
+
+Parent `CMAKE_INTERPROCEDURAL_OPTIMIZATION` is a blunt instrument. It
+is fine when every leaf is happy under LTO. It is not fine when one
+Meson `cc.has_function` probe links a bitcode archive and decides the
+symbol does not exist. That is a long evening that looks like a missing
+dependency.
+
+`IPO=` is per id. The translator strips foreign LTO tokens and then
+puts back only what this profile and this mode asked for.
+
+| Written | Meaning |
+|---------|---------|
+| *(omit)* | Inherit the parent (`CMAKE_INTERPROCEDURAL_OPTIMIZATION` / `_RELEASE`) and leftover `-flto` / `/GL` tokens |
+| `IPO` / `IPO=` / `IPO=on` | Thin LTO on this id |
+| `IPO=off` | Strip every IPO token, even if the parent has LTO on |
+| `IPO=fat` | Thin LTO plus `-ffat-lto-objects` on gcc/clang **C/CXX** (not on LD). MSVC and clang-cl treat fat as on (`/GL`+`/LTCG`, or `-flto`) |
+| anything else | **FATAL** |
+
+Thin tokens: gcc / clang / clang-cl get `-flto` on C, CXX and LD.
+MSVC gets `/GL` on C/CXX and `/LTCG` on LD — never `/LTCG` on the
+compiler line.
+
+A meta with `IPO=` stamps members that omitted the key (same
+destinations as `TOOLCHAIN=`). A member that already wrote `IPO=`
+keeps it. Two metas that want different values do not FATAL.
+
+CMake and Meson stages both honour the mode. Meson `-Db_lto=` follows
+it (`off` → `false`, `on`/`fat` → `true`, omit → parent).
+
+You do not turn the parent off “just in case”. You write `IPO=off` on
+the leaf that cannot probe under LTO, and leave the rest of the graph
+alone.
 
 ---
 
@@ -744,6 +799,12 @@ The profile owns compilers **and** binutils. `CMAKE_AR` and Meson
 `llvm-ar` + `ld.lld`, `gcc` → binutils `ar` and the driver linker).
 A clang-cl parent does not leave `llvm-lib` on an `msvc` leaf.
 Paths are absolute before the component toolchain file is written.
+
+Flag dialect is rewritten for that profile before the env runner
+refresh: foreign `-I`/`-L`/`-flto`/`/GL` tokens do not leak, then
+`IPO=` (or the parent) injects the tokens this profile actually
+understands. See
+[Interprocedural optimization (`IPO`)](#interprocedural-optimization-ipo).
 
 ---
 

@@ -3,8 +3,10 @@
 # =============================================================================
 # Not public. Called from cmake/meson stages before the env runner refresh.
 # Pass 1: drop foreign dialect, rewrite -I/-L on MSVC-like, drop IPO and
-#         every -fuse-ld=.
-# Pass 2: IPO tokens of this profile (or nothing).
+#         every -fuse-ld= and -ffat-lto-objects.
+# Pass 2: IPO tokens of this profile according to the resolved mode
+#         (inherit parent / on / off / fat). fat is on + -ffat-lto-objects
+#         on gcc/clang C/CXX only. MSVC and clang-cl treat fat as on.
 # Pass 3: -fuse-ld= of this profile only (gcc=bfd, clang/clang-cl=lld,
 #         msvc=none). Always, not only when IPO is on.
 #         clang-cl Meson sanity puts link_args after /link; the driver
@@ -36,6 +38,11 @@ function(_bm_tc_flag_append io_var token)
 	endif()
 endfunction()
 
+## @brief Parent-scope IPO: cache flags or leftover tokens in the strings.
+## @param[in]  c_str   C flags.
+## @param[in]  cxx_str CXX flags.
+## @param[in]  ld_str  LD flags.
+## @param[out] out_var TRUE if the parent wants IPO.
 function(_bm_tc_ipo_wanted c_str cxx_str ld_str out_var)
 	set(_yes FALSE)
 	if(CMAKE_INTERPROCEDURAL_OPTIMIZATION)
@@ -49,13 +56,37 @@ function(_bm_tc_ipo_wanted c_str cxx_str ld_str out_var)
 	endif()
 	if(NOT _yes)
 		foreach(_s IN ITEMS "${c_str}" "${cxx_str}" "${ld_str}")
-			if(_s MATCHES "(^| )(-flto|/GL|/LTCG|-fwhole-program-vtables)( |$)")
+			if(_s MATCHES "(^| )(-flto|/GL|/LTCG|-fwhole-program-vtables|-ffat-lto-objects)( |$)")
 				set(_yes TRUE)
 				break()
 			endif()
 		endforeach()
 	endif()
 	set(${out_var} "${_yes}" PARENT_SCOPE)
+endfunction()
+
+## @brief Resolve `inherit|on|off|fat` against the parent.
+## @param[in]  mode    From `_bm_opt_parse_ipo` (`inherit` if the key is absent).
+## @param[in]  c_str   C flags (used only when mode is inherit).
+## @param[in]  cxx_str CXX flags.
+## @param[in]  ld_str  LD flags.
+## @param[out] out_on  TRUE when thin or fat LTO tokens must be written.
+## @param[out] out_fat TRUE when `-ffat-lto-objects` must be written (gcc/clang).
+function(_bm_tc_ipo_resolve mode c_str cxx_str ld_str out_on out_fat)
+	set(_on FALSE)
+	set(_fat FALSE)
+	if("${mode}" STREQUAL "off")
+		set(_on FALSE)
+	elseif("${mode}" STREQUAL "on")
+		set(_on TRUE)
+	elseif("${mode}" STREQUAL "fat")
+		set(_on TRUE)
+		set(_fat TRUE)
+	else()
+		_bm_tc_ipo_wanted("${c_str}" "${cxx_str}" "${ld_str}" _on)
+	endif()
+	set(${out_on} "${_on}" PARENT_SCOPE)
+	set(${out_fat} "${_fat}" PARENT_SCOPE)
 endfunction()
 
 ## @brief Drop foreign dialect and IPO tokens from one flag string.
@@ -80,6 +111,7 @@ function(_bm_tc_sanitize_flag_string in_str profile out_var)
 		endif()
 		if(_t MATCHES "^-flto" OR _t STREQUAL "/GL" OR _t STREQUAL "/LTCG"
 				OR _t STREQUAL "-fwhole-program-vtables"
+				OR _t STREQUAL "-ffat-lto-objects"
 				OR _t MATCHES "^-fuse-ld=")
 			continue()
 		endif()
@@ -120,18 +152,24 @@ endfunction()
 ## @param[in,out] cxx_var Name of the CXX flags variable.
 ## @param[in,out] ld_var  Name of the linker flags variable.
 ## @param[in]     profile gcc|clang|clang-cl|msvc
+## @param[in]     ARGN    Optional IPO mode from `_bm_opt_parse_ipo`
+##            (`inherit`, `on`, `off`, `fat`). Omitted → `inherit`.
 ## @note Linux gcc: `-fuse-ld=bfd` on LD only.
 ##       Linux clang: `-fuse-ld=lld` on LD only.
-##       Darwin gcc/clang: no `-fuse-ld` (ld64; CMake rejects BFD).
+##       Darwin gcc/clang: no `-fuse-ld` (ld64; CMake rejects BFD / APPLE).
 ##       clang-cl: `-fuse-ld=lld` on C/CXX and LD (Meson `/link` order).
 function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
+	set(_ipo_mode "inherit")
+	if(ARGC GREATER 4)
+		set(_ipo_mode "${ARGV4}")
+	endif()
 	_bm_log_message(TOOLCHAIN LOWLEVEL
-		"Entering _bm_tc_translate_flags(${profile})")
+		"Entering _bm_tc_translate_flags(${profile} ipo=${_ipo_mode})")
 	set(_c "${${c_var}}")
 	set(_cxx "${${cxx_var}}")
 	set(_ld "${${ld_var}}")
 
-	_bm_tc_ipo_wanted("${_c}" "${_cxx}" "${_ld}" _ipo)
+	_bm_tc_ipo_resolve("${_ipo_mode}" "${_c}" "${_cxx}" "${_ld}" _ipo _fat)
 	_bm_tc_sanitize_flag_string("${_c}" "${profile}" _c)
 	_bm_tc_sanitize_flag_string("${_cxx}" "${profile}" _cxx)
 	_bm_tc_sanitize_flag_string("${_ld}" "${profile}" _ld)
@@ -145,6 +183,10 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 			_bm_tc_flag_append(_c "-flto")
 			_bm_tc_flag_append(_cxx "-flto")
 			_bm_tc_flag_append(_ld "-flto")
+			if(_fat AND (profile STREQUAL "gcc" OR profile STREQUAL "clang"))
+				_bm_tc_flag_append(_c "-ffat-lto-objects")
+				_bm_tc_flag_append(_cxx "-ffat-lto-objects")
+			endif()
 		endif()
 	endif()
 
@@ -162,6 +204,33 @@ function(_bm_tc_translate_flags c_var cxx_var ld_var profile)
 	set(${cxx_var} "${_cxx}" PARENT_SCOPE)
 	set(${ld_var} "${_ld}" PARENT_SCOPE)
 	_bm_log_message(TOOLCHAIN DEBUG
-		"translate ${profile} ipo=${_ipo} c='${_c}' ld='${_ld}'")
+		"translate ${profile} ipo=${_ipo_mode} on=${_ipo} fat=${_fat} c='${_c}' ld='${_ld}'")
 	_bm_log_message(TOOLCHAIN LOWLEVEL "Exiting _bm_tc_translate_flags")
+endfunction()
+
+## @brief Translate C/CXX/LD for one registered component.
+## @param[in]     id      Component id (`BUILDMASTER_COMPONENT_<id>_OPTSTR`).
+## @param[in,out] c_var   Name of the C flags variable.
+## @param[in,out] cxx_var Name of the CXX flags variable.
+## @param[in,out] ld_var  Name of the linker flags variable.
+## @param[in]     profile gcc|clang|clang-cl|msvc
+## @note Reads `IPO` from that component's OPTSTR via `_bm_opt_parse_ipo`.
+##       `inherit` (key absent) uses parent
+##       `CMAKE_INTERPROCEDURAL_OPTIMIZATION[_<CONFIG>]` and leftover
+##       flto/GL tokens. `on` / `off` / `fat` override the parent.
+##       A meta that stamped `IPO=` into OPTSTR is visible here.
+## @note Delegates to `_bm_tc_translate_flags`. Callers that have no
+##       component id keep calling that function (5th arg optional).
+function(_bm_tc_translate_component id c_var cxx_var ld_var profile)
+	_bm_log_message(TOOLCHAIN LOWLEVEL
+		"Entering _bm_tc_translate_component(${id} ${profile})")
+	get_property(_optstr GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_OPTSTR)
+	_bm_opt_parse_ipo("${_optstr}" _ipo_mode)
+	_bm_tc_translate_flags("${c_var}" "${cxx_var}" "${ld_var}"
+		"${profile}" "${_ipo_mode}")
+	set(${c_var} "${${c_var}}" PARENT_SCOPE)
+	set(${cxx_var} "${${cxx_var}}" PARENT_SCOPE)
+	set(${ld_var} "${${ld_var}}" PARENT_SCOPE)
+	_bm_log_message(TOOLCHAIN LOWLEVEL
+		"Exiting _bm_tc_translate_component")
 endfunction()
