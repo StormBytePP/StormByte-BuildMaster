@@ -14,6 +14,13 @@ function(_bm_read_version_file _dir _out)
 	set(${_out} "${_ver}" PARENT_SCOPE)
 endfunction()
 
+function(_bm_warn_version_mismatch _pin _pindir _trunk _trunkdir)
+	if(NOT _pin STREQUAL _trunk)
+		_bm_log_message(CORE WARNING
+			"BuildMaster pin ${_pin} (${_pindir}) does not match trunk ${_trunk} (${_trunkdir}). Match submodule versions.")
+	endif()
+endfunction()
+
 set(_BM_PIN_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
 _bm_read_version_file("${_BM_PIN_SRCDIR}" _BM_PIN_VERSION)
 set(BUILDMASTER_VERSION "${_BM_PIN_VERSION}")
@@ -30,13 +37,12 @@ endif()
 
 if(DEFINED BUILDMASTER_ROOT AND NOT "${BUILDMASTER_ROOT}" STREQUAL ""
 		AND NOT _BM_PIN_SRCDIR STREQUAL BUILDMASTER_ROOT)
+	include("${BUILDMASTER_ROOT}/log.cmake")
+	_bm_log_level_init()
 	_bm_read_version_file("${BUILDMASTER_ROOT}" _BM_TRUNK_VERSION)
-	if(NOT _BM_PIN_VERSION STREQUAL _BM_TRUNK_VERSION)
-		message(WARNING
-			"BuildMaster pin ${_BM_PIN_VERSION} (${_BM_PIN_SRCDIR}) "
-			"does not match trunk ${_BM_TRUNK_VERSION} (${BUILDMASTER_ROOT}). "
-			"Match submodule versions.")
-	endif()
+	_bm_warn_version_mismatch(
+		"${_BM_PIN_VERSION}" "${_BM_PIN_SRCDIR}"
+		"${_BM_TRUNK_VERSION}" "${BUILDMASTER_ROOT}")
 	include("${BUILDMASTER_ROOT}/helpers.cmake")
 	include("${BUILDMASTER_ROOT}/tools/helpers.cmake")
 	include("${BUILDMASTER_ROOT}/propagate_vars.cmake")
@@ -79,6 +85,10 @@ include(init_vars.cmake)
 # modules. Nested hosts still need helpers.cmake so create_* APIs remain
 # available; then we propagate and stop.
 if(BUILDMASTER_CONFIGURED)
+	_bm_read_version_file("${BUILDMASTER_ROOT}" _BM_TRUNK_VERSION)
+	_bm_warn_version_mismatch(
+		"${_BM_PIN_VERSION}" "${_BM_PIN_SRCDIR}"
+		"${_BM_TRUNK_VERSION}" "${BUILDMASTER_ROOT}")
 	include("${BUILDMASTER_ROOT}/helpers.cmake")
 	include("${BUILDMASTER_ROOT}/tools/helpers.cmake")
 	include(propagate_vars.cmake)
