@@ -1,9 +1,22 @@
 # -----------------------------------------------------------------------------
 # Version (pin local, before any redirect)
 # -----------------------------------------------------------------------------
-set(BUILDMASTER_VERSION "2.0.0")
-set(_BM_PIN_VERSION "${BUILDMASTER_VERSION}")
+function(_bm_read_version_file _dir _out)
+	set(_file "${_dir}/VERSION")
+	set(_ver "pre-2.0.0")
+	if(EXISTS "${_file}")
+		file(READ "${_file}" _ver)
+		string(STRIP "${_ver}" _ver)
+		if(_ver STREQUAL "")
+			set(_ver "pre-2.0.0")
+		endif()
+	endif()
+	set(${_out} "${_ver}" PARENT_SCOPE)
+endfunction()
+
 set(_BM_PIN_SRCDIR "${CMAKE_CURRENT_LIST_DIR}")
+_bm_read_version_file("${_BM_PIN_SRCDIR}" _BM_PIN_VERSION)
+set(BUILDMASTER_VERSION "${_BM_PIN_VERSION}")
 set(BUILDMASTER_VERSION "${BUILDMASTER_VERSION}" PARENT_SCOPE)
 
 # -----------------------------------------------------------------------------
@@ -17,11 +30,11 @@ endif()
 
 if(DEFINED BUILDMASTER_ROOT AND NOT "${BUILDMASTER_ROOT}" STREQUAL ""
 		AND NOT _BM_PIN_SRCDIR STREQUAL BUILDMASTER_ROOT)
-	if(DEFINED BUILDMASTER_VERSION AND NOT "${BUILDMASTER_VERSION}" STREQUAL ""
-			AND NOT _BM_PIN_VERSION STREQUAL BUILDMASTER_VERSION)
+	_bm_read_version_file("${BUILDMASTER_ROOT}" _BM_TRUNK_VERSION)
+	if(NOT _BM_PIN_VERSION STREQUAL _BM_TRUNK_VERSION)
 		message(WARNING
 			"BuildMaster pin ${_BM_PIN_VERSION} (${_BM_PIN_SRCDIR}) "
-			"does not match trunk ${BUILDMASTER_VERSION} (${BUILDMASTER_ROOT}). "
+			"does not match trunk ${_BM_TRUNK_VERSION} (${BUILDMASTER_ROOT}). "
 			"Match submodule versions.")
 	endif()
 	include("${BUILDMASTER_ROOT}/helpers.cmake")
