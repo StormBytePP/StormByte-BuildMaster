@@ -103,6 +103,8 @@ If you landed here from a release link and have not read the tree:
       Do not invent new `.pc` files. Shared-library sonames and
       CMake `*Config.cmake` / `*Targets.cmake` are a separate
       ticket (`find_package` paths vs `pkg-config`).
+- [ ] **Groups** can be created after they are called by `buildmaster_group_add`
+      and only fail if at the end the group was never created.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
