@@ -89,6 +89,48 @@ macro(_bm_opt_append_spec library_mode spec base_libdir
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_append_spec")
 endmacro()
 
+## @brief Register the ELF WHOLE group feature (CMake 3.24+).
+## @note CMake classifies `-Wl,--whole-archive` as a *flag* and `*.a` as a
+##       *library*. `target_link_libraries(t INTERFACE -Wl,--whole-archive
+##       libavutil.a … -Wl,--no-whole-archive)` therefore emits:
+##
+##         libavutil.a libavcodec.a …  -Wl,--whole-archive -Wl,--no-whole-archive
+##
+##       i.e. an empty wrap. `LINK_GROUP:BM_WHOLE` is one token and keeps
+##       every produced archive between the two flags:
+##
+##         -Wl,--whole-archive libavutil.a libavcodec.a … -Wl,--no-whole-archive
+## @brief Register the ELF WHOLE *group* feature (CMake 3.24+).
+## @note This is LINK_GROUP, not LINK_LIBRARY. CMake looks up
+##       CMAKE_<LANG>_LINK_GROUP_USING_<FEATURE>_SUPPORTED when a target
+##       of that language consumes `$<LINK_GROUP:FEATURE,…>`. Without the
+##       CXX/C entries, add_library() of a C++ DSO fails with:
+##       Feature 'BM_WHOLE' … is not supported for the 'CXX' link language.
+## @note Two-element form = prefix + suffix around every member:
+##
+##         -Wl,--whole-archive  <all produced .a>  -Wl,--no-whole-archive
+function(_bm_opt_whole_enable_group)
+	if(MSVC OR APPLE)
+		return()
+	endif()
+	set(_prefix "LINKER:--whole-archive")
+	set(_suffix "LINKER:--no-whole-archive")
+	foreach(_var
+			CMAKE_LINK_GROUP_USING_BM_WHOLE
+			CMAKE_C_LINK_GROUP_USING_BM_WHOLE
+			CMAKE_CXX_LINK_GROUP_USING_BM_WHOLE)
+		set(${_var} "${_prefix}" "${_suffix}" CACHE INTERNAL
+			"BuildMaster ELF WHOLE group")
+	endforeach()
+	foreach(_var
+			CMAKE_LINK_GROUP_USING_BM_WHOLE_SUPPORTED
+			CMAKE_C_LINK_GROUP_USING_BM_WHOLE_SUPPORTED
+			CMAKE_CXX_LINK_GROUP_USING_BM_WHOLE_SUPPORTED)
+		set(${_var} TRUE CACHE INTERNAL
+			"BuildMaster ELF WHOLE group")
+	endforeach()
+endfunction()
+
 ## @brief Build whole-archive linker items for a list of static archive paths.
 ## @param[out] _out_var Name of the parent-scope variable to receive the item list.
 ## @param[in]  ARGN     Absolute (or install-relative) static archive paths.
@@ -96,6 +138,9 @@ endmacro()
 ##       per-archive `-Wl,-force_load,` on Apple; `-WHOLEARCHIVE:` on MSVC.
 ##       MSVC uses the `-WHOLEARCHIVE:` spelling so Ninja does not treat a leading
 ##       `/WHOLEARCHIVE:` token as a filesystem path.
+## @note ELF uses `$<LINK_GROUP:BM_WHOLE,…>` (not raw `-Wl` + paths). That
+##       group is a single genex, survives `configure_file(@ONLY)`, and is
+##       not split into flags-vs-libs by CMake.
 function(_bm_opt_whole_items _out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_opt_whole_items")
 	set(_paths ${ARGN})
@@ -114,11 +159,9 @@ function(_bm_opt_whole_items _out_var)
 			list(APPEND _items "-Wl,-force_load,${_p}")
 		endforeach()
 	else()
-		list(APPEND _items "-Wl,--whole-archive")
-		foreach(_p IN LISTS _paths)
-			list(APPEND _items "${_p}")
-		endforeach()
-		list(APPEND _items "-Wl,--no-whole-archive")
+		_bm_opt_whole_enable_group()
+		list(JOIN _paths "," _csv)
+		set(_items "$<LINK_GROUP:BM_WHOLE,${_csv}>")
 	endif()
 	set(${_out_var} "${_items}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_opt_whole_items")

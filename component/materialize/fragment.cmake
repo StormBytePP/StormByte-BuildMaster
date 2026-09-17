@@ -199,6 +199,12 @@ endfunction()
 ##       Dependant variants use `*_dependant.cmake.in`.
 ## @note After include, seals GLOBAL
 ##       `BUILDMASTER_COMPONENT_<id>_NAMES` and `_FILES` for REPACK/meta.
+## @note WHOLE: `_BM_WHOLE_LINK_ITEMS` stays a CMake list (ELF: one
+##       `$<LINK_GROUP:BM_WHOLE,…>` token). Do **not** flatten `;` to
+##       spaces — that made CMake treat `-Wl,--whole-archive` as a flag
+##       and the `.a` paths as libraries, which emptied the wrap:
+##
+##         libavutil.a … -Wl,--whole-archive -Wl,--no-whole-archive
 function(_bm_materialize_write_fragment _component _deferred)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_materialize_write_fragment")
 	_bm_materialize_collect_outputs("${_component}")
@@ -247,9 +253,17 @@ function(_bm_materialize_write_fragment _component _deferred)
 				"WHOLE ignored for '${_component}' (mode '${_library_mode}'; only static is supported)")
 		elseif(_LIBRARY_COMPONENT_FILES)
 			set(_BM_WHOLE "1")
-			_bm_opt_whole_items(_whole_list
+			_bm_opt_whole_items(_BM_WHOLE_LINK_ITEMS
 				${_LIBRARY_COMPONENT_FILES})
-			string(REPLACE ";" " " _BM_WHOLE_LINK_ITEMS "${_whole_list}")
+			# Host generate() must see the ELF group feature, not just this
+			# function's parent scope.
+			if(CMAKE_LINK_LIBRARY_USING_BM_WHOLE_SUPPORTED)
+				set(CMAKE_LINK_LIBRARY_USING_BM_WHOLE
+					"${CMAKE_LINK_LIBRARY_USING_BM_WHOLE}"
+					CACHE INTERNAL "BuildMaster ELF WHOLE group")
+				set(CMAKE_LINK_LIBRARY_USING_BM_WHOLE_SUPPORTED TRUE
+					CACHE INTERNAL "BuildMaster ELF WHOLE group")
+			endif()
 		endif()
 	endif()
 

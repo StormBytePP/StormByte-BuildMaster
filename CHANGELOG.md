@@ -29,6 +29,22 @@ If you landed here from a release link and have not read the tree:
 
 ### Fixed
 
+- **`WHOLE` wrap was empty on ELF.** `_bm_opt_whole_items` built
+  `-Wl,--whole-archive` + produced `.a` + `-Wl,--no-whole-archive`, then
+  `fragment.cmake` flattened the CMake list to spaces and
+  `target_link_libraries(<id> INTERFACE …)` let CMake classify the
+  `-Wl` tokens as *flags* and the archives as *libraries*. The DSO
+  line became `libavutil.a … libavfilter.a -Wl,--whole-archive
+  -Wl,--no-whole-archive`. GNU ld.bfd (single pass) then dropped
+  unreferenced avutil objects (`av_md5_sum`, AES/HMAC, …) while lld
+  still linked. ELF now emits one `$<LINK_GROUP:BM_WHOLE,…>` and
+  registers `CMAKE_{,C_,CXX_}LINK_GROUP_USING_BM_WHOLE` (prefix /
+  suffix `--whole-archive` / `--no-whole-archive`) so every produced
+  static of that id stays inside the wrap. Apple (`-force_load`) and
+  MSVC (`-WHOLEARCHIVE:`) are unchanged. The fragment no longer
+  replaces `;` with spaces. `WHOLE` still means one region around
+  **all** produced archives of the id, not one wrap per file.
+
 ### ToDo
 
 - [ ] **Idempotent stage stamps.** After `ninja <meta>_install` the
