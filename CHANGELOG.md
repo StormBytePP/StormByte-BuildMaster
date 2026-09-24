@@ -29,98 +29,21 @@ If you landed here from a release link and have not read the tree:
 
 ### Fixed
 
-- **`WHOLE` wrap was empty on ELF.** `_bm_opt_whole_items` built
-  `-Wl,--whole-archive` + produced `.a` + `-Wl,--no-whole-archive`, then
-  `fragment.cmake` flattened the CMake list to spaces and
-  `target_link_libraries(<id> INTERFACE …)` let CMake classify the
-  `-Wl` tokens as *flags* and the archives as *libraries*. The DSO
-  line became `libavutil.a … libavfilter.a -Wl,--whole-archive
-  -Wl,--no-whole-archive`. GNU ld.bfd (single pass) then dropped
-  unreferenced avutil objects (`av_md5_sum`, AES/HMAC, …) while lld
-  still linked. ELF now emits one `$<LINK_GROUP:BM_WHOLE,…>` and
-  registers `CMAKE_{,C_,CXX_}LINK_GROUP_USING_BM_WHOLE` (prefix /
-  suffix `--whole-archive` / `--no-whole-archive`) so every produced
-  static of that id stays inside the wrap. Apple (`-force_load`) and
-  MSVC (`-WHOLEARCHIVE:`) are unchanged. The fragment no longer
-  replaces `;` with spaces. `WHOLE` still means one region around
-  **all** produced archives of the id, not one wrap per file.
+- **`WHOLE` wrap was empty on ELF.** `_bm_opt_whole_items` built `-Wl,--whole-archive` + produced `.a` + `-Wl,--no-whole-archive`, then `fragment.cmake` flattened the CMake list to spaces and `target_link_libraries(<id> INTERFACE …)` let CMake classify the `-Wl` tokens as *flags* and the archives as *libraries*. The DSO line became `libavutil.a … libavfilter.a -Wl,--whole-archive -Wl,--no-whole-archive`. GNU ld.bfd (single pass) then dropped unreferenced avutil objects (`av_md5_sum`, AES/HMAC, …) while lld still linked. ELF now emits one `$<LINK_GROUP:BM_WHOLE,…>` and registers `CMAKE_{,C_,CXX_}LINK_GROUP_USING_BM_WHOLE` (prefix / suffix `--whole-archive` / `--no-whole-archive`) so every produced static of that id stays inside the wrap. Apple (`-force_load`) and MSVC (`-WHOLEARCHIVE:`) are unchanged. The fragment no longer replaces `;` with spaces. `WHOLE` still means one region around **all** produced archives of the id, not one wrap per file.
 
 ### ToDo
 
-- [ ] **Idempotent stage stamps.** After `ninja <meta>_install` the
-      leaf `_build` / `_install` / `_configure` files must stay
-      current. A later `ninja ffmpeg_install` (or any consumer of the
-      same leaves) must be a no-op for work that already published
-      to the prefix. Today Ninja treats those nodes as dirty and
-      re-enters nested `cmake --build` / `meson compile`.
-- [ ] **Re-apply `GIT={PATCH}` before any rebuild.** Post-install
-      `RESET` restores the work tree (correct: the submodule stays
-      clean). That also removes the patches. A dirty nested
-      `build.ninja` then runs `cmake --regenerate-during-build` on
-      *upstream* sources (`cmake_minimum_required` too old, missing
-      guards, …) and the compile stage dies. Either queue PATCH
-      again as a dependency of `_build` / regenerate, keep a
-      patched worktree until the graph is idle, or turn off
-      regenerate-during-build on BM builddirs. Samplerate on CMake
-      4 is the canary.
-- [ ] **`BUILDMASTER_JOBS`.** Cap concurrent BM stage scripts
-      (configure/build/install) independently of `ninja -jN`.
-      Sync log lines so two oficios do not interleave. Needs a
-      portable lock around `_bm_log_message` (Unix + Windows `.ps1`
-      runners). Empty `COMMENT` on `add_custom_command`; banners
-      go through log only.
-- [ ] **Named install phases.** Split the current `_install` bag
-      into explicit pre-install oficios (`rename` on NOINSTALL
-      BUILDDIR) and post-install oficios (`rename` on prefix,
-      `strip_res`, `pc`, git RESET). Keep `_install` as the public
-      stamp until callers migrate. Document that NOINSTALL still
-      runs the “install” wrapper (it does not `cmake --install`).
-- [ ] **Optstr tokenizer.** One scanner for nested `{…}` lists
-      (`PATCH={a;b}`, `LINK={…}`). Per-option code only interprets
-      tokens. Stops CMake from splitting `PATCH={file1;file2}`.
-- [ ] **`validate/`** for contract FATALs (factory / options / meta /
-      group / demand). Operation FATALs stay in `-P` workers.
-- [ ] Allow BuildMaster anywhere on disk, not only as a sibling of
-      `thirdparty`. Sole rule: `add_subdirectory(BM)` before first
-      use.
-- [ ] **Install-tree cache (2.1).** Each component may restore its
-      *installed* prefix from a blob cache instead of compile+install.
-      Staging prefix per id, then an atomic copy into
-      `BUILDMASTER_INSTALL_DIR` (same layout as a live install: libs,
-      headers, `*Config.cmake`, `.pc`). Not a builddir cache
-      (ccache/sccache already cover objects).
-      Default cache key: worktree SHA *after* PATCH, hash of the
-      applied patch files, toolchain profile, `CMAKE_BUILD_TYPE`,
-      IPO on/off, `mode`, `produced`, host OS/arch. SHA of the
-      unpatched submodule pin is not enough.
-      Extra key material via optstr (name TBD, e.g. `CACHEKEY=` /
-      `CACHE={…}`): caller-supplied tokens so a leaf like FFmpeg
-      distinguishes `-Dlibx265=enabled` vs disabled without hashing
-      the entire options list by default. Empty extra key = default
-      only. HIT must be a no-op for `_build`/`_install`; MISS writes
-      the staging tree after a successful install. `NOINSTALL` never
-      publishes (no cache write). `REPACK` caches the publisher
-      archive, not each member, unless the member itself is cached.
-      Partial HIT (lib without Config.cmake) is FATAL, not a silent
-      fallback. Needs the 2.0.1 idempotent stamps first or restore
-      and rebuild will race.
-- [ ] **RENAME should rewrite installed `.pc` files to the produced stem.**
-      `RENAME` already moves `libfoo-static.a` / `jpeg-static.lib` /
-      `libpng16.a` to the `produced` name. The matching
-      `*.pc` (`Libs: -lpng16`, `-ljpeg`, `-ltesseract55`) is left
-      untouched, so Meson/`pkg-config --static --libs` still looks
-      for the *pre-rename* artifact. Consumers then fail with
-      LNK1104 / “library not found” even though the archive exists
-      under the produced stem.
-      After renaming an archive, scan
-      `${BUILDMASTER_INSTALL_DIR}/**/pkgconfig/*.pc` (or the
-      component’s own `.pc`) and rewrite `-l<old-stem>` (and
-      `Name:` if it is only the old stem) to `-l<produced>`.
-      Do not invent new `.pc` files. Shared-library sonames and
-      CMake `*Config.cmake` / `*Targets.cmake` are a separate
-      ticket (`find_package` paths vs `pkg-config`).
-- [ ] **Groups** can be created after they are called by `buildmaster_group_add`
-      and only fail if at the end the group was never created.
+- [ ] **Idempotent stage stamps.** After `ninja <meta>_install` the leaf `_build` / `_install` / `_configure` files must stay current. A later `ninja ffmpeg_install` (or any consumer of the same leaves) must be a no-op for work that already published to the prefix. Today Ninja treats those nodes as dirty and re-enters nested `cmake --build` / `meson compile`.
+- [ ] **Re-apply `GIT={PATCH}` before any rebuild.** Post-install `RESET` restores the work tree (correct: the submodule stays clean). That also removes the patches. A dirty nested `build.ninja` then runs `cmake --regenerate-during-build` on *upstream* sources (`cmake_minimum_required` too old, missing guards, …) and the compile stage dies. Either queue PATCH again as a dependency of `_build` / regenerate, keep a patched worktree until the graph is idle, or turn off regenerate-during-build on BM builddirs. Samplerate on CMake 4 is the canary.
+- [ ] **`BUILDMASTER_JOBS`.** Cap concurrent BM stage scripts (configure/build/install) independently of `ninja -jN`. Sync log lines so two oficios do not interleave. Needs a portable lock around `_bm_log_message` (Unix + Windows `.ps1` runners). Empty `COMMENT` on `add_custom_command`; banners go through log only.
+- [ ] **Named install phases.** Split the current `_install` bag into explicit pre-install oficios (`rename` on NOINSTALL BUILDDIR) and post-install oficios (`rename` on prefix, `strip_res`, `pc`, git RESET). Keep `_install` as the public stamp until callers migrate. Document that NOINSTALL still runs the “install” wrapper (it does not `cmake --install`).
+- [ ] **Optstr tokenizer.** One scanner for nested `{…}` lists (`PATCH={a;b}`, `LINK={…}`). Per-option code only interprets tokens. Stops CMake from splitting `PATCH={file1;file2}`.
+- [ ] **`validate/`** for contract FATALs (factory / options / meta / group / demand). Operation FATALs stay in `-P` workers.
+- [ ] Allow BuildMaster anywhere on disk, not only as a sibling of `thirdparty`. Sole rule: `add_subdirectory(BM)` before first use.
+- [ ] **Install-tree cache (2.1).** Each component may restore its *installed* prefix from a blob cache instead of compile+install. Staging prefix per id, then an atomic copy into `BUILDMASTER_INSTALL_DIR` (same layout as a live install: libs, headers, `*Config.cmake`, `.pc`). Not a builddir cache (ccache/sccache already cover objects). Default cache key: worktree SHA *after* PATCH, hash of the applied patch files, toolchain profile, `CMAKE_BUILD_TYPE`, IPO on/off, `mode`, `produced`, host OS/arch. SHA of the unpatched submodule pin is not enough. Extra key material via optstr (name TBD, e.g. `CACHEKEY=` / `CACHE={…}`): caller-supplied tokens so a leaf like FFmpeg distinguishes `-Dlibx265=enabled` vs disabled without hashing the entire options list by default. Empty extra key = default only. HIT must be a no-op for `_build`/`_install`; MISS writes the staging tree after a successful install. `NOINSTALL` never publishes (no cache write). `REPACK` caches the publisher archive, not each member, unless the member itself is cached. Partial HIT (lib without Config.cmake) is FATAL, not a silent fallback. Needs the 2.0.1 idempotent stamps first or restore and rebuild will race.
+- [ ] **RENAME should rewrite installed `.pc` files to the produced stem.** `RENAME` already moves `libfoo-static.a` / `jpeg-static.lib` / `libpng16.a` to the `produced` name. The matching `*.pc` (`Libs: -lpng16`, `-ljpeg`, `-ltesseract55`) is left untouched, so Meson/`pkg-config --static --libs` still looks for the *pre-rename* artifact. Consumers then fail with LNK1104 / “library not found” even though the archive exists under the produced stem. After renaming an archive, scan `${BUILDMASTER_INSTALL_DIR}/**/pkgconfig/*.pc` (or the component’s own `.pc`) and rewrite `-l<old-stem>` (and `Name:` if it is only the old stem) to `-l<produced>`. Do not invent new `.pc` files. Shared-library sonames and CMake `*Config.cmake` / `*Targets.cmake` are a separate ticket (`find_package` paths vs `pkg-config`).
+- [ ] **Groups** can be created after they are called by `buildmaster_group_add` and only fail if at the end the group was never created.
+- [ ] **Shared-dep compile vs install race.** When two components share a leaf (Logger and System both need String/Base), configure correctly skips the second copy (`already built by 'StormByte Suite - String'`). The parent `-jN` graph still starts `<consumer>_build` in parallel with that leaf’s `_build`/`_install`. Nested `clang-scan-deps` / compile of the consumer then looks at `BUILDMASTER_INSTALL_DIR/include` before the leaf has published `error.hxx` / `platform.h` / `cstring.hxx` (`file not found`). `-j1` hides it because install finishes first. The skip-configure path must still wait on the *winner’s* `_install` stamp before any other id that needs those headers may compile. Same class of bug as the install-tree cache note: a skipped configure is not a published prefix.
 
 [Unreleased]: https://github.com/StormBytePP/StormByte-BuildMaster/compare/2.0.0...HEAD
 
