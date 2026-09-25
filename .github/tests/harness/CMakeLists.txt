@@ -31,6 +31,24 @@ add_subdirectory("${BM_TEST_FIXTURES_DIR}")
 # callback later is a no-op.
 _bm_materialize_finalize()
 
+get_property(_stamp_repo GLOBAL PROPERTY STAMP_PATCH_REPO)
+get_property(_stamp_bd GLOBAL PROPERTY STAMP_PATCH_BUILDDIR)
+if("${_stamp_repo}" STREQUAL "" OR "${_stamp_bd}" STREQUAL "")
+	message(FATAL_ERROR "stamp-patch fixture did not publish its repo")
+endif()
+add_custom_target(stamp_patch_second
+	COMMAND ${CMAKE_COMMAND}
+		-DCMAKE_CMD=${CMAKE_COMMAND}
+		-DROOT=${CMAKE_BINARY_DIR}
+		-DTARGET=stamp-leaf_install
+		-DREPO=${_stamp_repo}
+		-DBUILDDIR=${_stamp_bd}
+		-P ${BM_TEST_FIXTURES_DIR}/stamp-patch/second_pass.cmake
+	DEPENDS stamp-leaf_install
+	COMMENT "[BuildMaster/Core     ]: stamp-patch second install"
+	VERBATIM
+)
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_tc_prefix.cmake")
 
 # ---------------------------------------------------------------------------
@@ -84,24 +102,6 @@ add_custom_target(run_buildmaster_consumer
 # ---------------------------------------------------------------------------
 # Smoke
 # ---------------------------------------------------------------------------
-
-get_property(_stamp_repo GLOBAL PROPERTY STAMP_PATCH_REPO)
-get_property(_stamp_bd GLOBAL PROPERTY STAMP_PATCH_BUILDDIR)
-if("${_stamp_repo}" STREQUAL "" OR "${_stamp_bd}" STREQUAL "")
-	message(FATAL_ERROR "stamp-patch fixture did not publish its repo")
-endif()
-add_custom_target(stamp_patch_second
-	COMMAND ${CMAKE_COMMAND}
-		-DCMAKE_CMD=${CMAKE_COMMAND}
-		-DROOT=${CMAKE_BINARY_DIR}
-		-DTARGET=stamp-leaf_install
-		-DREPO=${_stamp_repo}
-		-DBUILDDIR=${_stamp_bd}
-		-P ${BM_TEST_FIXTURES_DIR}/stamp-patch/second_pass.cmake
-	DEPENDS stamp-leaf_install
-	COMMENT "[BuildMaster/Core     ]: stamp-patch second install"
-	VERBATIM
-)
 
 set(_BM_SMOKE_UNIX "")
 if(NOT WIN32)
