@@ -523,6 +523,10 @@ function(_bm_tools_meson_stages _file_setup _file_compile _file_install _compone
 			"_bm_tools_meson_stages('${_component}'): install rules missing")
 	endif()
 
+	_bm_stamp_bake(
+		"${_component}" "${_srcdir}" "${_builddir}"
+		"${BM_TC_IPO_ON}" "${BM_TC_IPO_FAT}" "${_toolchain_raw}")
+
 	set(_MESON_SETUP_FILE
 		"${BUILDMASTER_SCRIPTS_MESON_DIR}/${_MESON_COMPONENT_SAFE}_configure.cmake"
 	)

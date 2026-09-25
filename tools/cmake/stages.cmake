@@ -452,6 +452,10 @@ function(_bm_tools_cmake_stages _file_configure _file_compile _file_install _com
 			"_bm_tools_cmake_stages('${_component}'): install rules missing")
 	endif()
 
+	_bm_stamp_bake(
+		"${_component}" "${_srcdir}" "${_builddir}"
+		"${BM_TC_IPO_ON}" "${BM_TC_IPO_FAT}" "${_toolchain_raw}")
+
 	set(_CMAKE_CONFIGURE_FILE
 		"${BUILDMASTER_SCRIPTS_CMAKEDIR}/${_CMAKE_COMPONENT_SAFE}_configure.cmake"
 	)

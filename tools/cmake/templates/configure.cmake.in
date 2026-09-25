@@ -5,6 +5,19 @@ if(COMMAND _bm_log_level_init)
 	_bm_log_level_init()
 endif()
 
+include("@BUILDMASTER_SRCDIR@/component/stamp/gate.cmake")
+_bm_stamp_enter(
+	"@_BM_STAMP_ID@"
+	"configure"
+	"@_BM_STAMP_SRCDIR@"
+	"@_BM_STAMP_BUILDDIR@"
+	"@_BM_STAMP_EXTRA@"
+	"@_BM_STAMP_WORKDIR@"
+	"@_BM_STAMP_PATCHES@"
+	"@_BM_STAMP_HOLDERS@"
+	"@_BM_STAMP_ENV@")
+if(NOT BM_STAMP_SKIP)
+
 # Cache alone is not enough: an interrupted first run leaves CMakeCache.txt
 # (and CMakeScratch) without build.ninja. The next parent configure used
 # to skip this block; Ninja then died with "loading build.ninja".
@@ -115,4 +128,6 @@ if(NOT EXISTS "@_CMAKE_BUILD_DIR@/CMakeCache.txt"
 		_bm_log_message(CMAKE FATAL
 			"CMake configure failed for @_CMAKE_COMPONENT_TITLE@ (exit ${CMAKE_RESULT}). Working directory: @_CMAKE_BUILD_DIR@. Nested output was already written by the env runner.")
 	endif()
+endif()
+	_bm_stamp_leave(0)
 endif()

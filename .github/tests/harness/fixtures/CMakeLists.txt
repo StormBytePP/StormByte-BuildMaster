@@ -116,6 +116,7 @@ add_subdirectory(backend-pick)
 add_subdirectory(dup-link)
 add_subdirectory(link-raw)
 add_subdirectory(git-reset-patch)
+add_subdirectory(stamp-patch)
 
 # ---------------------------------------------------------------------------
 # PRIVATE headers (no backend) + configure -I

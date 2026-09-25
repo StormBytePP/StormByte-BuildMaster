@@ -5,6 +5,19 @@ if(COMMAND _bm_log_level_init)
 	_bm_log_level_init()
 endif()
 
+include("@BUILDMASTER_SRCDIR@/component/stamp/gate.cmake")
+_bm_stamp_enter(
+	"@_BM_STAMP_ID@"
+	"configure"
+	"@_BM_STAMP_SRCDIR@"
+	"@_BM_STAMP_BUILDDIR@"
+	"@_BM_STAMP_EXTRA@"
+	"@_BM_STAMP_WORKDIR@"
+	"@_BM_STAMP_PATCHES@"
+	"@_BM_STAMP_HOLDERS@"
+	"@_BM_STAMP_ENV@")
+if(NOT BM_STAMP_SKIP)
+
 if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 	if(NOT "@_BM_CONFIGURE_VIA_TARGET@" STREQUAL "1")
 		_bm_log_message(MESON STATUS
@@ -131,4 +144,6 @@ if(NOT EXISTS "@_MESON_BUILD_DIR@/build.ninja")
 		_bm_log_message(MESON FATAL
 			"Meson setup failed for @_MESON_COMPONENT_TITLE@ (exit ${MESON_SETUP_RESULT})\nWorking directory / build dir: @_MESON_BUILD_DIR@\n--- stdout ---\n${MESON_SETUP_OUT}\n--- stderr ---\n${MESON_SETUP_ERR}\n--- meson-log.txt ---\n${_meson_log}")
 	endif()
+endif()
+	_bm_stamp_leave(0)
 endif()

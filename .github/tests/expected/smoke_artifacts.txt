@@ -299,6 +299,11 @@ bin/bm_rescan_exe.exe|windows
 <lib>/libslowlib.a|unix
 <lib>/slowlib.lib|windows
 
+# stamp-patch
+<include>/stampleaf.h|all
+<lib>/libstampleaf.a|unix
+<lib>/stampleaf.lib|windows
+
 # tc-prefix
 <include>/tcprefix.h|all
 <lib>/libtcprefix.a|unix

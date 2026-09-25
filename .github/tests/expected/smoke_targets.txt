@@ -178,6 +178,10 @@ sdkloader_install
 # slow-configure
 slow-configure_install
 
+# stamp-patch
+stamp-leaf_install
+stamp_patch_second
+
 # toolchain
 nest-tc_install
 

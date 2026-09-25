@@ -152,6 +152,10 @@ sdkloader_configure -> sdk-headers_install
 slow-configure -> slow-configure_install
 slow-configure_configure -> base_install
 
+# stamp-patch
+stamp-leaf -> stamp-leaf_install
+stamp_patch_second -> stamp-leaf_install
+
 # toolchain
 nest-tc -> nest-tc_install
 
