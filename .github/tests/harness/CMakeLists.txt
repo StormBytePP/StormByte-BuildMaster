@@ -45,6 +45,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/check_hooks.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_link_raw.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_private_headers.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/check_groups_late.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_files_hash.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_exe_meta_whole.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_exe_rescan.cmake")
@@ -133,6 +134,7 @@ add_custom_target(run_buildmaster_smoke
 		grp-opus_install grp-speex_install grp-maudio_install
 		grp-vmaf_install grp-ssim_install grp-mfilter_install
 		grp-orphan_install
+		late-leaf_install
 		# Order / link tests
 		link_component_test order_independent_link_test
 		# LINKFLAGS

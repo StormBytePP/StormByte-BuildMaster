@@ -81,9 +81,40 @@ function(_bm_group_walk id depth)
 	endforeach()
 endfunction()
 
-## @brief After the graph is complete: cycles, event list, leftover ids.
+## @brief FATAL if buildmaster_group_add named a group that was never created.
+## @note Runs at the start of `_bm_group_plan`, after every declaration.
+##       `buildmaster_group_add` before `buildmaster_group` is legal.
+##       Cycles and id clashes are not decided here.
+function(_bm_group_require_defined)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_group_require_defined")
+	get_property(_refs GLOBAL PROPERTY BUILDMASTER_GROUP_PENDING)
+	if(NOT _refs)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_group_require_defined")
+		return()
+	endif()
+	foreach(_g IN LISTS _refs)
+		_bm_group_is("${_g}" _isg)
+		if(_isg)
+			continue()
+		endif()
+		get_property(_at GLOBAL PROPERTY BUILDMASTER_GROUP_${_g}_ADD_AT)
+		set(_where "")
+		if(NOT "${_at}" STREQUAL "")
+			set(_where " (${_at})")
+		endif()
+		# Not at group_add time: a later buildmaster_group is still legal.
+		_bm_log_message(COMPONENT FATAL
+			"buildmaster_group_add('${_g}'): group was never created${_where}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_group_require_defined")
+endfunction()
+
+## @brief After the graph is complete: undefined groups, cycles, event list.
+## @note `_bm_group_require_defined` runs even when no group was created,
+##       so a lone `buildmaster_group_add` still fails at finalize.
 function(_bm_group_plan)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_group_plan")
+	_bm_group_require_defined()
 	set_property(GLOBAL PROPERTY BUILDMASTER_GROUP_EVENTS "")
 	get_property(_gids GLOBAL PROPERTY BUILDMASTER_GROUP_IDS)
 	if(NOT _gids)
@@ -196,9 +227,36 @@ macro(buildmaster_group)
 	endif()
 endmacro()
 
+## @brief Remember the first buildmaster_group_add of an id.
+## @param[in] _group Group id. It does not have to exist yet.
+## @param[in] _file  Caller's `CMAKE_CURRENT_LIST_FILE`.
+## @param[in] _line  Caller's `CMAKE_CURRENT_LIST_LINE`.
+## @note Does not create the group. `_bm_group_plan` FATALs if this id
+##       is still not a group when the graph closes.
+function(_bm_group_note_add _group _file _line)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_group_note_add")
+	get_property(_at GLOBAL PROPERTY BUILDMASTER_GROUP_${_group}_ADD_AT)
+	if("${_at}" STREQUAL "" AND NOT "${_file}" STREQUAL "")
+		set_property(GLOBAL PROPERTY BUILDMASTER_GROUP_${_group}_ADD_AT
+			"${_file}:${_line}")
+	endif()
+	get_property(_refs GLOBAL PROPERTY BUILDMASTER_GROUP_PENDING)
+	if(_refs)
+		list(FIND _refs "${_group}" _idx)
+		if(NOT _idx EQUAL -1)
+			_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_group_note_add")
+			return()
+		endif()
+	endif()
+	set_property(GLOBAL APPEND PROPERTY BUILDMASTER_GROUP_PENDING "${_group}")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_group_note_add")
+endfunction()
+
 ## @brief Add members in call order (groups or components/metas).
-## @param[in] _group Group id (must already exist).
+## @param[in] _group Group id. May be created later with buildmaster_group.
 ## @param[in] ARGN   Member ids. Duplicates skipped. Self is FATAL.
+## @note A missing group is not FATAL here. `_bm_group_require_defined`
+##       fails at finalize, and only for an id that was never created.
 function(_bm_group_add_impl _group)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_group_add_impl")
 	if("${_group}" STREQUAL "")
@@ -212,11 +270,6 @@ function(_bm_group_add_impl _group)
 	if(_done)
 		_bm_log_message(COMPONENT FATAL
 			"buildmaster_group_add: called after finalize")
-	endif()
-	_bm_group_is("${_group}" _isg)
-	if(NOT _isg)
-		_bm_log_message(COMPONENT FATAL
-			"buildmaster_group_add: '${_group}' is not a group")
 	endif()
 	get_property(_mem GLOBAL PROPERTY BUILDMASTER_GROUP_${_group}_MEMBERS)
 	set(_i 1)
@@ -244,11 +297,14 @@ function(_bm_group_add_impl _group)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_group_add_impl")
 endfunction()
 
-## @brief Public group membership (macro; origin already stamped on the group).
+## @brief Public group membership (macro).
+## @note The group may be created afterwards. Finalize FATALs if it never is.
 ## @see _bm_group_add_impl
 macro(buildmaster_group_add _group)
 	if("${_group}" STREQUAL "")
 		_bm_log_message(COMPONENT FATAL "buildmaster_group_add: missing group id")
 	endif()
+	_bm_group_note_add("${_group}"
+		"${CMAKE_CURRENT_LIST_FILE}" "${CMAKE_CURRENT_LIST_LINE}")
 	_bm_group_add_impl("${_group}" ${ARGN})
 endmacro()

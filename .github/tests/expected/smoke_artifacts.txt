@@ -110,6 +110,11 @@ bin/bm_rescan_exe.exe|windows
 <lib>/libgrpssim.a|unix
 <lib>/libgrpvmaf.a|unix
 
+# groups-late
+<include>/lateleaf.h|all
+<lib>/lateleaf.lib|windows
+<lib>/liblateleaf.a|unix
+
 # hooks
 <include>/hooka.h|all
 <include>/hookb.h|all

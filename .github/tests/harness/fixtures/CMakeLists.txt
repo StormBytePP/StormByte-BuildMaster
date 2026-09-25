@@ -42,6 +42,7 @@ add_subdirectory(meta-toolchain)
 # Outline groups (banners + walk order)
 # ---------------------------------------------------------------------------
 add_subdirectory(groups)
+add_subdirectory(groups-late)
 
 # ---------------------------------------------------------------------------
 # Order / link

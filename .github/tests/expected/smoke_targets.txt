@@ -71,6 +71,9 @@ grp-speex_install
 grp-ssim_install
 grp-vmaf_install
 
+# groups-late
+late-leaf_install
+
 # hooks
 hook-a_install
 hook-b_install

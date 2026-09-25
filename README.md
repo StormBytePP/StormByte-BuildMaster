@@ -230,7 +230,7 @@ Ten commands. If you need an eleventh, the optstr is lying or the graph is.
 | `buildmaster_meta(id title [, optstr])` | `INTERFACE` collection. `REPACK` publishes one merged static archive |
 | `buildmaster_meta_add(meta member…)` | Membership (allowed before `buildmaster_meta`) |
 | `buildmaster_group(id [title])` | Outline banner. No target, no edge |
-| `buildmaster_group_add(group member…)` | Membership (group / component / meta). Group must already exist |
+| `buildmaster_group_add(group member…)` | Membership (group / component / meta). Allowed before `buildmaster_group` |
 | `buildmaster_hook_component(id fn alias [CAPTURE …])` | Run `fn` after that id materializes |
 | `buildmaster_hook_graph(fn alias [CAPTURE …])` | Run `fn` after the whole graph materializes |
 | `buildmaster_message(level text [, indent])` | Log. Module is always `USER` |
@@ -472,9 +472,10 @@ buildmaster_group(grp-audio "Audio")
 buildmaster_group_add(grp-audio opus speex)
 ```
 
-`buildmaster_group_add` requires the group to already exist. Members
-may be components, metas, or other groups. Cycles and id clashes are
-FATAL.
+`buildmaster_group_add` may run before `buildmaster_group`.
+Members may be components, metas, or other groups. FATAL only at
+the end, and only if that group was never created. Cycles and id
+clashes are FATAL.
 
 Groups are not consumption. Linking still goes through
 `buildmaster_link` on the real ids.
