@@ -44,10 +44,10 @@ add_custom_target(stamp_patch_second
 		-DREPO=${_stamp_repo}
 		-DBUILDDIR=${_stamp_bd}
 		-P ${BM_TEST_FIXTURES_DIR}/stamp-patch/second_pass.cmake
-	DEPENDS stamp-leaf_install
 	COMMENT "[BuildMaster/Core     ]: stamp-patch second install"
 	VERBATIM
 )
+add_dependencies(stamp_patch_second stamp-leaf_install)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/check_tc_prefix.cmake")
 
