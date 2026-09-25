@@ -278,12 +278,20 @@ endfunction()
 ## @note Same-process: id already in COMPONENT_IDS or a created meta.
 ##       Other process: `${BUILDMASTER_LINKS_DIR}/<sanitized>.cmake` exists
 ##       → include it (IMPORTED stub + aliases) and treat as already built.
+## @note Other-process skip does not mean the caller has no dependency.
+##       The id is appended to `${CMAKE_BINARY_DIR}/bm-reuse-needs.txt`
+##       (the first call in this process truncates that file). The parent
+##       component that owns this binary dir applies the need after the
+##       nested configure returns: the id plus dests already stored in
+##       its links file, and a wait on `<id>_install` or on the component
+##       that created the file.
 ## @note A leftover `links/<id>.cmake` from a previous configure without
 ##       wipe skips the nested cmake. Then Logger/Base files are never
 ##       rewritten this run and flatten sees an empty glob. Wipe harness
 ##       when debugging this path.
 function(_bm_links_try_reuse _id _title out_skip)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_try_reuse")
+	_bm_links_reuse_needs_reset()
 	set(_skip FALSE)
 	if("${_id}" STREQUAL "")
 		set(${out_skip} FALSE PARENT_SCOPE)
@@ -326,11 +334,204 @@ function(_bm_links_try_reuse _id _title out_skip)
 			endif()
 			_bm_log_message(COMPONENT STATUS
 				"Skipping configure of ${_title} — already built by '${_who}' (${_id})")
+			_bm_links_reuse_needs_note("${_id}")
 			set(_skip TRUE)
 		endif()
 	endif()
 	set(${out_skip} "${_skip}" PARENT_SCOPE)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_try_reuse")
+endfunction()
+
+## @brief Truncate this process's reuse-needs list once per configure.
+## @note `${CMAKE_BINARY_DIR}/bm-reuse-needs.txt`. Nested cmake's binary
+##       dir is the parent component's build dir. A reconfigure must not
+##       keep ids from the previous run.
+function(_bm_links_reuse_needs_reset)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_reuse_needs_reset")
+	get_property(_done GLOBAL PROPERTY BUILDMASTER_REUSE_NEEDS_RESET)
+	if(_done)
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_needs_reset")
+		return()
+	endif()
+	set_property(GLOBAL PROPERTY BUILDMASTER_REUSE_NEEDS_RESET TRUE)
+	if(NOT "${CMAKE_BINARY_DIR}" STREQUAL "")
+		file(WRITE "${CMAKE_BINARY_DIR}/bm-reuse-needs.txt" "")
+	endif()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_needs_reset")
+endfunction()
+
+## @brief Remember an id whose configure was skipped in another process.
+## @param[in] _id Component id that already has `links/<id>.cmake`.
+## @note Append-only. The parent reads the file after this cmake returns.
+function(_bm_links_reuse_needs_note _id)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_reuse_needs_note")
+	if("${_id}" STREQUAL "" OR "${CMAKE_BINARY_DIR}" STREQUAL "")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_needs_note")
+		return()
+	endif()
+	file(APPEND "${CMAKE_BINARY_DIR}/bm-reuse-needs.txt" "${_id}\n")
+	_bm_log_message(COMPONENT DEBUG
+		"reuse need ${_id} (configure skipped, still required)")
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_needs_note")
+endfunction()
+
+## @brief `_id` plus dest ids already stored in links files, to a fixpoint.
+## @param[in]  _id      Raw component id.
+## @param[out] _out_var Parent-scope list. Contains `_id` when it is non-empty.
+## @note `_bm_links_file_dests` only. Does not re-enter the skipped cmake.
+##       A seen-set cuts cycles.
+function(_bm_links_reuse_closure _id _out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_reuse_closure")
+	set(_expanded "")
+	if(NOT "${_id}" STREQUAL "")
+		set(_pending "${_id}")
+		set(_guard 0)
+		while(_pending)
+			list(GET _pending 0 _cur)
+			list(REMOVE_AT _pending 0)
+			if("${_cur}" STREQUAL "")
+				continue()
+			endif()
+			list(FIND _expanded "${_cur}" _seen)
+			if(NOT _seen EQUAL -1)
+				continue()
+			endif()
+			list(APPEND _expanded "${_cur}")
+			math(EXPR _guard "${_guard} + 1")
+			if(_guard GREATER 256)
+				_bm_log_message(COMPONENT FATAL
+					"_bm_links_reuse_closure(${_id}): link closure did not converge")
+			endif()
+			_bm_links_file_dests("${_cur}" _more)
+			foreach(_extra IN LISTS _more)
+				list(APPEND _pending "${_extra}")
+			endforeach()
+		endwhile()
+	endif()
+	set(${_out_var} "${_expanded}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_closure")
+endfunction()
+
+## @brief Stage in this process that publishes a skipped id.
+## @param[in]  _id       Skipped component id.
+## @param[in]  _consumer Component whose nested configure skipped `_id`.
+## @param[out] _out_var  Target name, or empty when none can be named.
+## @note `<id>_install` when this process has that stage (hoist).
+##       NOINSTALL uses `<id>_build`. Otherwise the parent component that
+##       created `links/<id>.cmake` (`BUILDMASTER_LINKS_OWNER_<id>`),
+##       its `_install`, else its `_build`. Never a self-edge. Not FATAL:
+##       a leftover links file has no owner here.
+function(_bm_links_reuse_wait_target _id _consumer _out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_reuse_wait_target")
+	set(_wait "")
+	if(TARGET "${_id}_install")
+		set(_wait "${_id}_install")
+	else()
+		_bm_graph_is_registered("${_id}" _reg)
+		if(_reg)
+			_bm_graph_is_noinstall("${_id}" _ni)
+			if(_ni AND TARGET "${_id}_build")
+				set(_wait "${_id}_build")
+			endif()
+		endif()
+	endif()
+	if("${_wait}" STREQUAL "")
+		get_property(_owner GLOBAL PROPERTY BUILDMASTER_LINKS_OWNER_${_id})
+		if(NOT "${_owner}" STREQUAL "" AND NOT "${_owner}" STREQUAL "${_consumer}")
+			if(TARGET "${_owner}_install")
+				set(_wait "${_owner}_install")
+			elseif(TARGET "${_owner}_build")
+				set(_wait "${_owner}_build")
+			endif()
+		endif()
+	endif()
+	if(_wait STREQUAL "${_consumer}"
+			OR _wait STREQUAL "${_consumer}_configure"
+			OR _wait STREQUAL "${_consumer}_build"
+			OR _wait STREQUAL "${_consumer}_install")
+		set(_wait "")
+	endif()
+	set(${_out_var} "${_wait}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_reuse_wait_target")
+endfunction()
+
+## @brief Keep the need a skipped configure would have dropped.
+## @param[in] _consumer Component whose build dir may hold
+##            `bm-reuse-needs.txt`.
+## @note Does not configure or build the skipped id again. Walks each
+##       noted id and the dests already in `links/<id>.cmake`. Hangs
+##       that closure on `_consumer` (`LINKS_ATTACHED` and an order-only
+##       dep) and makes `<consumer>_configure` / `<consumer>_build` wait
+##       on the stage from `_bm_links_reuse_wait_target`. Called after
+##       the fragment exists, so `add_dependencies` still reaches ninja.
+function(_bm_links_apply_reuse_needs _consumer)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_apply_reuse_needs")
+	if("${_consumer}" STREQUAL "")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_apply_reuse_needs")
+		return()
+	endif()
+	get_property(_bd GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_consumer}_BUILDDIR)
+	if("${_bd}" STREQUAL "")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_apply_reuse_needs")
+		return()
+	endif()
+	set(_file "${_bd}/bm-reuse-needs.txt")
+	if(NOT EXISTS "${_file}")
+		_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_apply_reuse_needs")
+		return()
+	endif()
+	file(STRINGS "${_file}" _lines)
+	set(_needs "")
+	foreach(_line IN LISTS _lines)
+		string(STRIP "${_line}" _line)
+		if("${_line}" STREQUAL "")
+			continue()
+		endif()
+		_bm_links_reuse_closure("${_line}" _part)
+		foreach(_one IN LISTS _part)
+			list(FIND _needs "${_one}" _hit)
+			if(_hit EQUAL -1)
+				list(APPEND _needs "${_one}")
+			endif()
+		endforeach()
+	endforeach()
+	set(_waits "")
+	foreach(_need IN LISTS _needs)
+		if("${_need}" STREQUAL "" OR "${_need}" STREQUAL "${_consumer}")
+			continue()
+		endif()
+		get_property(_att GLOBAL PROPERTY
+			BUILDMASTER_COMPONENT_${_consumer}_LINKS_ATTACHED)
+		list(FIND _att "${_need}" _hit)
+		if(_hit EQUAL -1)
+			set_property(GLOBAL APPEND PROPERTY
+				BUILDMASTER_COMPONENT_${_consumer}_LINKS_ATTACHED "${_need}")
+		endif()
+		if(COMMAND _bm_graph_record_dep)
+			_bm_graph_record_dep("${_consumer}" "${_need}")
+		endif()
+		if(TARGET "${_consumer}" AND TARGET "${_need}")
+			target_link_libraries("${_consumer}" INTERFACE "${_need}")
+		endif()
+		_bm_links_reuse_wait_target("${_need}" "${_consumer}" _wait)
+		if(NOT "${_wait}" STREQUAL "")
+			list(APPEND _waits "${_wait}")
+		endif()
+	endforeach()
+	if(_waits)
+		list(REMOVE_DUPLICATES _waits)
+	endif()
+	foreach(_w IN LISTS _waits)
+		if(TARGET "${_consumer}_configure")
+			add_dependencies("${_consumer}_configure" "${_w}")
+		endif()
+		if(TARGET "${_consumer}_build")
+			add_dependencies("${_consumer}_build" "${_w}")
+		endif()
+		_bm_log_message(COMPONENT DEBUG
+			"reuse wait ${_consumer} → ${_w}")
+	endforeach()
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_apply_reuse_needs")
 endfunction()
 
 ## @brief Record ids from `links/*.cmake` created during one nested materialize.
@@ -339,6 +540,9 @@ endfunction()
 ##            before that nested configure.
 ## @note Appends each new id to `BUILDMASTER_COMPONENT_<id>_LINKS_ATTACHED`
 ##       so flatten can walk Logger/Base when the parent only named Buffer.
+## @note The first parent component that creates `links/<nested>.cmake`
+##       is `BUILDMASTER_LINKS_OWNER_<nested>`. A later process that
+##       skips that id waits on this owner's `_install`.
 ## @note Does **not** `target_link_libraries(INTERFACE <stem>)`.
 ##       Raw stems become `-lmidlib` on a parent that already has the
 ##       NAMES path under a prefix subdir.
@@ -370,6 +574,11 @@ function(_bm_links_attach_new _id _before)
 		endif()
 		set_property(GLOBAL APPEND PROPERTY
 			BUILDMASTER_COMPONENT_${_id}_LINKS_ATTACHED "${_BM_LINKS_ID}")
+		get_property(_bm_owner GLOBAL PROPERTY BUILDMASTER_LINKS_OWNER_${_BM_LINKS_ID})
+		if("${_bm_owner}" STREQUAL "")
+			set_property(GLOBAL PROPERTY
+				BUILDMASTER_LINKS_OWNER_${_BM_LINKS_ID} "${_id}")
+		endif()
 		if(NOT _BM_LINKS_LIBDIR STREQUAL "")
 			target_link_directories("${_id}" INTERFACE "${_BM_LINKS_LIBDIR}")
 		endif()

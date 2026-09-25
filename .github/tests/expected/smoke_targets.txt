@@ -88,6 +88,12 @@ links-host_install
 links_chain_test
 links_chain_test_run
 
+# links-race
+RaceA_install
+RaceB_install
+links_race_test
+links_race_test_run
+
 # link-component
 link-a_install
 link-b_install

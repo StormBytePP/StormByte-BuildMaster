@@ -145,6 +145,12 @@ bin/bm_rescan_exe.exe|windows
 <lib>/liblinkshost.a|unix
 <lib>/linkshost.lib|windows
 
+# links-race
+<include>/race_a.h|all
+<include>/race_b.h|all
+<include>/race_base.h|all
+<include>/race_mid.h|all
+
 # links-transitive
 <include>/trans_base.h|all
 <include>/trans_leaf.h|all

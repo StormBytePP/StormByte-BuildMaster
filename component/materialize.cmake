@@ -11,6 +11,9 @@ include("${CMAKE_CURRENT_LIST_DIR}/materialize/helpers.cmake")
 ## @param[in] id Registered component id.
 ## @note After the nested configure returns, `_bm_links_attach_new` hangs
 ##       any `links/*.cmake` that appeared during that configure onto `id`.
+##       `_bm_links_apply_reuse_needs` then keeps ids that configure skipped
+##       because another process already wrote their links file: closure
+##       on `id`, and `<id>_build` waits on the real install stage.
 function(_bm_materialize_one id)
 	get_property(_sys GLOBAL PROPERTY BUILDMASTER_COMPONENT_${id}_SYSTEM)
 	if("${_sys}" STREQUAL "")
@@ -32,6 +35,9 @@ function(_bm_materialize_one id)
 	endif()
 	if(COMMAND _bm_links_attach_new)
 		_bm_links_attach_new("${id}" "${_links_before}")
+	endif()
+	if(COMMAND _bm_links_apply_reuse_needs)
+		_bm_links_apply_reuse_needs("${id}")
 	endif()
 endfunction()
 

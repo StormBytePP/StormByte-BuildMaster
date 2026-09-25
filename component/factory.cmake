@@ -275,6 +275,9 @@ endfunction()
 ##       Other process that already wrote `${BUILDMASTER_LINKS_DIR}/<id>.cmake`:
 ##       that file is `include`d and STATUS
 ##       `Skipping configure of <title> — already built by '<winner>' (<id>)`.
+##       The skip still records the need (that id and the dests in its
+##       links file) on the component whose nested configure hit it, and
+##       orders that component's build after the winner's install.
 ##       Identity is the id, not srcdir. The first registration wins.
 ## @note `ALIAS=` empty / `ALIAS={}` is FATAL. Alias equal to `<id>` or a
 ##       TARGET that is not already an ALIAS of `<id>` is FATAL.
