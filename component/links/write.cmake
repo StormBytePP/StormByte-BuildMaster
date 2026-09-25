@@ -34,6 +34,30 @@ function(_bm_links_closure _id _out_var)
 	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_closure")
 endfunction()
 
+## @brief Dest ids recorded in `links/<id>.cmake`, if that file exists.
+## @param[in]  _id      Raw component id.
+## @param[out] _out_var Parent-scope list. Empty when the file is absent.
+## @note `file(READ)` and a quoted MATCHES. `file(STRINGS)` or an
+##       unquoted MATCHES splits on `;` and keeps only the first dest.
+## @note Do not `include()` the file. The template `unset()`s
+##       `_bm_links_dests` after it wires INTERFACE edges.
+function(_bm_links_file_dests _id _out_var)
+	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_file_dests")
+	set(_out "")
+	if(NOT "${_id}" STREQUAL "" AND NOT "${BUILDMASTER_LINKS_DIR}" STREQUAL "")
+		_bm_path_sanitize(_safe "${_id}")
+		set(_file "${BUILDMASTER_LINKS_DIR}/${_safe}.cmake")
+		if(EXISTS "${_file}")
+			file(READ "${_file}" _txt)
+			if("${_txt}" MATCHES "set\\(_bm_links_dests \"([^\"]*)\"\\)")
+				set(_out "${CMAKE_MATCH_1}")
+			endif()
+		endif()
+	endif()
+	set(${_out_var} "${_out}" PARENT_SCOPE)
+	_bm_log_message(COMPONENT LOWLEVEL "Exiting _bm_links_file_dests")
+endfunction()
+
 ## @brief Write one links file for `_id` after that id has materialized.
 ## @param[in] _id Component or meta id (winner of the first registration).
 ## @note Filename is `_bm_path_sanitize(_id)`. `@BM_LINKS_ID@` is the raw id.
@@ -45,6 +69,16 @@ endfunction()
 ##       `file(STRINGS)` and unquoted MATCHES split on `;` and drop Base
 ##       from `LIBNAMES "Logger;Base"`.
 ## @note Do not `include()` dest files here: the template `unset()`s dests.
+## @note Do not replace dests with this process's `buildmaster_link`
+##       edges alone. Nested configure hangs String → Base on
+##       `LINKS_ATTACHED` and in the child file. A parent rewrite that
+##       drops those dests leaves a skipped consumer with `-lString`
+##       and no Base (Darwin two-level namespace, Windows).
+## @note Closure is a fixpoint over this process's `buildmaster_link`
+##       edges, dest files and `LINKS_ATTACHED`, with a seen-set so a
+##       cycle is not followed. Two write passes still exist so a dest
+##       file created earlier in this process is visible; they are not
+##       a depth limit.
 ## @note `mode=executable` writes an empty LIBNAMES. An exe is never a
 ##       link input, including when the id sits in a meta. Order-only
 ##       edges still flow through DESTS / *_install.
@@ -109,28 +143,60 @@ function(_bm_links_write_one _id)
 	get_property(BM_LINKS_ALIASES GLOBAL PROPERTY BUILDMASTER_COMPONENT_${_id}_ALIASES)
 	_bm_links_closure("${_id}" BM_LINKS_DESTS)
 
-	foreach(_dst IN LISTS BM_LINKS_DESTS)
-		if(_dst STREQUAL "")
+	# Union, do not replace. This process often has no String → Base
+	# edge; the nested configure recorded it. Dropping it is the
+	# `-lString` with no Base failure.
+	get_property(_attached GLOBAL PROPERTY
+		BUILDMASTER_COMPONENT_${_id}_LINKS_ATTACHED)
+	set(_pending "${BM_LINKS_DESTS}")
+	# Unquoted list(APPEND) of an empty value is `list(APPEND _pending)`
+	# and CMake rejects it. Most ids have no LINKS_ATTACHED.
+	if(_attached)
+		list(APPEND _pending ${_attached})
+	endif()
+	_bm_links_file_dests("${_id}" _from_file)
+	if(_from_file)
+		list(APPEND _pending ${_from_file})
+	endif()
+	set(_expanded "")
+	set(_guard 0)
+	while(_pending)
+		list(GET _pending 0 _dst)
+		list(REMOVE_AT _pending 0)
+		if("${_dst}" STREQUAL "" OR "${_dst}" STREQUAL "${_id}")
 			continue()
 		endif()
-		_bm_path_sanitize(_safe_dst "${_dst}")
-		set(_dfile "${BUILDMASTER_LINKS_DIR}/${_safe_dst}.cmake")
-		if(NOT EXISTS "${_dfile}")
+		list(FIND _expanded "${_dst}" _seen)
+		if(NOT _seen EQUAL -1)
 			continue()
 		endif()
-		file(READ "${_dfile}" _dtxt)
-		if("${_dtxt}" MATCHES "set\\(_bm_links_dests \"([^\"]*)\"\\)")
-			foreach(_extra IN LISTS CMAKE_MATCH_1)
-				if(_extra STREQUAL "" OR _extra STREQUAL "${_id}")
-					continue()
-				endif()
-				list(FIND BM_LINKS_DESTS "${_extra}" _hit)
-				if(_hit EQUAL -1)
-					list(APPEND BM_LINKS_DESTS "${_extra}")
-				endif()
-			endforeach()
+		list(APPEND _expanded "${_dst}")
+		list(FIND BM_LINKS_DESTS "${_dst}" _hit)
+		if(_hit EQUAL -1)
+			list(APPEND BM_LINKS_DESTS "${_dst}")
 		endif()
-	endforeach()
+		math(EXPR _guard "${_guard} + 1")
+		if(_guard GREATER 256)
+			_bm_log_message(COMPONENT FATAL
+				"_bm_links_write_one(${_id}): link closure did not converge")
+		endif()
+		_bm_links_file_dests("${_dst}" _more)
+		foreach(_extra IN LISTS _more)
+			list(APPEND _pending "${_extra}")
+		endforeach()
+		get_property(_more_att GLOBAL PROPERTY
+			BUILDMASTER_COMPONENT_${_dst}_LINKS_ATTACHED)
+		foreach(_extra IN LISTS _more_att)
+			list(APPEND _pending "${_extra}")
+		endforeach()
+		# Same-process edges are not in the dest file until that id is
+		# written. Walking them here is what makes one pass a fixpoint;
+		# the second pass only republishes files created earlier.
+		_bm_links_closure("${_dst}" _more_edges)
+		foreach(_extra IN LISTS _more_edges)
+			list(APPEND _pending "${_extra}")
+		endforeach()
+	endwhile()
 
 	set(BM_LINKS_INCLUDES "")
 	if(_priv)
@@ -154,9 +220,10 @@ function(_bm_links_write_one _id)
 endfunction()
 
 ## @brief Write links files for every component and created meta in this process.
-## @note Two passes: first creates the files (so a dest living only as
-##       `links/<dest>.cmake` is visible); second rewrites dests after
-##       those files exist. Does **not** merge dest stems into LIBNAMES.
+## @note Two passes so a dest file created earlier in this process is
+##       visible to the next id. Depth is the fixpoint in
+##       `_bm_links_write_one`, not the pass count. Does **not** merge
+##       dest stems into LIBNAMES.
 function(_bm_links_write_all)
 	_bm_log_message(COMPONENT LOWLEVEL "Entering _bm_links_write_all")
 	set(_all "")

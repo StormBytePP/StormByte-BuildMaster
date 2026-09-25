@@ -145,6 +145,12 @@ bin/bm_rescan_exe.exe|windows
 <lib>/liblinkshost.a|unix
 <lib>/linkshost.lib|windows
 
+# links-transitive
+<include>/trans_base.h|all
+<include>/trans_leaf.h|all
+<include>/trans_mid.h|all
+<include>/trans_upper.h|all
+
 # link-component
 <include>/a.h|all
 <include>/b.h|all

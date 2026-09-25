@@ -72,6 +72,7 @@ add_subdirectory(recursive/meson)
 # ---------------------------------------------------------------------------
 add_subdirectory(links-chain)
 add_subdirectory(links-shared-chain)
+add_subdirectory(links-transitive)
 
 # ---------------------------------------------------------------------------
 # Install archive rename (Meson zs.* → produced z.*)

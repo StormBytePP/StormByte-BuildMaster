@@ -61,6 +61,11 @@ StormByte-Buffer -> StormByte-Buffer_install
 links-host -> links-host_install
 links-host_configure -> StormByte-Buffer_install
 
+# links-transitive
+TransLeaf -> TransLeaf_install
+TransLeaf_configure -> TransUpper_install
+TransUpper -> TransUpper_install
+
 # link-component
 link-a -> link-a_install
 link-b -> link-b_install
