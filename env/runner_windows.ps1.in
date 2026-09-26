@@ -13,7 +13,20 @@ function Enable-BmAnsiConsole {
 [DllImport("kernel32.dll")] public static extern bool GetConsoleMode(IntPtr h, out uint m);
 [DllImport("kernel32.dll")] public static extern bool SetConsoleMode(IntPtr h, uint m);
 '@
-		$k = Add-Type -MemberDefinition $sig -Name BmVt -Namespace BuildMaster -PassThru
+		$saved = @{}
+		foreach ($n in @('LIB', 'INCLUDE', 'LIBPATH')) {
+			$saved[$n] = [Environment]::GetEnvironmentVariable($n, 'Process')
+			Remove-Item -Path "Env:$n" -ErrorAction SilentlyContinue
+		}
+		try {
+			$k = Add-Type -MemberDefinition $sig -Name BmVt -Namespace BuildMaster -PassThru
+		} finally {
+			foreach ($n in $saved.Keys) {
+				if ($null -ne $saved[$n] -and $saved[$n] -ne '') {
+					Set-Item -Path "Env:$n" -Value $saved[$n]
+				}
+			}
+		}
 		foreach ($id in @(-11, -12)) {
 			$h = $k::GetStdHandle($id)
 			[uint32]$m = 0
