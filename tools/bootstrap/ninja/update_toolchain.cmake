@@ -1,4 +1,6 @@
 _bm_tc_export(BUILDMASTER_TOOLS_NINJA_SRCDIR "${BUILDMASTER_TOOLS_NINJA_SRCDIR}")
 _bm_tc_export(NINJA_EXECUTABLE "${NINJA_EXECUTABLE}")
+_bm_path_normalize(_bm_ninja "${NINJA_EXECUTABLE}")
+_bm_tc_export_raw("set(CMAKE_MAKE_PROGRAM \"${_bm_ninja}\" CACHE FILEPATH \"\" FORCE)")
 _bm_tc_export_raw("set(ENV_NINJA_COMMAND ${ENV_NINJA_COMMAND})")
 _bm_tc_export_raw("set(ENV_NINJA_SILENT_COMMAND ${ENV_NINJA_SILENT_COMMAND})")
